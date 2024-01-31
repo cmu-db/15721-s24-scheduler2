@@ -58,9 +58,11 @@ We aim to build a pipeline with GitHub Actions that will allow us to continuousl
 - **Work Queue:** The work queue may become a bottleneck as all worker threads retrieve data from it. Choosing an ideal scheduling policy could also become a challenge.
 - **Memory Footprint of Metadata:** Uncertainty about the potential memory footprint implications of storing extensive metadata alongside the DAGs in the query table.
 - **gRPC over REST:** Chosen for better performance. However, modifying messages requires recompiling the proto file, which may introduce complexity during development.
-- **Breadth-First vs. Work-First Task Scheduling:** Our scheduler does not yet implement job stealing, and some research shows that work-first scheduling can experience reduced throughput without task migration, especially with imbalanced loads [Duran]. Furthermore, breadth-first scheduling may work better with push-based assignment. However, work-first scheduling can have significant locality benefits.
+- **Breadth-First vs. Work-First Task Scheduling:** Our scheduler does not yet implement job stealing, and some research shows that work-first scheduling can experience reduced throughput without task migration, especially with imbalanced loads [1]. Furthermore, breadth-first scheduling may work better with push-based assignment. However, work-first scheduling can have significant locality benefits.
 - **Push vs. Pull Task Assignment:**
 
 # Glossary
 - **Stage:** refers to the amount of work that can be completed without shuffling intermediate data.
+
+- [1]. Duran, Alejandro et al. Evaluation of OpenMP Task Scheduling Strategies. https://link.springer.com/chapter/10.1007/978-3-540-79561-2_9
 
