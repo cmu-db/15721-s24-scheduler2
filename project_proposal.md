@@ -60,3 +60,5 @@ We aim to build a pipeline with GitHub Actions that will allow us to continuousl
 - **Push vs. Pull Task Assignment:**
 
 # Glossary
+- **Stage:** refers to the amount of work that can be completed without shuffling intermediate data.
+
