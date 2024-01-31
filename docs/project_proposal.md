@@ -20,6 +20,8 @@
 
 # Architectural Design
 
+![Project Proposal Architecture](project_proposal_arch.png "Project Proposal Architecture Diagram")
+
 **Architectural Components:**
 - **DAG Parser:** Parses a Substrait logical plan into a DAG of stages, where each stage consists of tasks that can be completed without shuffling intermediate results. After decomposing the work, it then enqueues tasks into a work queue in a breadth-first manner.
 - **Work Queue:** A FIFO queue where tasks are enqueued by the DAG Parser. Each query submitted by the optimizer also has a cost, allowing for heuristic adjustments to the ordering.
