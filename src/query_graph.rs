@@ -7,7 +7,7 @@ use substrait::proto::rel::RelType;
 pub enum StageStatus {
     NotStarted,
     Running(u64),
-    Finished(u64),
+    Finished(u64), // More detailed datatype to describe location(s) of ALL output data.
 }
 
 pub struct QueryStage {
