@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package distributed_database;
+package composable_database;
 
 // Common message types and enums here
 
