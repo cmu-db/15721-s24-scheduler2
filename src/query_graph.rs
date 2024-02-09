@@ -1,15 +1,27 @@
+use std::collections::HashMap;
 
-pub struct QueryTask {
-    id: u64,
-    name: String,
-    query: String,
+use substrait::proto::rel::RelType;
 
-    inputs: Vec<u64>,
+pub enum StageStatus {
+    NotStarted,
+    Running(u64),
+    Finished(u64),
+}
+
+pub struct QueryStage {
+    stage: RelType,
+    status: StageStatus,
+
+    outputs: Vec<usize>,
+    inputs: Vec<usize>,
 }
 
 pub struct QueryGraph {
-    plan: Vec<u8>,
-    tasks: Vec<QueryTask>,
+    query_id: u64,
+    plan: RelType, // Potentially can be thrown away at this point.
+
+    stages: Vec<QueryStage>,
+    frontier: Vec<usize>,
 }
 
 enum TaskStatus {
