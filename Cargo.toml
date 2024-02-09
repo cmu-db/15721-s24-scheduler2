@@ -9,3 +9,6 @@ edition = "2021"
 substrait = "0.21.0"
 tonic = "0.11.0"
 tokio = "1.36.0"
+
+[build-dependencies]
+tonic-build = "0.11"
