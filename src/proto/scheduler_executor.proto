@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package composable_database;
+
+import "common.proto";
+
+// Task execution and status messages
+
+message TaskDone {
+    int32 result_size = 1;
+}
+
+message TaskStatusIncomplete {
+    enum StatusType {
+        FAILED = 0;
+        PREFETCH = 1;
+    }
+    StatusType status_type = 1;
+}
+
+message NotifyTaskStateArgs {
+    int32 task_id = 1;
+    oneof state {
+        TaskDone result = 1;
+        TaskStatusIncomplete code = 2;
+    }
+}
+
+message NewTaskPlan {
+    bytes physical_plan = 1;
+    oneof exchange_instruction {
+        // Definitions for scatter, gather, discard results
+    }
+}
+
+message NotifyTaskStateRet {
+    oneof response {
+        NewTaskPlan plan = 1;
+        // Wait or other instructions
+    }
+}
+
+service ExecutionEngine {
+    rpc NotifyTaskState(NotifyTaskStateArgs) returns (NotifyTaskStateRet);
+    // Additional RPCs for task execution
+}
