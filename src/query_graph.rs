@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+#![allow(dead_code)]
+
+// use std::collections::HashMap;
 
 use substrait::proto::rel::RelType;
 
@@ -9,7 +11,7 @@ pub enum StageStatus {
 }
 
 pub struct QueryStage {
-    stage: RelType,
+    plan: RelType,
     status: StageStatus,
 
     outputs: Vec<usize>,
@@ -24,6 +26,17 @@ pub struct QueryGraph {
     frontier: Vec<usize>,
 }
 
+impl QueryGraph {
+    pub fn new(query_id: u64, plan: RelType) -> Self {
+        Self {
+            query_id,
+            plan,
+            stages: Vec::new(),
+            frontier: Vec::new(),
+        }
+    }
+}
+
 enum TaskStatus {
     Waiting,
     Ready,
@@ -31,5 +44,3 @@ enum TaskStatus {
     Finished,
     Failed,
 }
-
-
