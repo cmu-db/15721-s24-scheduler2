@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+// Define a message for metadata related to a query.
+message QueryInfo {
+    int32 priority = 1; // The priority of the query.
+    int32 cost = 2; // The estimated cost of query execution.
+    // Additional information about how to send the query results
+    // to the front end can be added here.
+}
+
+// Define a message for arguments required to schedule a query.
+message ScheduleQueryArgs {
+    bytes physical_plan = 1; // A Substrait physical plan.
+    QueryInfo metadata = 2; // Metadata related to the query.
+}
+
+// Define a message for the return type of the ScheduleQuery RPC.
+message ScheduleQueryRet {
+    int32 query_id = 1; // The identifier to refer to this query execution.
+}
+
+// Define a message for arguments required to query the status of a job.
+message QueryJobStatusArgs {
+    int32 query_id = 1; // The id of the query to get the status of.
+}
+
+// Define an enumeration for the status of the query.
+enum QueryStatus {
+    DONE = 0; // The query is done.
+    IN_PROGRESS = 1; // The query is in progress.
+    FAILED = 2; // The query has failed.
+    NOT_FOUND = 3; // The query was not found.
+    PREFETCH_NEXT = 4; // Request from the execution engine to send the next query fragment.
+}
+
+// Define a message for the return type of the QueryJobStatus RPC.
+message QueryJobStatusRet {
+    QueryStatus query_status = 1; // The status of the job.
+}
+
+// Define a message for arguments required for the QueryExecutionDone RPC.
+message QueryExecutionDoneArgs {
+    int32 fragment_id = 1; // The query fragment whose execution is complete.
+    QueryStatus status = 2; // The status of query execution.
+}
+
+// Define a message for the return type of the QueryExecutionDone RPC.
+message QueryExecutionDoneRet {
+    // This can be empty if no specific return information is needed.
+}
+
+// Define a service for the scheduler API.
+service Scheduler {
+    // Used by the optimizer to schedule a new query.
+    rpc ScheduleQuery(ScheduleQueryArgs) returns (ScheduleQueryRet);
+
+    // Used by the optimizer to query the status of a job.
+    rpc QueryJobStatus(QueryJobStatusArgs) returns (QueryJobStatusRet);
+
+    // Used by the execution engine to notify the scheduler that
+    // the execution of a query fragment is complete.
+    rpc QueryExecutionDone(QueryExecutionDoneArgs) returns (QueryExecutionDoneRet);
+}
+
