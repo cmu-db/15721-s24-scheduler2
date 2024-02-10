@@ -21,8 +21,8 @@ message TaskStatusIncomplete {
 message NotifyTaskStateArgs {
     int32 task_id = 1;
     oneof state {
-        TaskDone result = 1;
-        TaskStatusIncomplete code = 2;
+        TaskDone result = 2;
+        TaskStatusIncomplete code = 3;
     }
 }
 
@@ -30,6 +30,8 @@ message NewTaskPlan {
     bytes physical_plan = 1;
     oneof exchange_instruction {
         // Definitions for scatter, gather, discard results
+        int32 scatter = 2;
+        string gather = 3;
     }
 }
 
