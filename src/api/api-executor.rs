@@ -41,6 +41,7 @@ impl Scheduler for SchedulerService {
     async fn query_job_status(&self,
         _request: Request<QueryJobStatusArgs>,
     ) -> Result<Response<QueryJobStatusRet>, Status> {
+        // Get actual status from queryID table
         let response = QueryJobStatusRet { query_status: QueryStatus::Done.into()};
         Ok(Response::new(response))
     }
@@ -48,6 +49,7 @@ impl Scheduler for SchedulerService {
     async fn abort_query(&self,
         _request: Request<AbortQueryArgs>,
     ) -> Result<Response<AbortQueryRet>, Status> {
+        // handle response
         let response = AbortQueryRet { aborted: true };
         Ok(Response::new(response))
     }
