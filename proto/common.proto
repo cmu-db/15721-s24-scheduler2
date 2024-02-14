@@ -9,14 +9,11 @@ message TaskID {
     int32 task = 2;
 }
 
-message QueryStatus {
-    enum Status {
-        DONE = 0;
-        IN_PROGRESS = 1;
-        FAILED = 2;
-        NOT_FOUND = 3;
-    }
-    Status status = 1;
+enum QueryStatus {
+    DONE = 0;
+    IN_PROGRESS = 1;
+    FAILED = 2;
+    NOT_FOUND = 3;
 }
 
 // Other common definitions
