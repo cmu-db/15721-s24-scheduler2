@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+use crate::scheduler::Task;
+use std::collections::VecDeque;
+use std::sync::Arc;
+
 pub enum WorkerStatus {
     Idle,
     Busy,
@@ -25,7 +29,6 @@ pub struct Dispatcher {
 
     // Internal worker state.
     workers: Vec<Worker>,
-
     // Need some datastructure to select next worker to assign a task to.
 }
 
@@ -42,6 +45,6 @@ impl Dispatcher {
     }
 
     pub fn remove_worker(&mut self, worker_id: u32) {
-        self.workers.retain(|&worker| worker.id != worker_id);
+        self.workers.retain(|worker| worker.id != worker_id);
     }
 }

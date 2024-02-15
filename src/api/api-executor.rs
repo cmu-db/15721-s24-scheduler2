@@ -1,9 +1,11 @@
-use tonic::{transport::Server, Request, Response, Status};
 use prost::Message;
+use tonic::{transport::Server, Request, Response, Status};
 
 use composable_database::scheduler_server::{Scheduler, SchedulerServer};
-use composable_database::{ScheduleQueryArgs, ScheduleQueryRet, QueryInfo, QueryStatus,
-    QueryJobStatusArgs, QueryJobStatusRet, AbortQueryArgs, AbortQueryRet};
+use composable_database::{
+    AbortQueryArgs, AbortQueryRet, QueryInfo, QueryJobStatusArgs, QueryJobStatusRet, QueryStatus,
+    ScheduleQueryArgs, ScheduleQueryRet,
+};
 
 use substrait::proto::Plan;
 
@@ -20,33 +22,39 @@ impl Scheduler for SchedulerService {
         &self,
         request: Request<ScheduleQueryArgs>,
     ) -> Result<Response<ScheduleQueryRet>, Status> {
-
-
         if let ScheduleQueryArgs {
             physical_plan,
-            metadata: Some(QueryInfo {priority, cost})
+            metadata: Some(QueryInfo { priority, cost }),
         } = request.into_inner()
         {
-            println!("Got a request with priority {:?} and cost {:?}", priority, cost);
+            println!(
+                "Got a request with priority {:?} and cost {:?}",
+                priority, cost
+            );
             let _plan = Plan::decode(physical_plan.as_slice()).unwrap();
-        }
-        else {
-            let _ = Err::<Response<ScheduleQueryRet>, Status>(Status::invalid_argument("Missing metadata in request"));
+        } else {
+            let _ = Err::<Response<ScheduleQueryRet>, Status>(Status::invalid_argument(
+                "Missing metadata in request",
+            ));
         }
 
         let response = ScheduleQueryRet { query_id: 0 };
         Ok(Response::new(response))
     }
 
-    async fn query_job_status(&self,
+    async fn query_job_status(
+        &self,
         _request: Request<QueryJobStatusArgs>,
     ) -> Result<Response<QueryJobStatusRet>, Status> {
         // Get actual status from queryID table
-        let response = QueryJobStatusRet { query_status: QueryStatus::Done.into()};
+        let response = QueryJobStatusRet {
+            query_status: QueryStatus::Done.into(),
+        };
         Ok(Response::new(response))
     }
 
-    async fn abort_query(&self,
+    async fn abort_query(
+        &self,
         _request: Request<AbortQueryArgs>,
     ) -> Result<Response<AbortQueryRet>, Status> {
         // handle response

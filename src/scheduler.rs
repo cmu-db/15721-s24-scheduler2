@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
-use std::collections::{VecDeque, HashMap};
+use std::collections::{HashMap, VecDeque};
 
 use crate::query_graph::{QueryGraph, StageStatus};
+use substrait::proto::rel::RelType;
 
 enum TaskStatus {
     Waiting,
@@ -41,7 +42,7 @@ impl Scheduler {
 
         let query_id = 1; // Should generate a unique query id.
         let query = QueryGraph::new(query_id, plan);
-        self.query_table.insert(query_id, plan);
+        //self.query_table.insert(query_id, plan);
 
         // Add the query to the task queue.
     }
@@ -49,5 +50,4 @@ impl Scheduler {
     pub fn update_stage_status(&mut self, query_id: u64, stage_id: usize, status: StageStatus) {
         // Update the status of the stage in the query graph.
     }
-
 }
