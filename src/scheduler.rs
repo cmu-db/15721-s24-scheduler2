@@ -2,7 +2,8 @@
 
 use std::collections::{VecDeque, HashMap};
 
-use crate::query_graph::QueryGraph;
+use crate::query_graph::{QueryGraph, StageStatus};
+use substrait::proto::rel::RelType;
 
 enum TaskStatus {
     Waiting,
@@ -41,7 +42,7 @@ impl Scheduler {
 
         let query_id = 1; // Should generate a unique query id.
         let query = QueryGraph::new(query_id, plan);
-        self.query_table.insert(query_id, plan);
+        //self.query_table.insert(query_id, plan);
 
         // Add the query to the task queue.
     }

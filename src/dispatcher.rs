@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+use std::collections::VecDeque;
+use std::sync::Arc;
+use crate::scheduler::Task;
+
 pub enum WorkerStatus {
     Idle,
     Busy,
@@ -42,6 +46,6 @@ impl Dispatcher {
     }
 
     pub fn remove_worker(&mut self, worker_id: u32) {
-        self.workers.retain(|&worker| worker.id != worker_id);
+        self.workers.retain(|worker| worker.id != worker_id);
     }
 }
