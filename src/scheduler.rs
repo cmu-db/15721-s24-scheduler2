@@ -2,7 +2,7 @@
 
 use std::collections::{VecDeque, HashMap};
 
-use crate::query_graph::QueryGraph;
+use crate::query_graph::{QueryGraph, StageStatus};
 
 enum TaskStatus {
     Waiting,
