@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+use crate::scheduler::Task;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use crate::scheduler::Task;
 
 pub enum WorkerStatus {
     Idle,
@@ -29,7 +29,6 @@ pub struct Dispatcher {
 
     // Internal worker state.
     workers: Vec<Worker>,
-
     // Need some datastructure to select next worker to assign a task to.
 }
 

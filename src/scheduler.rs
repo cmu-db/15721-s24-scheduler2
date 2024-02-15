@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::collections::{VecDeque, HashMap};
+use std::collections::{HashMap, VecDeque};
 
 use crate::query_graph::{QueryGraph, StageStatus};
 use substrait::proto::rel::RelType;
@@ -50,5 +50,4 @@ impl Scheduler {
     pub fn update_stage_status(&mut self, query_id: u64, stage_id: usize, status: StageStatus) {
         // Update the status of the stage in the query graph.
     }
-
 }
