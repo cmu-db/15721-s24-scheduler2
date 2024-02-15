@@ -3,6 +3,8 @@
 // use std::collections::HashMap;
 
 use substrait::proto::rel::RelType;
+use tokio::sync::RwLock;
+use std::mem;
 
 pub enum StageStatus {
     NotStarted,
@@ -14,16 +16,17 @@ pub struct QueryStage {
     plan: RelType,
     status: StageStatus,
 
-    outputs: Vec<usize>,
-    inputs: Vec<usize>,
+    outputs: Vec<u64>,
+    inputs: Vec<u64>,
 }
 
 pub struct QueryGraph {
-    query_id: u64,
+    pub query_id: u64,
     plan: RelType, // Potentially can be thrown away at this point.
 
     stages: Vec<QueryStage>,
-    frontier: Vec<usize>,
+    frontier: Vec<u64>,
+    frontier_lock: tokio::sync::RwLock<()>,
 }
 
 impl QueryGraph {
@@ -33,7 +36,17 @@ impl QueryGraph {
             plan,
             stages: Vec::new(),
             frontier: Vec::new(),
+            frontier_lock: RwLock::new(()),
         }
+    }
+
+    // Atomically clear frontier vector and return old frontier.
+    pub fn get_frontier(&mut self) -> Vec<u64> {
+        let _lock = self.frontier_lock.blocking_write();
+        let mut old_frontier = Vec::new();
+        mem::swap(&mut self.frontier, &mut old_frontier);
+        self.frontier = Vec::new();
+        old_frontier
     }
 }
 

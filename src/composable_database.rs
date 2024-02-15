@@ -1,10 +1,10 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TaskId {
-    #[prost(int32, tag = "1")]
-    pub query_id: i32,
-    #[prost(int32, tag = "2")]
-    pub task: i32,
+    #[prost(uint64, tag = "1")]
+    pub query_id: u64,
+    #[prost(uint64, tag = "2")]
+    pub task: u64,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -58,14 +58,14 @@ pub struct ScheduleQueryArgs {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ScheduleQueryRet {
-    #[prost(int32, tag = "1")]
-    pub query_id: i32,
+    #[prost(uint64, tag = "1")]
+    pub query_id: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct QueryJobStatusArgs {
-    #[prost(int32, tag = "1")]
-    pub query_id: i32,
+    #[prost(uint64, tag = "1")]
+    pub query_id: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -76,8 +76,8 @@ pub struct QueryJobStatusRet {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AbortQueryArgs {
-    #[prost(int32, tag = "1")]
-    pub query_id: i32,
+    #[prost(uint64, tag = "1")]
+    pub query_id: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -88,8 +88,8 @@ pub struct AbortQueryRet {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TaskDone {
-    #[prost(int32, tag = "1")]
-    pub result_size: i32,
+    #[prost(uint64, tag = "1")]
+    pub result_size: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -139,8 +139,8 @@ pub mod task_status_incomplete {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NotifyTaskStateArgs {
-    #[prost(int32, tag = "1")]
-    pub task_id: i32,
+    #[prost(uint64, tag = "1")]
+    pub task_id: u64,
     #[prost(oneof = "notify_task_state_args::State", tags = "2, 3")]
     pub state: ::core::option::Option<notify_task_state_args::State>,
 }

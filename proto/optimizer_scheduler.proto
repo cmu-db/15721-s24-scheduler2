@@ -19,11 +19,11 @@ message ScheduleQueryArgs {
 }
 
 message ScheduleQueryRet {
-    int32 query_id = 1;
+    uint64 query_id = 1;
 }
 
 message QueryJobStatusArgs {
-    int32 query_id = 1;
+    uint64 query_id = 1;
 }
 
 message QueryJobStatusRet {
@@ -31,7 +31,7 @@ message QueryJobStatusRet {
 }
 
 message AbortQueryArgs {
-    int32 query_id = 1;
+    uint64 query_id = 1;
 }
 
 message AbortQueryRet {
