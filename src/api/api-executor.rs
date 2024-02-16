@@ -6,15 +6,29 @@ use composable_database::{
     AbortQueryArgs, AbortQueryRet, QueryInfo, QueryJobStatusArgs, QueryJobStatusRet, QueryStatus,
     ScheduleQueryArgs, ScheduleQueryRet,
 };
+// use crate::scheduler::Scheduler;
 
 use substrait::proto::Plan;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Once;
+
+// Static query_id generator
+static QID_COUNTER: AtomicU64 = AtomicU64::new(0);
+static QID_COUNTER_INIT: Once = Once::new();
+
+fn next_query_id() -> u64 {
+    QID_COUNTER_INIT.call_once(|| {});
+    QID_COUNTER.fetch_add(1, Ordering::SeqCst)
+}
 
 pub mod composable_database {
     tonic::include_proto!("composable_database");
 }
 
 #[derive(Debug, Default)]
-pub struct SchedulerService {}
+pub struct SchedulerService {
+    // scheduler: scheduler::Scheduler,
+}
 
 #[tonic::async_trait]
 impl Scheduler for SchedulerService {
@@ -37,8 +51,9 @@ impl Scheduler for SchedulerService {
                 "Missing metadata in request",
             ));
         }
-
-        let response = ScheduleQueryRet { query_id: 0 };
+        let qid = next_query_id();
+        // Generate query graph and schedule
+        let response = ScheduleQueryRet { query_id: qid };
         Ok(Response::new(response))
     }
 

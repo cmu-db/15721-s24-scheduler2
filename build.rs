@@ -1,8 +1,8 @@
 // use std::io::Result;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut config = prost_build::Config::new();
-    config.out_dir("src");
-    config.compile_protos(
+    prost_build::Config::new()
+    .out_dir("src")
+    .compile_protos(
         &[
             "proto/common.proto",
             "proto/optimizer_scheduler.proto",

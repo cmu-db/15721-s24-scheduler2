@@ -7,7 +7,7 @@ import "common.proto";
 // Task execution and status messages
 
 message TaskDone {
-    int32 result_size = 1;
+    uint64 result_size = 1;
 }
 
 message TaskStatusIncomplete {
@@ -19,7 +19,7 @@ message TaskStatusIncomplete {
 }
 
 message NotifyTaskStateArgs {
-    int32 task_id = 1;
+    uint64 task_id = 1;
     oneof state {
         TaskDone result = 2;
         TaskStatusIncomplete code = 3;

@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use crate::query_graph::{QueryGraph, StageStatus};
+use crate::query_table::QueryTable;
 use substrait::proto::rel::RelType;
 
 enum TaskStatus {
@@ -17,13 +18,13 @@ enum TaskStatus {
 pub struct Task {
     id: u64,
     query_id: u64,
-    stage_id: usize,
+    stage_id: u64,
     status: TaskStatus,
 }
 
 pub struct Scheduler {
     // Internal state of queries.
-    query_table: HashMap<u64, QueryGraph>,
+    query_table: QueryTable,
 
     // Task queue
     task_queue: VecDeque<Task>,
@@ -32,7 +33,7 @@ pub struct Scheduler {
 impl Scheduler {
     pub fn new() -> Self {
         Self {
-            query_table: HashMap::new(),
+            query_table: QueryTable::new(),
             task_queue: VecDeque::new(),
         }
     }
@@ -40,14 +41,14 @@ impl Scheduler {
     pub fn schedule_plan(&mut self, query_id: u64, plan: RelType) {
         // Build a query graph from the plan.
 
-        let query_id = 1; // Should generate a unique query id.
         let query = QueryGraph::new(query_id, plan);
-        //self.query_table.insert(query_id, plan);
+        self.query_table.add_query(query);
 
         // Add the query to the task queue.
     }
 
-    pub fn update_stage_status(&mut self, query_id: u64, stage_id: usize, status: StageStatus) {
+    pub fn update_stage_status(&mut self, query_id: u64, stage_id: u64, status: StageStatus) {
         // Update the status of the stage in the query graph.
     }
+
 }
