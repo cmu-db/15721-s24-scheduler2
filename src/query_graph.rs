@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
-// use std::collections::HashMap;
-
+use crate::scheduler::Task;
 use substrait::proto::rel::RelType;
 use tokio::sync::RwLock;
 use std::mem;
@@ -15,7 +14,6 @@ pub enum StageStatus {
 pub struct QueryStage {
     plan: RelType,
     status: StageStatus,
-
     outputs: Vec<u64>,
     inputs: Vec<u64>,
 }
@@ -25,7 +23,7 @@ pub struct QueryGraph {
     plan: RelType, // Potentially can be thrown away at this point.
 
     stages: Vec<QueryStage>,
-    frontier: Vec<u64>,
+    frontier: Vec<Task>,
     frontier_lock: tokio::sync::RwLock<()>,
 }
 
@@ -41,8 +39,8 @@ impl QueryGraph {
     }
 
     // Atomically clear frontier vector and return old frontier.
-    pub fn get_frontier(&mut self) -> Vec<u64> {
-        let _lock = self.frontier_lock.blocking_write();
+    pub fn get_frontier(&mut self) -> Vec<Task> {
+        let _ = self.frontier_lock.blocking_write();
         let mut old_frontier = Vec::new();
         mem::swap(&mut self.frontier, &mut old_frontier);
         self.frontier = Vec::new();

@@ -1,5 +1,4 @@
 use prost::Message;
-use serde_json;
 use std::io::{self, Cursor};
 use substrait::proto::Plan;
 

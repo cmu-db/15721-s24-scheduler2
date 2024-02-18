@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 
-use std::collections::VecDeque;
-
-use crate::query_graph::{QueryGraph, StageStatus};
+use crate::query_graph::{QueryGraph, StageStatus, QueryStage};
 use crate::query_table::QueryTable;
+use crate::task_queue::TaskQueue;
 use substrait::proto::rel::RelType;
 
 enum TaskStatus {
@@ -27,24 +26,25 @@ pub struct Scheduler {
     query_table: QueryTable,
 
     // Task queue
-    task_queue: VecDeque<Task>,
+    task_queue: TaskQueue,
 }
 
 impl Scheduler {
     pub fn new() -> Self {
         Self {
             query_table: QueryTable::new(),
-            task_queue: VecDeque::new(),
+            task_queue: TaskQueue::new(),
         }
     }
 
     pub fn schedule_plan(&mut self, query_id: u64, plan: RelType) {
+        
         // Build a query graph from the plan.
-
         let query = QueryGraph::new(query_id, plan);
-        self.query_table.add_query(query);
-
+        let frontier = self.query_table.add_query(query);
+        
         // Add the query to the task queue.
+        self.task_queue.add_tasks(frontier);
     }
 
     pub fn update_stage_status(&mut self, query_id: u64, stage_id: u64, status: StageStatus) {
