@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
 use crate::scheduler::Task;
-use substrait::proto::rel::RelType;
+use datafusion::physical_plan::ExecutionPlan;
 use tokio::sync::RwLock;
-use std::mem;
+use std::{mem, sync::Arc};
 
 pub enum StageStatus {
     NotStarted,
@@ -12,7 +12,7 @@ pub enum StageStatus {
 }
 
 pub struct QueryStage {
-    plan: RelType,
+    plan: Arc<dyn ExecutionPlan>,
     status: StageStatus,
     outputs: Vec<u64>,
     inputs: Vec<u64>,
@@ -20,7 +20,7 @@ pub struct QueryStage {
 
 pub struct QueryGraph {
     pub query_id: u64,
-    plan: RelType, // Potentially can be thrown away at this point.
+    plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
 
     stages: Vec<QueryStage>,
     frontier: Vec<Task>,
@@ -28,7 +28,7 @@ pub struct QueryGraph {
 }
 
 impl QueryGraph {
-    pub fn new(query_id: u64, plan: RelType) -> Self {
+    pub fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
         Self {
             query_id,
             plan,

@@ -6,9 +6,8 @@ use composable_database::{
     AbortQueryArgs, AbortQueryRet, QueryInfo, QueryJobStatusArgs, QueryJobStatusRet, QueryStatus,
     ScheduleQueryArgs, ScheduleQueryRet,
 };
-// use crate::scheduler::Scheduler;
 
-use substrait::proto::Plan;
+use datafusion::physical_plan::ExecutionPlan;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Once;
 

@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
+use std::sync::Arc;
+
 use crate::query_graph::{QueryGraph, StageStatus, QueryStage};
 use crate::query_table::QueryTable;
 use crate::task_queue::TaskQueue;
-use substrait::proto::rel::RelType;
+use datafusion::physical_plan::ExecutionPlan;
 
 enum TaskStatus {
     Waiting,
@@ -37,12 +39,12 @@ impl Scheduler {
         }
     }
 
-    pub fn schedule_plan(&mut self, query_id: u64, plan: RelType) {
-        
+    pub fn schedule_plan(&mut self, query_id: u64, plan: Arc<dyn ExecutionPlan>) {
+
         // Build a query graph from the plan.
         let query = QueryGraph::new(query_id, plan);
         let frontier = self.query_table.add_query(query);
-        
+
         // Add the query to the task queue.
         self.task_queue.add_tasks(frontier);
     }
