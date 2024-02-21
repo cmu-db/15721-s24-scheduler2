@@ -17,10 +17,6 @@ datafusion-proto = "35.0.0"
 datafusion = "35.0.0"
 config = "0.14.0"
 
-[[bin]]
-name = "scheduler"
-path = "src/api.rs"
-
 [build-dependencies]
 tonic-build = "0.11"
 prost-build = {version = "0.12.0"}
