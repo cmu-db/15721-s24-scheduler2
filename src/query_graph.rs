@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 
 use crate::scheduler::Task;
-use substrait::proto::rel::RelType;
+use datafusion::physical_plan::ExecutionPlan;
 use tokio::sync::RwLock;
-use std::mem;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{mem, sync::Arc};
 
 pub enum StageStatus {
     NotStarted,
@@ -13,7 +12,7 @@ pub enum StageStatus {
 }
 
 pub struct QueryStage {
-    plan: RelType,
+    plan: Arc<dyn ExecutionPlan>,
     status: StageStatus,
     outputs: Vec<u64>,
     inputs: Vec<u64>,
@@ -21,16 +20,15 @@ pub struct QueryStage {
 
 pub struct QueryGraph {
     pub query_id: u64,
-    plan: RelType, // Potentially can be thrown away at this point.
     tid_counter: AtomicU64,
     stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
+    plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
     frontier: Vec<Task>,
     frontier_lock: tokio::sync::RwLock<()>,
 }
 
 impl QueryGraph {
-    pub fn new(query_id: u64, plan: RelType) -> Self {
-        // Break plan down into stages and get frontier.
+    pub fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
         Self {
             query_id,
             plan,

@@ -1,24 +1,17 @@
+use datafusion_proto::bytes::{physical_plan_from_bytes,physical_plan_to_bytes};
+use datafusion::execution::context::SessionContext;
 use prost::Message;
 use std::io::{self, Cursor};
-use substrait::proto::Plan;
+use std::sync::Arc;
+use datafusion::physical_plan::ExecutionPlan;
+use datafusion::error::Result;
+use datafusion::arrow::datatypes::DataType;
+use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::arrow::array::Int32Array;
+use datafusion::physical_planner::DefaultPhysicalPlanner;
+use datafusion::physical_planner::PhysicalPlanner;
 
-pub enum Format {
-    Json,
-    Binary,
-}
-
-pub fn deserialize_plan(data: &[u8], format: Format) -> Result<Plan, Box<dyn std::error::Error>> {
-    match format {
-        Format::Json => {
-            // Deserialize JSON to Plan
-            let plan = serde_json::from_slice::<Plan>(data)?;
-            Ok(plan)
-        }
-        Format::Binary => {
-            // Deserialize binary to Plan
-            let mut cursor = Cursor::new(data);
-            let plan = Plan::decode(&mut cursor)?;
-            Ok(plan)
-        }
-    }
+async fn deserialize_physical_plan(bytes: &[u8]) -> Result<Arc<dyn ExecutionPlan>> {
+    let ctx = SessionContext::new();
+    physical_plan_from_bytes(bytes, &ctx)
 }
