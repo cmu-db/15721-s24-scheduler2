@@ -49,6 +49,7 @@ impl Scheduler {
 
     pub fn update_stage_status(&mut self, query_id: u64, stage_id: u64, status: StageStatus) {
         // Update the status of the stage in the query graph.
+        self.query_table.update_stage_status(query_id, stage_id, status);
     }
 
 }

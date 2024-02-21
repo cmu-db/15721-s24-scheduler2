@@ -41,8 +41,3 @@ message NotifyTaskStateRet {
         // Wait or other instructions
     }
 }
-
-service ExecutionEngine {
-    rpc NotifyTaskState(NotifyTaskStateArgs) returns (NotifyTaskStateRet);
-    // Additional RPCs for task execution
-}

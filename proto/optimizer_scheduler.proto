@@ -3,7 +3,7 @@ syntax = "proto3";
 package composable_database;
 
 import "common.proto";
-// import "substrait/algebra.proto";
+import "scheduelr_executor.proto"
 
 // Definitions specific to Optimizer and Scheduler interaction
 
@@ -39,7 +39,11 @@ message AbortQueryRet {
 }
 
 service Scheduler {
+    // OPTIMIZER
     rpc ScheduleQuery(ScheduleQueryArgs) returns (ScheduleQueryRet);
     rpc QueryJobStatus(QueryJobStatusArgs) returns (QueryJobStatusRet);
     rpc AbortQuery(AbortQueryArgs) returns (AbortQueryRet);
+
+    // EXECUTOR
+    rpc NotifyTaskState(NotifyTaskStateArgs) returns (NotifyTaskStateRet);
 }

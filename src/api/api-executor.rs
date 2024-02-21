@@ -3,8 +3,7 @@ use tonic::{transport::Server, Request, Response, Status};
 
 use composable_database::scheduler_server::{Scheduler, SchedulerServer};
 use composable_database::{
-    AbortQueryArgs, AbortQueryRet, QueryInfo, QueryJobStatusArgs, QueryJobStatusRet, QueryStatus,
-    ScheduleQueryArgs, ScheduleQueryRet,
+    AbortQueryArgs, AbortQueryRet, NewTaskPlan, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo, QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet
 };
 // use crate::scheduler::Scheduler;
 
@@ -74,6 +73,24 @@ impl Scheduler for SchedulerService {
     ) -> Result<Response<AbortQueryRet>, Status> {
         // handle response
         let response = AbortQueryRet { aborted: true };
+        Ok(Response::new(response))
+    }
+
+    async fn notify_task_state(
+        &self,
+        request: Request<NotifyTaskStateArgs>,
+    ) -> Result<Response<NotifyTaskStateRet>, Status> {
+        if let NotifyTaskStateArgs {
+            task_id,
+            state
+        } = request.into_inner()
+        {
+        } else {
+            let _ = Err::<Response<NotifyTaskStateRet>, Status>(Status::invalid_argument(
+                "Missing metadata in request",
+            ));
+        }
+        let response = NewTaskPlan::new();
         Ok(Response::new(response))
     }
 }

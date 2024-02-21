@@ -4,6 +4,7 @@ use crate::scheduler::Task;
 use substrait::proto::rel::RelType;
 use tokio::sync::RwLock;
 use std::mem;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub enum StageStatus {
     NotStarted,
@@ -21,21 +22,27 @@ pub struct QueryStage {
 pub struct QueryGraph {
     pub query_id: u64,
     plan: RelType, // Potentially can be thrown away at this point.
-
-    stages: Vec<QueryStage>,
+    tid_counter: AtomicU64,
+    stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     frontier: Vec<Task>,
     frontier_lock: tokio::sync::RwLock<()>,
 }
 
 impl QueryGraph {
     pub fn new(query_id: u64, plan: RelType) -> Self {
+        // Break plan down into stages and get frontier.
         Self {
             query_id,
             plan,
+            tid_counter: AtomicU64::new(0),
             stages: Vec::new(),
             frontier: Vec::new(),
             frontier_lock: RwLock::new(()),
         }
+    }
+
+    fn next_task_id(&mut self) -> u64 {
+        self.tid_counter.fetch_add(1, Ordering::SeqCst)
     }
 
     // Atomically clear frontier vector and return old frontier.
@@ -45,6 +52,19 @@ impl QueryGraph {
         mem::swap(&mut self.frontier, &mut old_frontier);
         self.frontier = Vec::new();
         old_frontier
+    }
+
+    pub fn update_stage_status(&mut self, stage_id: u64, status: StageStatus) -> Result<(), &'static str> {
+        if let Some(stage) = self.stages.get_mut(stage_id as usize) {
+            match (&stage.status, status) {
+                // TODO: handle input/output stuff
+                (StageStatus::NotStarted, StageStatus::Running(_)) => Ok(()),
+                (StageStatus::Running(_a), StageStatus::Finished(_b)) => Ok(()),
+                _ => Err("Mismatched stage statuses.")
+            }
+        } else {
+            Err("Task not found.")
+        }
     }
 }
 
