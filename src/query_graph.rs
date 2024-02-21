@@ -4,6 +4,7 @@ use crate::scheduler::Task;
 use datafusion::physical_plan::ExecutionPlan;
 use tokio::sync::RwLock;
 use std::{mem, sync::Arc};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub enum StageStatus {
     NotStarted,

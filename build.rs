@@ -5,8 +5,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .compile_protos(
         &[
             "proto/common.proto",
-            "proto/optimizer_scheduler.proto",
-            "proto/scheduler_executor.proto",
         ],
         &["proto"],
     )?;
@@ -17,8 +15,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .compile(
             &[
                 "proto/common.proto",
-                "proto/optimizer_scheduler.proto",
-                "proto/scheduler_executor.proto",
             ],
             &["proto"], // Specify the directory where .proto files reside
         )?;

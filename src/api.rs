@@ -10,6 +10,8 @@ use datafusion::physical_plan::ExecutionPlan;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Once;
 
+use crate::parser::deserialize_physical_plan;
+
 // Static query_id generator
 static QID_COUNTER: AtomicU64 = AtomicU64::new(0);
 static QID_COUNTER_INIT: Once = Once::new();
@@ -43,7 +45,7 @@ impl Scheduler for SchedulerService {
                 "Got a request with priority {:?} and cost {:?}",
                 priority, cost
             );
-            let _plan = Plan::decode(physical_plan.as_slice()).unwrap();
+            let _plan = deserialize_physical_plan(physical_plan.as_slice()).await.unwrap();
         } else {
             let _ = Err::<Response<ScheduleQueryRet>, Status>(Status::invalid_argument(
                 "Missing metadata in request",
@@ -89,8 +91,9 @@ impl Scheduler for SchedulerService {
                 "Missing metadata in request",
             ));
         }
-        let response = NewTaskPlan::new();
-        Ok(Response::new(response))
+        Err::<Response<NotifyTaskStateRet>, Status>(Status::invalid_argument(
+            "Missing metadata in request",
+        ))
     }
 }
 
