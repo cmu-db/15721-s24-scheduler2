@@ -2,9 +2,9 @@
 
 use crate::scheduler::Task;
 use datafusion::physical_plan::ExecutionPlan;
-use tokio::sync::RwLock;
 use std::{mem, sync::Arc};
 use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::sync::RwLock;
 
 pub enum StageStatus {
     NotStarted,
@@ -53,13 +53,17 @@ impl QueryGraph {
         old_frontier
     }
 
-    pub fn update_stage_status(&mut self, stage_id: u64, status: StageStatus) -> Result<(), &'static str> {
+    pub fn update_stage_status(
+        &mut self,
+        stage_id: u64,
+        status: StageStatus,
+    ) -> Result<(), &'static str> {
         if let Some(stage) = self.stages.get_mut(stage_id as usize) {
             match (&stage.status, status) {
                 // TODO: handle input/output stuff
                 (StageStatus::NotStarted, StageStatus::Running(_)) => Ok(()),
                 (StageStatus::Running(_a), StageStatus::Finished(_b)) => Ok(()),
-                _ => Err("Mismatched stage statuses.")
+                _ => Err("Mismatched stage statuses."),
             }
         } else {
             Err("Task not found.")

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::query_graph::{QueryGraph, StageStatus, QueryStage};
+use crate::query_graph::{QueryGraph, QueryStage, StageStatus};
 use crate::query_table::QueryTable;
 use crate::task_queue::TaskQueue;
 use datafusion::physical_plan::ExecutionPlan;
@@ -40,7 +40,6 @@ impl Scheduler {
     }
 
     pub fn schedule_plan(&mut self, query_id: u64, plan: Arc<dyn ExecutionPlan>) {
-
         // Build a query graph from the plan.
         let query = QueryGraph::new(query_id, plan);
         let frontier = self.query_table.add_query(query);
@@ -51,7 +50,7 @@ impl Scheduler {
 
     pub fn update_stage_status(&mut self, query_id: u64, stage_id: u64, status: StageStatus) {
         // Update the status of the stage in the query graph.
-        self.query_table.update_stage_status(query_id, stage_id, status);
+        self.query_table
+            .update_stage_status(query_id, stage_id, status);
     }
-
 }
