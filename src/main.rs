@@ -9,6 +9,9 @@ pub mod api;
 
 use config::{Config, ConfigError, File, FileFormat};
 use serde::Deserialize;
+use tonic::transport::Server;
+
+use crate::api::{composable_database::scheduler_server::SchedulerServer, SchedulerService};
 
 #[derive(Debug, Deserialize)]
 struct Executor {
@@ -43,9 +46,23 @@ impl Executors {
 
 const EXECUTOR_CONFIG: &str = "executors.toml";
 
-fn main() {
-    println!("Hello, world!");
+// fn main() {
+//     println!("Hello, world!");
+//
+//     let executors = Executors::from_file().unwrap();
+//     println!("A config: {:#?}", executors);
+// }
 
-    let executors = Executors::from_file().unwrap();
-    println!("A config: {:#?}", executors);
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let crate_root = env!("CARGO_MANIFEST_DIR");
+    println!("Path to crate's root: {}", crate_root);
+    let addr = "[::1]:50051".parse()?;
+    let scheduler_service = SchedulerService::default();
+    Server::builder()
+        .add_service(SchedulerServer::new(scheduler_service))
+        .serve(addr)
+        .await?;
+    Ok(())
 }

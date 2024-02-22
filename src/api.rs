@@ -97,15 +97,3 @@ impl Scheduler for SchedulerService {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let crate_root = env!("CARGO_MANIFEST_DIR");
-    println!("Path to crate's root: {}", crate_root);
-    let addr = "[::1]:50051".parse()?;
-    let scheduler_service = SchedulerService::default();
-    Server::builder()
-        .add_service(SchedulerServer::new(scheduler_service))
-        .serve(addr)
-        .await?;
-    Ok(())
-}
