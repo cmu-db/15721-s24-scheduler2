@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::query_graph::{QueryGraph, StageStatus, QueryStage};
+use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
 use crate::task_queue::TaskQueue;
 use datafusion::physical_plan::ExecutionPlan;
