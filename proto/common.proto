@@ -87,7 +87,7 @@ message AbortQueryRet {
     bool aborted = 1;
 }
 
-service Scheduler {
+service SchedulerAPI {
     // OPTIMIZER
     rpc ScheduleQuery(ScheduleQueryArgs) returns (ScheduleQueryRet);
     rpc QueryJobStatus(QueryJobStatusArgs) returns (QueryJobStatusRet);
