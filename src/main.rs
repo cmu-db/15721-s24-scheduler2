@@ -1,3 +1,4 @@
+pub mod api;
 mod composable_database;
 mod dispatcher;
 pub mod parser;
@@ -5,7 +6,6 @@ mod query_graph;
 mod query_table;
 mod scheduler;
 mod task_queue;
-pub mod api;
 
 use config::{Config, ConfigError, File, FileFormat};
 use serde::Deserialize;

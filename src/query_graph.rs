@@ -2,8 +2,8 @@
 
 use crate::scheduler::Task;
 use datafusion::physical_plan::ExecutionPlan;
-use std::{mem, sync::Arc};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::{mem, sync::Arc};
 use tokio::sync::RwLock;
 
 pub enum StageStatus {
