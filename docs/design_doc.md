@@ -5,7 +5,7 @@
 
 # Overview
 **Goal of the Project:** 
-- The aim of this project is to develop a Rust-based scheduler for a distributed cloud-native OLAP DBMS on a shared-disk architecture. This scheduler will process Substrait physical plans, managing and sending Substrait physical plans across various execution nodes. Additionally, it will collect and relay the final results back to the user.
+- The aim of this project is to develop a Rust-based scheduler for a distributed cloud-native OLAP DBMS on a shared-disk architecture. This scheduler will process Datafusion execution plans, managing and sending Datafusion ExecutionPlans across various execution nodes. Additionally, it will collect and relay the final results back to the user.
 
 - The scheduler should enable concurrent delivery and dispatch of query plans from one or more query optimizers (inter-query parallelism) along with effective decomposition of each individual query (intra-query parallelism). We aim to produce a module with the following high-level criteria:
   - Fair, responsive scheduling policy.
@@ -33,14 +33,14 @@
 ![Project Proposal Architecture](project_proposal_arch.png "Project Proposal Architecture Diagram")
 
 **Architectural Components:**
-- **DAG Parser:** Parses a Substrait logical plan into a DAG of stages, where each stage consists of tasks that can be completed without shuffling intermediate results. After decomposing the work, it then enqueues tasks into a work queue in a breadth-first manner.
+- **DAG Parser:** Parses a Datafusion ExecutionPlan into a DAG of stages, where each stage consists of tasks that can be completed without shuffling intermediate results. After decomposing the work, it then enqueues tasks into a work queue in a breadth-first manner.
 - **Work Queue:** A concurrent queue (initially FIFO) where tasks are enqueued by the DAG Parser. Each query submitted by the optimizer also has a cost, allowing for heuristic adjustments to the ordering.
 - **Work Threads (tokio):** Tokio threads are created for each executor node to handle communications.
 - **QueryID Table:** An in-memory data structure mapping QueryIDs to a DAG of remaining query fragments and cost estimates retrieved from the optimizer.
 - **Executors:** Each executor is connected to the scheduler and the other executors via gRPC (tonic).
 
 **Workflow:**
-1. Receives Substrait Logical Plans from Query Optimizer and parses them into DAG, then stores in QueryID Table.
+1. Receives Datafusion ExecutionPlans from Query Optimizer and parses them into DAG, then stores in QueryID Table.
 2. Leaves of DAG are added to work queue that work threads can pull from.
 3. Work threads pull work from the queue and push to execution nodes, then update QueryID Table with results, and enqueue any new leaves.
 4. Upon completion of the last leaf, the job is marked as done in the QueryID Table, and results are stored (either to an S3 location or in memory) until the client calls `query_job_status`.
@@ -58,7 +58,7 @@
 Individual components within the scheduler will be unit tested using Rust’s test module.
 
 ### End-to-End / Integration Testing
-To test the correctness of our scheduler implementation, we intend on using Apache DataFusion as an executor, and comparing the Arrow results from running our scheduler on a given Substrait plan, against the naive result. We will use the same pipeline to benchmark the performance of our scheduler, measuring the time to compute the final Arrow results, again using DataFusion as our executor. We can use EC2 to simulate multiple executors for more precise performance metrics.
+To test our scheduler's correctness, we will use test cases from the sqllogictest module within the DataFusion repository. Our approach involves building a component to parse .slt files, transform each query into a DataFusion ExecutionPlan, and forward it to the scheduler. We will verify the scheduler's correctness by comparing the Arrow results produced by our scheduler-driven DataFusion execution against those obtained from executing on a single DF executor. Additionally, this pipeline will serve to benchmark our scheduler's performance by timing the computation of the final Arrow results, utilizing DataFusion as the executor. For more precise performance metrics, we will simulate multiple executors using EC2.
 
 ### CI/CD
 We aim to build a pipeline with GitHub Actions that will allow us to continuously run our end-to-end correctness tests before merging PRs to establish a correct implementation early, and maintain that as we add more advanced functionality to our scheduler.
