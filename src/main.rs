@@ -6,7 +6,6 @@ mod query_table;
 mod scheduler;
 mod task_queue;
 pub mod api;
-mod tests;
 
 use config::{Config, ConfigError, File, FileFormat};
 use serde::Deserialize;
