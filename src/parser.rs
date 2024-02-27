@@ -133,7 +133,9 @@ async fn test_get_execution_plans_from_files() {
     }
 
     // Print out the total counts.
-    eprintln!("Total number of execution plans generated: {}", total_execution_plans);
+    eprintln!(
+        "Total number of execution plans generated: {}",
+        total_execution_plans
+    );
     eprintln!("Total number of files scanned: {}", files_scanned);
 }
-
