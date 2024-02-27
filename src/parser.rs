@@ -107,6 +107,9 @@ async fn test_get_execution_plans_from_files() {
         return;
     }
 
+    let mut total_execution_plans = 0; // Counter for the total number of execution plans.
+    let mut files_scanned = 0; // Counter for the number of files scanned.
+
     for file_path in entries {
         let file_path_str = file_path
             .to_str()
@@ -114,7 +117,9 @@ async fn test_get_execution_plans_from_files() {
         eprintln!("Processing test file: {}", file_path_str);
 
         match get_execution_plan_from_file(file_path_str).await {
-            Ok(_) => {}
+            Ok(plans) => {
+                total_execution_plans += plans.len();
+            }
             Err(e) => {
                 eprintln!(
                     "Failed to get execution plans from file {}: {}",
@@ -123,5 +128,12 @@ async fn test_get_execution_plans_from_files() {
                 panic!("Test failed due to error with file: {}", file_path_str);
             }
         }
+
+        files_scanned += 1;
     }
+
+    // Print out the total counts.
+    eprintln!("Total number of execution plans generated: {}", total_execution_plans);
+    eprintln!("Total number of files scanned: {}", files_scanned);
 }
+
