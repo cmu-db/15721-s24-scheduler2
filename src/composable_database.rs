@@ -20,17 +20,7 @@ pub struct TaskStatusIncomplete {
 }
 /// Nested message and enum types in `TaskStatusIncomplete`.
 pub mod task_status_incomplete {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum StatusType {
         Failed = 0,
