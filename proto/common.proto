@@ -2,11 +2,12 @@ syntax = "proto3";
 
 package composable_database;
 
-// Common message types and enums here
+// Common message types and enums
 
+// A task is identified by its query id and task id
 message TaskID {
     uint64 query_id = 1;
-    uint64 task = 2;
+    uint64 task_id = 2;
 }
 
 enum QueryStatus {
@@ -18,40 +19,16 @@ enum QueryStatus {
 
 // Task execution and status messages
 
-message TaskDone {
-    uint64 result_size = 1;
-}
-
-message TaskStatusIncomplete {
-    enum StatusType {
-        FAILED = 0;
-        PREFETCH = 1;
-    }
-    StatusType status_type = 1;
-}
-
 message NotifyTaskStateArgs {
-    uint64 task_id = 1;
-    oneof state {
-        TaskDone result = 2;
-        TaskStatusIncomplete code = 3;
-    }
-}
-
-message NewTaskPlan {
-    bytes physical_plan = 1;
-    oneof exchange_instruction {
-        // Definitions for scatter, gather, discard results
-        int32 scatter = 2;
-        string gather = 3;
-    }
+    TaskID task = 1;
+    bool success = 2; // if the query succeeded
+    bytes result = 3; // bytes for the result
 }
 
 message NotifyTaskStateRet {
-    oneof response {
-        NewTaskPlan plan = 1;
-        // Wait or other instructions
-    }
+    bool has_new_task = 1; // true if there is a new task (details given below)
+    TaskID task = 2;
+    bytes physical_plan = 3;
 }
 
 // Definitions specific to Optimizer and Scheduler interaction
@@ -96,6 +73,3 @@ service SchedulerAPI {
     // EXECUTOR
     rpc NotifyTaskState(NotifyTaskStateArgs) returns (NotifyTaskStateRet);
 }
-
-
-// Other common definitions
