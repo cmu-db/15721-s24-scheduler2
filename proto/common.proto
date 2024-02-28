@@ -36,7 +36,6 @@ message NotifyTaskStateRet {
 message QueryInfo {
     int32 priority = 1;
     int32 cost = 2;
-    // Additional fields here
 }
 
 message ScheduleQueryArgs {
