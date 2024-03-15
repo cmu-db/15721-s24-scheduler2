@@ -1,7 +1,7 @@
-use datafusion::prelude::*;
-use datafusion::error::Result;
 use datafusion::execution::context::SessionContext;
+use datafusion::physical_plan::ExecutionPlan;
 use datafusion::dataframe::DataFrame;
+use datafusion::error::Result;
 use std::sync::Arc;
 
 struct DatafusionExecutor {
@@ -19,19 +19,14 @@ impl DatafusionExecutor {
         self.ctx.register_csv(table_name, file_path, options).await
     }
 
+    // Function to execute a query from a SQL string
     pub async fn execute_query(&self, query: &str) -> Result<DataFrame> {
         self.ctx.sql(query).await
     }
-}
 
-// #[tokio::main]
-// async fn main() -> Result<()> {
-//     let executor = DatafusionExecutor::new();
-//     executor.register_csv("example", "tests/data/example.csv", CsvReadOptions::new()).await?;
-//
-//     let query = "SELECT a, MIN(b) FROM example WHERE a <= b GROUP BY a LIMIT 100";
-//     let df = executor.execute_query(query).await?;
-//
-//     df.show().await?;
-//     Ok(())
-// }
+    // Function to execute a query from an ExecutionPlan
+    pub async fn execute_plan(&self, plan: Arc<dyn ExecutionPlan>) -> Result<DataFrame> {
+        let execution = self.ctx.collect(plan).await?;
+        Ok(DataFrame::new(self.ctx.state.clone(), &execution))
+    }
+}
