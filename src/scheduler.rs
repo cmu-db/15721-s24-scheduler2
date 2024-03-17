@@ -6,8 +6,9 @@ use crate::query_graph::{QueryGraph, QueryStage, StageStatus};
 use crate::query_table::QueryTable;
 use crate::task_queue::TaskQueue;
 use datafusion::physical_plan::ExecutionPlan;
+use crate::SchedulerError;
 
-enum TaskStatus {
+pub enum TaskStatus {
     Waiting,
     Ready,
     Running(u32), // ID of executor running this task
@@ -17,10 +18,10 @@ enum TaskStatus {
 }
 
 pub struct Task {
-    id: u64,
-    query_id: u64,
-    stage_id: u64,
-    status: TaskStatus,
+    pub(crate) id: u64,
+    pub(crate) query_id: u64,
+    pub(crate) stage_id: u64,
+    pub(crate) status: TaskStatus,
 }
 
 pub struct Scheduler {
@@ -53,4 +54,25 @@ impl Scheduler {
         self.query_table
             .update_stage_status(query_id, stage_id, status);
     }
+
+    pub fn store_result(&self, _result: Vec<u8>) {
+        // Use either optimizer API to push result, or store in query table
+    }
+
+    pub fn update_task_state(&mut self, query_id: u64, task_id: u64) {
+        // Update the status of the stage in the query graph.
+        self.query_table
+            .update_stage_status(query_id, task_id, StageStatus::Finished(0));
+
+        // If new tasks are available, add them to the queue
+        let frontier = self.query_table.get_frontier(query_id);
+        self.task_queue.add_tasks(frontier);
+    }
+
+    pub fn next_task(&mut self) -> Result<(Task, Vec<u8>), SchedulerError> {
+        let task = self.task_queue.next_task();
+        let stage = self.query_table.get_plan_bytes(task.query_id, task.stage_id)?;
+        Ok((task, stage))
+    }
+
 }

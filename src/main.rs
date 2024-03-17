@@ -1,18 +1,25 @@
 pub mod api;
 mod composable_database;
 mod dispatcher;
+mod mock_executor;
 pub mod parser;
 mod query_graph;
 mod query_table;
 mod scheduler;
 mod task_queue;
-mod mock_executor;
+mod tests;
 
 use config::{Config, ConfigError, File, FileFormat};
 use serde::Deserialize;
 use tonic::transport::Server;
+use datafusion::error::DataFusionError;
 
 use crate::api::{composable_database::scheduler_api_server::SchedulerApiServer, SchedulerService};
+
+pub enum SchedulerError {
+    Error(String),
+    DfError(DataFusionError),
+}
 
 #[derive(Debug, Deserialize)]
 struct Executor {

@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
-use crate::scheduler::Task;
+use crate::scheduler::{Task, TaskStatus};
 use datafusion::physical_plan::ExecutionPlan;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{mem, sync::Arc};
 use tokio::sync::RwLock;
@@ -13,16 +14,16 @@ pub enum StageStatus {
 }
 
 pub struct QueryStage {
-    plan: Arc<dyn ExecutionPlan>,
+    pub plan: Arc<dyn ExecutionPlan>,
     status: StageStatus,
-    outputs: Vec<u64>,
-    inputs: Vec<u64>,
+    outputs: HashSet<u64>,
+    inputs: HashSet<u64>,
 }
 
 pub struct QueryGraph {
     pub query_id: u64,
-    tid_counter: AtomicU64,
-    stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
+    tid_counter: AtomicU64,       // TODO: add mutex to stages and make elements pointers to avoid copying
+    pub stages: Vec<QueryStage>,      // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
     frontier: Vec<Task>,
     frontier_lock: tokio::sync::RwLock<()>,
@@ -58,11 +59,43 @@ impl QueryGraph {
         stage_id: u64,
         status: StageStatus,
     ) -> Result<(), &'static str> {
-        if let Some(stage) = self.stages.get_mut(stage_id as usize) {
-            match (&stage.status, status) {
+        if self.stages.get(stage_id as usize).is_some() {
+            match (&self.stages.get(stage_id as usize).unwrap().status, &status) {
                 // TODO: handle input/output stuff
-                (StageStatus::NotStarted, StageStatus::Running(_)) => Ok(()),
-                (StageStatus::Running(_a), StageStatus::Finished(_b)) => Ok(()),
+                (StageStatus::NotStarted, StageStatus::Running(_)) => {
+                    self.stages.get_mut(stage_id as usize).unwrap().status = status;
+                    Ok(())
+                }
+                (StageStatus::Running(_a), StageStatus::Finished(_b)) => {
+                    let outputs = {
+                        let stage = self.stages.get_mut(stage_id as usize).unwrap();
+                        stage.status = status;
+                        stage.outputs.clone()
+                    };
+                    // stage.status = status;
+                    // Remove this stage from each output stage's input stage
+                    for output_stage_id in &outputs {
+                        if let Some(output_stage) = self.stages.get_mut(*output_stage_id as usize) {
+                            output_stage.inputs.remove(&stage_id);
+
+                            // Add output stage to frontier if its input size is zero
+                            if output_stage.inputs.len() == 0 {
+                                output_stage.status = StageStatus::Running(0); // TODO: "ready stage status?"
+                                let new_output_task = Task {
+                                    id: *output_stage_id, // same as stage ID for now
+                                    query_id: self.query_id,
+                                    stage_id: *output_stage_id,
+                                    status: TaskStatus::Ready,
+                                };
+                                let _ = self.frontier_lock.blocking_write();
+                                self.frontier.push(new_output_task);
+                            }
+                        } else {
+                            return Err("Output stage not found.");
+                        }
+                    }
+                    Ok(())
+                }
                 _ => Err("Mismatched stage statuses."),
             }
         } else {
@@ -71,10 +104,3 @@ impl QueryGraph {
     }
 }
 
-enum TaskStatus {
-    Waiting,
-    Ready,
-    Running(i32), // ID of executor running this task
-    Finished,
-    Failed,
-}

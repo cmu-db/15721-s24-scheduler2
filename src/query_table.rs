@@ -1,9 +1,12 @@
+use crate::parser::serialize_physical_plan;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::scheduler::Task;
 use futures::executor;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use tokio::sync::{Mutex, RwLock};
+use crate::SchedulerError;
+use std::sync::Arc;
 
 pub struct QueryTable {
     // Maps query IDs to query graphs
@@ -15,6 +18,14 @@ impl QueryTable {
         Self {
             table: RwLock::new(HashMap::new()),
         }
+    }
+
+    pub fn get_frontier(&self, query_id: u64) -> Vec<Task> {
+        executor::block_on(async {
+            let mut t = self.table.write().await;
+            let frontier = t.get(&query_id).unwrap().borrow_mut().get_frontier();
+            frontier
+        })
     }
 
     #[must_use]
@@ -40,6 +51,21 @@ impl QueryTable {
             Ok(())
         } else {
             Err("Graph not found.")
+        }
+    }
+
+    pub fn get_plan_bytes(&mut self, query_id: u64, stage_id: u64) 
+    -> Result<Vec<u8>, SchedulerError> {
+        let t = self.table.blocking_read();
+        if let Some(graph) = t.get(&query_id) {
+            let plan = Arc::clone(&graph.borrow().stages[stage_id as usize].plan);
+            executor::block_on(async{
+                match serialize_physical_plan(plan).await {
+                    Ok(p) => Ok(p),
+                    Err(e) => Err(SchedulerError::DfError(e))
+                }})
+        } else {
+            Err(SchedulerError::Error("Graph not found.".to_string()))
         }
     }
 

@@ -1,7 +1,7 @@
-use datafusion::prelude::*;
+use datafusion::dataframe::DataFrame;
 use datafusion::error::Result;
 use datafusion::execution::context::SessionContext;
-use datafusion::dataframe::DataFrame;
+use datafusion::prelude::*;
 use std::sync::Arc;
 
 struct DatafusionExecutor {
@@ -15,7 +15,12 @@ impl DatafusionExecutor {
         }
     }
 
-    pub async fn register_csv(&self, table_name: &str, file_path: &str, options: CsvReadOptions<'_>) -> Result<()> {
+    pub async fn register_csv(
+        &self,
+        table_name: &str,
+        file_path: &str,
+        options: CsvReadOptions<'_>,
+    ) -> Result<()> {
         self.ctx.register_csv(table_name, file_path, options).await
     }
 

@@ -2,7 +2,7 @@ use datafusion::error::Result;
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::physical_planner::PhysicalPlanner;
-use datafusion_proto::bytes::physical_plan_from_bytes;
+use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use sqllogictest::ColumnType;
 use sqllogictest::Record;
 use std::sync::Arc;
@@ -47,6 +47,13 @@ impl ColumnType for DFColumnType {
 pub async fn deserialize_physical_plan(bytes: &[u8]) -> Result<Arc<dyn ExecutionPlan>> {
     let ctx = SessionContext::new();
     physical_plan_from_bytes(bytes, &ctx)
+}
+
+pub async fn serialize_physical_plan(plan: Arc<dyn ExecutionPlan>) -> Result<Vec<u8>> {
+    match physical_plan_to_bytes(plan) {
+        Ok(plan_bytes) => Ok(Vec::from(plan_bytes)),
+        Err(e) => Err(e)
+    }
 }
 
 async fn get_execution_plan_from_file(
