@@ -18,7 +18,6 @@ enum QueryStatus {
 }
 
 // Task execution and status messages
-
 message NotifyTaskStateArgs {
     TaskID task = 1;
     bool success = 2; // if the query succeeded

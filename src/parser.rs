@@ -85,6 +85,22 @@ async fn get_execution_plan_from_file(
     Ok(plans)
 }
 
+// list all the .slt files under a directory
+pub fn list_all_slt_files(dir_path: &str) -> Vec<PathBuf> {
+    let entries = fs::read_dir(dir_path)
+        .unwrap_or_else(|_| panic!("Failed to read directory: {}", dir_path))
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(std::ffi::OsStr::to_str) == Some("slt"))
+        .collect::<Vec<_>>();
+
+    if entries.is_empty() {
+        eprintln!("No .slt files found in directory: {}", dir_path);
+    }
+
+    entries
+}
+
 #[tokio::test]
 async fn test_get_execution_plans_from_files() {
     use std::fs;
@@ -93,13 +109,7 @@ async fn test_get_execution_plans_from_files() {
     let dir_path = "./test_files";
     eprintln!("Parsing test files in directory: {}", dir_path);
 
-    // Read the directory contents.
-    let entries = fs::read_dir(dir_path)
-        .expect("Failed to read directory")
-        .filter_map(|entry| entry.ok()) // Filter out Err results and unwrap Ok values.
-        .map(|entry| entry.path()) // Convert DirEntry to PathBuf.
-        .filter(|path| path.extension().and_then(std::ffi::OsStr::to_str) == Some("slt")) // Keep only .slt files.
-        .collect::<Vec<_>>();
+    let entries = list_all_slt_files(dir_path);
 
     // Check if there are any .slt files to process.
     if entries.is_empty() {

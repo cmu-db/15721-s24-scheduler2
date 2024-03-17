@@ -7,6 +7,7 @@ mod query_table;
 mod scheduler;
 mod task_queue;
 mod mock_executor;
+pub mod integration_testing;
 
 use config::{Config, ConfigError, File, FileFormat};
 use serde::Deserialize;
