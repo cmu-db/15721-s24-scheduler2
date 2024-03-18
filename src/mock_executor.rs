@@ -21,7 +21,12 @@ impl DatafusionExecutor {
         }
     }
 
-    pub async fn register_csv(&self, table_name: &str, file_path: &str, options: CsvReadOptions<'_>) -> Result<()> {
+    pub async fn register_csv(
+        &self,
+        table_name: &str,
+        file_path: &str,
+        options: CsvReadOptions<'_>,
+    ) -> Result<()> {
         self.ctx.register_csv(table_name, file_path, options).await
     }
 

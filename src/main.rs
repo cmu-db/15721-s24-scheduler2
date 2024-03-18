@@ -8,12 +8,19 @@ mod scheduler;
 mod task_queue;
 pub mod mock_executor;
 mod integration_test;
+mod tests;
 
 use config::{Config, ConfigError, File, FileFormat};
 use serde::Deserialize;
 use tonic::transport::Server;
+use datafusion::error::DataFusionError;
 
 use crate::api::{composable_database::scheduler_api_server::SchedulerApiServer, SchedulerService};
+
+pub enum SchedulerError {
+    Error(String),
+    DfError(DataFusionError),
+}
 
 #[derive(Debug, Deserialize)]
 struct Executor {

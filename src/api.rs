@@ -4,9 +4,8 @@ use tonic::{transport::Server, Request, Response, Status};
 
 use composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
 use composable_database::{
-    notify_task_state_args, AbortQueryArgs, AbortQueryRet, NewTaskPlan, NotifyTaskStateArgs,
-    NotifyTaskStateRet, QueryInfo, QueryJobStatusArgs, QueryJobStatusRet, QueryStatus,
-    ScheduleQueryArgs, ScheduleQueryRet,
+    TaskId, AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
+    QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
 };
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -90,26 +89,44 @@ impl SchedulerApi for SchedulerService {
         &self,
         request: Request<NotifyTaskStateArgs>,
     ) -> Result<Response<NotifyTaskStateRet>, Status> {
-        let NotifyTaskStateArgs { task_id, state, .. } = request.into_inner();
 
-        match state {
-            Some(field) => {
-                match field {
-                    notify_task_state_args::State::Result(_) => {
-                        // TODO: handle
-                    }
-                    notify_task_state_args::State::Code(_) => {
-                        // TODO: handle
-                    }
-                }
-            }
+        let NotifyTaskStateArgs {
+            task,
+            success,
+            result,
+        } = request.into_inner();
+
+        let task_id = match task {
+            Some(t) => t,
             None => {
-                return Err(Status::invalid_argument("Expected oneof field was missing"));
+                return Err(Status::invalid_argument(
+                    "Executor: Failed to match task ID.",
+                ))
             }
+        };
+        if !success {
+            // send kill message to all executors
+            // Flag query as aborted (for now)
+            // Another option is to requeue failed fragment
+            return Err(Status::invalid_argument(
+                "Executor: Failed to execute query fragment.",
+            ));
+        }
+        let mut scheduler = SCHEDULER.lock().unwrap();
+        scheduler.store_result(result);
+        scheduler.update_task_state(task_id.query_id, task_id.task_id);
+        if let Ok((task, bytes)) = scheduler.next_task() {
+            let response = NotifyTaskStateRet {
+                has_new_task: true, 
+                task: Some(TaskId {query_id: task.query_id, task_id: task.id}), 
+                physical_plan: bytes,
+            };
+            return Ok(Response::new(response));
+        } else {
+            return Err(Status::invalid_argument(
+                "Scheduler: Failed to get next task.",
+            ));
         }
 
-        Err(Status::invalid_argument(
-            "notify_task_state not implemented.",
-        ))
     }
 }
