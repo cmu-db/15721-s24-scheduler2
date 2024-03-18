@@ -90,7 +90,7 @@ impl SchedulerApi for SchedulerService {
         &self,
         request: Request<NotifyTaskStateArgs>,
     ) -> Result<Response<NotifyTaskStateRet>, Status> {
-        let NotifyTaskStateArgs { task_id, state } = request.into_inner();
+        let NotifyTaskStateArgs { task_id, state, .. } = request.into_inner();
 
         match state {
             Some(field) => {

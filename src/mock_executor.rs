@@ -3,10 +3,10 @@ use datafusion::physical_plan::ExecutionPlan;
 use datafusion::dataframe::DataFrame;
 use datafusion::error::Result;
 use std::sync::Arc;
-use datafusion::physical_plan::ExecutionPlan;
 use datafusion::execution::context::TaskContext;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::error::DataFusionError;
+use datafusion::prelude::CsvReadOptions;
 use futures::stream::StreamExt;
 
 
@@ -27,13 +27,12 @@ impl DatafusionExecutor {
 
     // Function to execute a query from a SQL string
     pub async fn execute_query(&self, query: &str) -> Result<Vec<RecordBatch>> {
-        let df = self.ctx.sql(query).await
+        let df = self.ctx.sql(query).await;
         return df.collect();
     }
 
     // Function to execute a query from an ExecutionPlan
     pub async fn execute_plan(&self, plan: Arc<dyn ExecutionPlan>) -> Result<Vec<RecordBatch>, DataFusionError> {
-        let execution = self.ctx.collect(plan).await?;
         let task_ctx = self.ctx.task_ctx();        
         let mut batches = Vec::new();
 

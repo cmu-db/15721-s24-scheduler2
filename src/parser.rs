@@ -1,3 +1,5 @@
+use std::fs;
+use std::path::PathBuf;
 use datafusion::error::Result;
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;

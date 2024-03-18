@@ -7,29 +7,38 @@ Steps for integration testing:
 2. Start th
 
 
+Task 1: figure out how to import mock executor
+Task 2: write unit tests for mock executor
+Task 3: make integration tests compile
+
 
 
 
 */
 
+use std::fs;
+use datafusion::physical_plan::test::exec::MockExec;
 use serde::Deserialize;
-use tonic::transport::Channel;
-use composable_database::scheduler_api_client::SchedulerApiClient;
-use composable_database::{ScheduleQueryArgs, NotifyTaskStateArgs};
+use tonic::transport::{Channel, Server};
+use crate::api::composable_database::{ScheduleQueryArgs, NotifyTaskStateArgs};
 use lazy_static::lazy_static;
-use composable_database::TaskId;
+use crate::api::composable_database::TaskId;
+use crate::api::composable_database::scheduler_api_server::SchedulerApiServer;
+use crate::Executor;
+use crate::scheduler::Scheduler;
 
 
 
 lazy_static! {
-    static HANDSHAKE_QUERY_ID = -1li64 as u64;
-    static HANDSHAKE_TASK_ID = -1li64 as u64;
-    static ref HANDSHAKE_TASK_ID: TaskId = TaskId {
-        query_id: HANDSHAKE_QUERY_ID,
-        task_id: HANDSHAKE_TASK_ID,
+    static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
+    // If you need a separate HANDSHAKE_TASK_ID, define it here without recursive dependency
+    static ref HANDSHAKE_TASK_ID: u64 = -1i64 as u64;
+    // Define HANDSHAKE_TASK only if it doesn't depend on HANDSHAKE_TASK_ID itself
+    static ref HANDSHAKE_TASK: TaskId = TaskId {
+        query_id: *HANDSHAKE_QUERY_ID,
+        task_id: *HANDSHAKE_TASK_ID,
     };
 }
-
 
 // Format definitions for the config file
 #[derive(Deserialize)]
@@ -61,7 +70,7 @@ fn read_config() -> Config {
 // Starts the scheduler gRPC service
 async fn start_scheduler_server(addr: String) {
     let addr = addr.parse().expect("Invalid address");
-    let scheduler = MyScheduler::default();
+    let scheduler = Scheduler::new();
 
     println!("Scheduler listening on {}", addr);
 
@@ -88,6 +97,8 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: String)
     // Create a client using the channel
     let mut client = SchedulerApiClient::new(channel);
 
+    let executor = DatafusionExecutor::new();
+
     // Send initial request with handshake task ID
     let handshake = tonic::Request::new(NotifyTaskStateArgs {
         task: Some(HANDSHAKE_TASK_ID),
@@ -95,14 +106,14 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: String)
         result: Vec::new(),
     });
 
-    let mut task_id = composable_database::TaskId {
-        query_id: HANDSHAKE_QUERY_ID,
-        task_id: HANDSHAKE_TASK_ID,
+    let mut task_id = TaskId {
+        query_id: *HANDSHAKE_QUERY_ID,
+        task_id: *HANDSHAKE_TASK_ID,
     };
 
     loop {
         let request = if task_id.query_id == HANDSHAKE_QUERY_ID && task_id.task_id == HANDSHAKE_TASK_ID {
-            initial_request.clone()
+            handshake.clone()
         } else {
             tonic::Request::new(NotifyTaskStateArgs {
                 task: Some(task_id.clone()),
@@ -116,6 +127,7 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: String)
                 let response_inner = response.into_inner();
                 if response_inner.has_new_task {
                     task_id = response_inner.task.unwrap_or_default();
+                    executor.
 
                     // TODO: execute the physical plan
                     // let new_result 
@@ -210,21 +222,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-    
 
     Ok(())
 }
