@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_client(true)
         .compile(
             &["proto/common.proto"],
-            &["proto"], // Specify the directory where .proto files reside
+            &["proto"],
         )?;
     Ok(())
 }

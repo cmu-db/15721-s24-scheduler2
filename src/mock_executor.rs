@@ -10,7 +10,7 @@ use datafusion::prelude::CsvReadOptions;
 use futures::stream::StreamExt;
 
 
-struct DatafusionExecutor {
+pub struct DatafusionExecutor {
     ctx: Arc<SessionContext>,
 }
 
@@ -33,7 +33,7 @@ impl DatafusionExecutor {
     // Function to execute a query from a SQL string
     pub async fn execute_query(&self, query: &str) -> Result<Vec<RecordBatch>> {
         let df = self.ctx.sql(query).await;
-        return df.collect();
+        return df?.collect().await;
     }
 
     // Function to execute a query from an ExecutionPlan
@@ -41,7 +41,7 @@ impl DatafusionExecutor {
         let task_ctx = self.ctx.task_ctx();        
         let mut batches = Vec::new();
 
-        match plan.execute(1, task_ctx).await {
+        match plan.execute(1, task_ctx) {
             Ok(mut stream) => {
                 // Iterate over the stream
                 while let Some(batch_result) = stream.next().await {

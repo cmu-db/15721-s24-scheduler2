@@ -3,8 +3,8 @@
 /*
 
 Steps for integration testing:
-1. Start the scheduler
-2. Start th
+1. Start the scheduler gRPC
+2. Start executors according to the config file
 
 
 Task 1: figure out how to import mock executor
@@ -16,16 +16,19 @@ Task 3: make integration tests compile
 
 */
 
+use std::env;
 use std::fs;
-use datafusion::physical_plan::test::exec::MockExec;
 use serde::Deserialize;
 use tonic::transport::{Channel, Server};
 use crate::api::composable_database::{ScheduleQueryArgs, NotifyTaskStateArgs};
 use lazy_static::lazy_static;
+use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
 use crate::api::composable_database::TaskId;
 use crate::api::composable_database::scheduler_api_server::SchedulerApiServer;
-use crate::Executor;
+use crate::api::SchedulerService;
+use crate::mock_executor::DatafusionExecutor;
 use crate::scheduler::Scheduler;
+use crate::parser::{list_all_slt_files, get_execution_plan_from_file};
 
 
 
@@ -68,27 +71,24 @@ fn read_config() -> Config {
 }
 
 // Starts the scheduler gRPC service
-async fn start_scheduler_server(addr: String) {
+async fn start_scheduler_server(addr: &str) {
     let addr = addr.parse().expect("Invalid address");
-    let scheduler = Scheduler::new();
 
     println!("Scheduler listening on {}", addr);
 
-    if let Err(e) = Server::builder()
-        .add_service(SchedulerApiServer::new(scheduler))
+    let scheduler_service = SchedulerService::default();
+    Server::builder()
+        .add_service(SchedulerApiServer::new(scheduler_service))
         .serve(addr)
-        .await
-    {
-        eprintln!("Server error: {}", e);
-    }
+        .await.expect("unable to start scheduler gRPC server");
 }
 
 // Starts the executor gRPC service
-async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: String) {
+async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
     println!("Executor {} connecting to scheduler at {}", executor.id, scheduler_addr);
 
     // Create a connection to the scheduler
-    let channel = Channel::from_shared(scheduler_addr)
+    let channel = Channel::from_shared(scheduler_addr.to_string())
         .expect("Invalid scheduler address")
         .connect()
         .await
@@ -100,11 +100,17 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: String)
     let executor = DatafusionExecutor::new();
 
     // Send initial request with handshake task ID
-    let handshake = tonic::Request::new(NotifyTaskStateArgs {
-        task: Some(HANDSHAKE_TASK_ID),
+
+    let handshake_req = NotifyTaskStateArgs {
+        task: Some(TaskId {
+            query_id: *HANDSHAKE_QUERY_ID,
+            task_id: *HANDSHAKE_TASK_ID
+        }),
         success: true,
         result: Vec::new(),
-    });
+    };
+
+    let handshake = tonic::Request::new(handshake_req.clone());
 
     let mut task_id = TaskId {
         query_id: *HANDSHAKE_QUERY_ID,
@@ -112,8 +118,8 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: String)
     };
 
     loop {
-        let request = if task_id.query_id == HANDSHAKE_QUERY_ID && task_id.task_id == HANDSHAKE_TASK_ID {
-            handshake.clone()
+        let request = if task_id.query_id == *HANDSHAKE_QUERY_ID && task_id.task_id == *HANDSHAKE_TASK_ID {
+            tonic::Request::new(handshake_req.clone())
         } else {
             tonic::Request::new(NotifyTaskStateArgs {
                 task: Some(task_id.clone()),
@@ -127,7 +133,6 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: String)
                 let response_inner = response.into_inner();
                 if response_inner.has_new_task {
                     task_id = response_inner.task.unwrap_or_default();
-                    executor.
 
                     // TODO: execute the physical plan
                     // let new_result 
@@ -161,17 +166,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = read_config();
 
+    let args: Vec<String> = env::args().collect();
+    // Check if at least one argument was provided (excluding the program name)
+    if args.len() != 1 {
+        panic!("Usage: pass in the .slt file you want to test");
+    }
+
+    let file_path = &args[1];
+    eprintln!("Start running file {}", file_path);
+
     // Start the scheduler server
     let scheduler_addr = format!("{}:{}", config.scheduler[0].ip_addr, config.scheduler[0].port);
     tokio::spawn(async move {
-        start_scheduler_server(scheduler_addr).await;
+        start_scheduler_server(&scheduler_addr).await;
     });
 
    // Start executor clients
    for executor in config.executors {
-    let scheduler_addr_clone = scheduler_addr.clone();
+    // let scheduler_addr_clone = scheduler_addr.clone();
     tokio::spawn(async move {
-        start_executor_client(executor, scheduler_addr_clone).await;
+        start_executor_client(executor, &scheduler_addr.clone()).await;
     });
     }
 
@@ -179,10 +193,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reference_executor = DatafusionExecutor::new();
 
     // get all the execution plans and pre-compute all the reference results
-    let execution_plans = get_execution_plan_from_file(file_path_str).await.expect("Failed to get execution plans");
+    let execution_plans = get_execution_plan_from_file(file_path).await.expect("Failed to get execution plans");
     let mut results = Vec::new();
     for plan in execution_plans {
-        match executor.execute_plan(plan).await {
+        match reference_executor.execute_plan(plan).await {
             Ok(dataframe) => {
                 results.push(dataframe);
             },
@@ -204,13 +218,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match get_execution_plan_from_file(file_path_str).await {
             Ok(plans) => {
-                
-
-                
-                
-
-
-
             }
             Err(e) => {
                 eprintln!(
