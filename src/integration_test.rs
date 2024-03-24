@@ -109,8 +109,6 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
         result: Vec::new(),
     };
 
-    let handshake = tonic::Request::new(handshake_req.clone());
-
     let mut task_id = TaskId {
         query_id: *HANDSHAKE_QUERY_ID,
         task_id: *HANDSHAKE_TASK_ID,
