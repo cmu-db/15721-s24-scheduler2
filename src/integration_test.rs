@@ -1,5 +1,3 @@
-
-
 /*
 
 Steps for integration testing:
@@ -16,21 +14,19 @@ Task 3: make integration tests compile
 
 */
 
-use std::env;
-use std::fs;
-use serde::Deserialize;
-use tonic::transport::{Channel, Server};
-use crate::api::composable_database::{ScheduleQueryArgs, NotifyTaskStateArgs};
-use lazy_static::lazy_static;
 use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
-use crate::api::composable_database::TaskId;
 use crate::api::composable_database::scheduler_api_server::SchedulerApiServer;
+use crate::api::composable_database::TaskId;
+use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
+use crate::parser::{get_execution_plan_from_file, list_all_slt_files};
 use crate::scheduler::Scheduler;
-use crate::parser::{list_all_slt_files, get_execution_plan_from_file};
-
-
+use lazy_static::lazy_static;
+use serde::Deserialize;
+use std::env;
+use std::fs;
+use tonic::transport::{Channel, Server};
 
 lazy_static! {
     static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
@@ -64,7 +60,6 @@ struct ExecutorConfig {
     numa_node: u32,
 }
 
-
 fn read_config() -> Config {
     let config_str = fs::read_to_string("config.toml").expect("Failed to read config file");
     toml::from_str(&config_str).expect("Failed to parse config file")
@@ -80,12 +75,16 @@ async fn start_scheduler_server(addr: &str) {
     Server::builder()
         .add_service(SchedulerApiServer::new(scheduler_service))
         .serve(addr)
-        .await.expect("unable to start scheduler gRPC server");
+        .await
+        .expect("unable to start scheduler gRPC server");
 }
 
 // Starts the executor gRPC service
 async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
-    println!("Executor {} connecting to scheduler at {}", executor.id, scheduler_addr);
+    println!(
+        "Executor {} connecting to scheduler at {}",
+        executor.id, scheduler_addr
+    );
 
     // Create a connection to the scheduler
     let channel = Channel::from_shared(scheduler_addr.to_string())
@@ -104,7 +103,7 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
     let handshake_req = NotifyTaskStateArgs {
         task: Some(TaskId {
             query_id: *HANDSHAKE_QUERY_ID,
-            task_id: *HANDSHAKE_TASK_ID
+            task_id: *HANDSHAKE_TASK_ID,
         }),
         success: true,
         result: Vec::new(),
@@ -118,15 +117,16 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
     };
 
     loop {
-        let request = if task_id.query_id == *HANDSHAKE_QUERY_ID && task_id.task_id == *HANDSHAKE_TASK_ID {
-            tonic::Request::new(handshake_req.clone())
-        } else {
-            tonic::Request::new(NotifyTaskStateArgs {
-                task: Some(task_id.clone()),
-                success: true,
-                result: Vec::new(),
-            })
-        };
+        let request =
+            if task_id.query_id == *HANDSHAKE_QUERY_ID && task_id.task_id == *HANDSHAKE_TASK_ID {
+                tonic::Request::new(handshake_req.clone())
+            } else {
+                tonic::Request::new(NotifyTaskStateArgs {
+                    task: Some(task_id.clone()),
+                    success: true,
+                    result: Vec::new(),
+                })
+            };
 
         match client.notify_task_state(request).await {
             Ok(response) => {
@@ -135,7 +135,7 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
                     task_id = response_inner.task.unwrap_or_default();
 
                     // TODO: execute the physical plan
-                    // let new_result 
+                    // let new_result
                 } else {
                     // No new task available
                     break;
@@ -151,19 +151,13 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
 
 // TODO: add a function to run a sql query on a single executor
 
-
 // TODO: research function to compare equality of two results (apache arrow?)
 
-
-
-fn generate_refsol() {
-    
-}
+fn generate_refsol() {}
 
 // Make this into a command line app
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     let config = read_config();
 
     let args: Vec<String> = env::args().collect();
@@ -176,36 +170,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Start running file {}", file_path);
 
     // Start the scheduler server
-    let scheduler_addr = format!("{}:{}", config.scheduler[0].ip_addr, config.scheduler[0].port);
+
+    let scheduler_addr = format!(
+        "{}:{}",
+        config.scheduler[0].ip_addr, config.scheduler[0].port
+    );
+
+    let scheduler_addr_for_server = scheduler_addr.clone();
     tokio::spawn(async move {
-        start_scheduler_server(&scheduler_addr).await;
+        start_scheduler_server(&scheduler_addr_for_server).await;
     });
 
-   // Start executor clients
-   for executor in config.executors {
-    // let scheduler_addr_clone = scheduler_addr.clone();
-    tokio::spawn(async move {
-        start_executor_client(executor, &scheduler_addr.clone()).await;
-    });
+    // Start executor clients
+    for executor in config.executors {
+        // Clone the scheduler_addr for each executor client
+        let scheduler_addr_for_client = scheduler_addr.clone();
+        tokio::spawn(async move {
+            start_executor_client(executor, &scheduler_addr_for_client).await;
+        });
     }
 
     // start an reference executor instance to verify correctness
     let reference_executor = DatafusionExecutor::new();
 
     // get all the execution plans and pre-compute all the reference results
-    let execution_plans = get_execution_plan_from_file(file_path).await.expect("Failed to get execution plans");
+    let execution_plans = get_execution_plan_from_file(file_path)
+        .await
+        .expect("Failed to get execution plans");
     let mut results = Vec::new();
     for plan in execution_plans {
         match reference_executor.execute_plan(plan).await {
             Ok(dataframe) => {
                 results.push(dataframe);
-            },
+            }
             Err(e) => eprintln!("Failed to execute plan: {}", e),
         }
     }
-    
-    // TODO: make this a command line program where it runs a file, verify files by comparing recordbatches
 
+    // TODO: make this a command line program where it runs a file, verify files by comparing recordbatches
 
     let test_files = list_all_slt_files("./test_files");
 
@@ -217,8 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Processing test file: {}", file_path_str);
 
         match get_execution_plan_from_file(file_path_str).await {
-            Ok(plans) => {
-            }
+            Ok(plans) => {}
             Err(e) => {
                 eprintln!(
                     "Failed to get execution plans from file {}: {}",
@@ -228,7 +229,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-
 
     Ok(())
 }

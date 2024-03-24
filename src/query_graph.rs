@@ -22,8 +22,8 @@ pub struct QueryStage {
 
 pub struct QueryGraph {
     pub query_id: u64,
-    tid_counter: AtomicU64,       // TODO: add mutex to stages and make elements pointers to avoid copying
-    pub stages: Vec<QueryStage>,      // Can be a vec since all stages in a query are enumerated from 0.
+    tid_counter: AtomicU64, // TODO: add mutex to stages and make elements pointers to avoid copying
+    pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
     frontier: Vec<Task>,
     frontier_lock: tokio::sync::RwLock<()>,
@@ -103,4 +103,3 @@ impl QueryGraph {
         }
     }
 }
-

@@ -1,14 +1,13 @@
-use datafusion::execution::context::SessionContext;
-use datafusion::physical_plan::ExecutionPlan;
-use datafusion::dataframe::DataFrame;
-use datafusion::error::Result;
-use std::sync::Arc;
-use datafusion::execution::context::TaskContext;
 use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::dataframe::DataFrame;
 use datafusion::error::DataFusionError;
+use datafusion::error::Result;
+use datafusion::execution::context::SessionContext;
+use datafusion::execution::context::TaskContext;
+use datafusion::physical_plan::ExecutionPlan;
 use datafusion::prelude::CsvReadOptions;
 use futures::stream::StreamExt;
-
+use std::sync::Arc;
 
 pub struct DatafusionExecutor {
     ctx: Arc<SessionContext>,
@@ -37,8 +36,11 @@ impl DatafusionExecutor {
     }
 
     // Function to execute a query from an ExecutionPlan
-    pub async fn execute_plan(&self, plan: Arc<dyn ExecutionPlan>) -> Result<Vec<RecordBatch>, DataFusionError> {
-        let task_ctx = self.ctx.task_ctx();        
+    pub async fn execute_plan(
+        &self,
+        plan: Arc<dyn ExecutionPlan>,
+    ) -> Result<Vec<RecordBatch>, DataFusionError> {
+        let task_ctx = self.ctx.task_ctx();
         let mut batches = Vec::new();
 
         match plan.execute(1, task_ctx) {
@@ -47,15 +49,15 @@ impl DatafusionExecutor {
                 while let Some(batch_result) = stream.next().await {
                     match batch_result {
                         Ok(record_batch) => {
-                           batches.push(record_batch);
-                        },
+                            batches.push(record_batch);
+                        }
                         Err(e) => {
                             eprintln!("Error processing batch: {}", e);
                             return Err(e);
                         }
                     }
                 }
-            },
+            }
             Err(e) => eprintln!("Failed to execute plan: {}", e),
         }
         Ok(batches)

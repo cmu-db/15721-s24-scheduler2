@@ -4,8 +4,9 @@ use tonic::{transport::Server, Request, Response, Status};
 
 use composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
 use composable_database::{
-    TaskId, AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
+    AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
     QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
+    TaskId,
 };
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -89,7 +90,6 @@ impl SchedulerApi for SchedulerService {
         &self,
         request: Request<NotifyTaskStateArgs>,
     ) -> Result<Response<NotifyTaskStateRet>, Status> {
-
         let NotifyTaskStateArgs {
             task,
             success,
@@ -117,8 +117,11 @@ impl SchedulerApi for SchedulerService {
         scheduler.update_task_state(task_id.query_id, task_id.task_id);
         if let Ok((task, bytes)) = scheduler.next_task() {
             let response = NotifyTaskStateRet {
-                has_new_task: true, 
-                task: Some(TaskId {query_id: task.query_id, task_id: task.id}), 
+                has_new_task: true,
+                task: Some(TaskId {
+                    query_id: task.query_id,
+                    task_id: task.id,
+                }),
                 physical_plan: bytes,
             };
             return Ok(Response::new(response));
@@ -127,6 +130,5 @@ impl SchedulerApi for SchedulerService {
                 "Scheduler: Failed to get next task.",
             ));
         }
-
     }
 }

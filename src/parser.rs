@@ -1,5 +1,3 @@
-use std::fs;
-use std::path::PathBuf;
 use datafusion::error::Result;
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
@@ -7,6 +5,8 @@ use datafusion::physical_planner::PhysicalPlanner;
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use sqllogictest::ColumnType;
 use sqllogictest::Record;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -54,7 +54,7 @@ pub async fn deserialize_physical_plan(bytes: &[u8]) -> Result<Arc<dyn Execution
 pub async fn serialize_physical_plan(plan: Arc<dyn ExecutionPlan>) -> Result<Vec<u8>> {
     match physical_plan_to_bytes(plan) {
         Ok(plan_bytes) => Ok(Vec::from(plan_bytes)),
-        Err(e) => Err(e)
+        Err(e) => Err(e),
     }
 }
 
@@ -112,7 +112,6 @@ pub fn list_all_slt_files(dir_path: &str) -> Vec<PathBuf> {
 
 #[tokio::test]
 async fn test_get_execution_plans_from_files() {
-
     // Define the directory that contains the .slt files.
     let dir_path = "./test_files";
     eprintln!("Parsing test files in directory: {}", dir_path);
