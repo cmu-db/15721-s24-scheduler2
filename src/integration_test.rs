@@ -30,13 +30,15 @@ use tonic::transport::{Channel, Server};
 
 lazy_static! {
     static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
-    // If you need a separate HANDSHAKE_TASK_ID, define it here without recursive dependency
+
     static ref HANDSHAKE_TASK_ID: u64 = -1i64 as u64;
-    // Define HANDSHAKE_TASK only if it doesn't depend on HANDSHAKE_TASK_ID itself
+
     static ref HANDSHAKE_TASK: TaskId = TaskId {
         query_id: *HANDSHAKE_QUERY_ID,
         task_id: *HANDSHAKE_TASK_ID,
     };
+
+    static ref
 }
 
 // Format definitions for the config file
@@ -78,6 +80,8 @@ async fn start_scheduler_server(addr: &str) {
         .await
         .expect("unable to start scheduler gRPC server");
 }
+
+
 
 // Starts the executor gRPC service
 async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
@@ -133,6 +137,7 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
                     task_id = response_inner.task.unwrap_or_default();
 
                     // TODO: execute the physical plan
+
                     // let new_result
                 } else {
                     // No new task available
