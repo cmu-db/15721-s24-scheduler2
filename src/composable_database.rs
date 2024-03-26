@@ -7,6 +7,7 @@ pub struct TaskId {
     #[prost(uint64, tag = "2")]
     pub task_id: u64,
 }
+/// Task execution and status messages
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NotifyTaskStateArgs {

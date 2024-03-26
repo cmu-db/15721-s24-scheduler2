@@ -5,8 +5,8 @@ use std::sync::Arc;
 use crate::query_graph::{QueryGraph, QueryStage, StageStatus};
 use crate::query_table::QueryTable;
 use crate::task_queue::TaskQueue;
-use datafusion::physical_plan::ExecutionPlan;
 use crate::SchedulerError;
+use datafusion::physical_plan::ExecutionPlan;
 
 pub enum TaskStatus {
     Waiting,
@@ -71,14 +71,15 @@ impl Scheduler {
 
     pub fn next_task(&mut self) -> Result<(Task, Vec<u8>), SchedulerError> {
         let task = self.task_queue.next_task();
-        let stage = self.query_table.get_plan_bytes(task.query_id, task.stage_id)?;
+        let stage = self
+            .query_table
+            .get_plan_bytes(task.query_id, task.stage_id)?;
         Ok((task, stage))
     }
-
 }
 
 // #[cfg(test)]
 // mod tests {
 //     #[test]
-//     fn 
+//     fn
 // }

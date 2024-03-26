@@ -1,3 +1,7 @@
+[[scheduler]]
+    id_addr = "127.0.0.1"
+    port = 15721
+
 [[executors]]
     id = 1
     ip_addr = "127.0.0.1"

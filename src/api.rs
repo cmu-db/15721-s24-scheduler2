@@ -4,8 +4,9 @@ use tonic::{transport::Server, Request, Response, Status};
 
 use composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
 use composable_database::{
-    TaskId, AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
+    AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
     QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
+    TaskId,
 };
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -116,8 +117,11 @@ impl SchedulerApi for SchedulerService {
         scheduler.update_task_state(task_id.query_id, task_id.task_id);
         if let Ok((task, bytes)) = scheduler.next_task() {
             let response = NotifyTaskStateRet {
-                has_new_task: true, 
-                task: Some(TaskId {query_id: task.query_id, task_id: task.id}), 
+                has_new_task: true,
+                task: Some(TaskId {
+                    query_id: task.query_id,
+                    task_id: task.id,
+                }),
                 physical_plan: bytes,
             };
             return Ok(Response::new(response));
@@ -126,21 +130,23 @@ impl SchedulerApi for SchedulerService {
                 "Scheduler: Failed to get next task.",
             ));
         }
-
     }
 }
 
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
-    use tonic::Request;
     use crate::api::composable_database::scheduler_api_server::SchedulerApi;
-    use crate::api::SchedulerService;
-    use crate::parser::{deserialize_physical_plan, get_execution_plan_from_file, serialize_physical_plan};
     use crate::api::composable_database::{
-        TaskId, AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
+        AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
         QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
+        TaskId,
     };
+    use crate::api::SchedulerService;
+    use crate::parser::{
+        deserialize_physical_plan, get_execution_plan_from_file, serialize_physical_plan,
+    };
+    use tonic::Request;
     #[tokio::test]
     async fn test_scheduler() {
         let scheduler_service = Box::new(SchedulerService::default());
@@ -150,24 +156,36 @@ mod tests {
             for plan in physical_plans {
                 let plan_f = serialize_physical_plan(plan).await;
                 if plan_f.is_err() {
-                    println!("test_scheduler: Unable to serialize plan in file {}.", test_file);
+                    println!(
+                        "test_scheduler: Unable to serialize plan in file {}.",
+                        test_file
+                    );
                     continue;
                 }
                 let plan_bytes: Vec<u8> = plan_f.unwrap();
                 let query = ScheduleQueryArgs {
                     physical_plan: plan_bytes,
-                    metadata: Some(QueryInfo {priority: 0, cost: 0})
+                    metadata: Some(QueryInfo {
+                        priority: 0,
+                        cost: 0,
+                    }),
                 };
                 let response = scheduler_service.schedule_query(Request::new(query)).await;
                 if response.is_err() {
-                    println!("test_scheduler: schedule_query failed in file {}.", test_file);
+                    println!(
+                        "test_scheduler: schedule_query failed in file {}.",
+                        test_file
+                    );
                     continue;
                 }
                 let query_id = response.unwrap().into_inner().query_id;
                 println!("test_scheduler: Queued query {}.", query_id);
             }
         } else {
-            println!("test_scheduler: Failed to get execution plan from file {}.", test_file);
+            println!(
+                "test_scheduler: Failed to get execution plan from file {}.",
+                test_file
+            );
         }
     }
 }

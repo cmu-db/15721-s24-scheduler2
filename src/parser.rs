@@ -5,6 +5,8 @@ use datafusion::physical_planner::PhysicalPlanner;
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use sqllogictest::ColumnType;
 use sqllogictest::Record;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -52,7 +54,7 @@ pub async fn deserialize_physical_plan(bytes: &[u8]) -> Result<Arc<dyn Execution
 pub async fn serialize_physical_plan(plan: Arc<dyn ExecutionPlan>) -> Result<Vec<u8>> {
     match physical_plan_to_bytes(plan) {
         Ok(plan_bytes) => Ok(Vec::from(plan_bytes)),
-        Err(e) => Err(e)
+        Err(e) => Err(e),
     }
 }
 
@@ -92,21 +94,29 @@ pub async fn get_execution_plan_from_file(
     Ok(plans)
 }
 
+// list all the .slt files under a directory
+pub fn list_all_slt_files(dir_path: &str) -> Vec<PathBuf> {
+    let entries = fs::read_dir(dir_path)
+        .unwrap_or_else(|_| panic!("Failed to read directory: {}", dir_path))
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(std::ffi::OsStr::to_str) == Some("slt"))
+        .collect::<Vec<_>>();
+
+    if entries.is_empty() {
+        eprintln!("No .slt files found in directory: {}", dir_path);
+    }
+
+    entries
+}
+
 #[tokio::test]
 async fn test_get_execution_plans_from_files() {
-    use std::fs;
-
     // Define the directory that contains the .slt files.
     let dir_path = "./test_files";
     eprintln!("Parsing test files in directory: {}", dir_path);
 
-    // Read the directory contents.
-    let entries = fs::read_dir(dir_path)
-        .expect("Failed to read directory")
-        .filter_map(|entry| entry.ok()) // Filter out Err results and unwrap Ok values.
-        .map(|entry| entry.path()) // Convert DirEntry to PathBuf.
-        .filter(|path| path.extension().and_then(std::ffi::OsStr::to_str) == Some("slt")) // Keep only .slt files.
-        .collect::<Vec<_>>();
+    let entries = list_all_slt_files(dir_path);
 
     // Check if there are any .slt files to process.
     if entries.is_empty() {
