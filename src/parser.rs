@@ -56,7 +56,7 @@ pub async fn serialize_physical_plan(plan: Arc<dyn ExecutionPlan>) -> Result<Vec
     }
 }
 
-async fn get_execution_plan_from_file(
+pub async fn get_execution_plan_from_file(
     file_path: &str,
 ) -> std::result::Result<Vec<Arc<dyn ExecutionPlan>>, Box<dyn std::error::Error>> {
     let ctx = SessionContext::new();

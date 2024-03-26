@@ -15,14 +15,14 @@ impl DatafusionExecutor {
         }
     }
 
-    pub async fn register_csv(
-        &self,
-        table_name: &str,
-        file_path: &str,
-        options: CsvReadOptions<'_>,
-    ) -> Result<()> {
-        self.ctx.register_csv(table_name, file_path, options).await
-    }
+    // pub async fn register_csv(
+    //     &self,
+    //     table_name: &str,
+    //     file_path: &str,
+    //     options: CsvReadOptions<'_>,
+    // ) -> Result<()> {
+    //     self.ctx.register_csv(table_name, file_path, options).await
+    // }
 
     // Function to execute a query from a SQL string
     pub async fn execute_query(&self, query: &str) -> Result<DataFrame> {
@@ -30,8 +30,8 @@ impl DatafusionExecutor {
     }
 
     // Function to execute a query from an ExecutionPlan
-    pub async fn execute_plan(&self, plan: Arc<dyn ExecutionPlan>) -> Result<DataFrame> {
-        let execution = self.ctx.collect(plan).await?;
-        Ok(DataFrame::new(self.ctx.state.clone(), &execution))
-    }
+    // pub async fn execute_plan(&self, plan: Arc<dyn ExecutionPlan>) -> Result<DataFrame> {
+    //     let execution = self.ctx.collect(plan).await?;
+    //     Ok(DataFrame::new(self.ctx.state.clone(), &execution))
+    // }
 }

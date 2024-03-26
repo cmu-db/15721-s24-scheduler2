@@ -22,7 +22,7 @@ impl QueryTable {
 
     pub fn get_frontier(&self, query_id: u64) -> Vec<Task> {
         executor::block_on(async {
-            let mut t = self.table.write().await;
+            let t = self.table.write().await;
             let frontier = t.get(&query_id).unwrap().borrow_mut().get_frontier();
             frontier
         })
@@ -47,7 +47,7 @@ impl QueryTable {
     ) -> Result<(), &'static str> {
         let t = self.table.read().await;
         if let Some(graph) = t.get(&query_id) {
-            graph.borrow_mut().update_stage_status(stage_id, status)?;
+            graph.borrow_mut().update_stage_status(stage_id, status).await?;
             Ok(())
         } else {
             Err("Graph not found.")
@@ -56,17 +56,18 @@ impl QueryTable {
 
     pub fn get_plan_bytes(&mut self, query_id: u64, stage_id: u64) 
     -> Result<Vec<u8>, SchedulerError> {
-        let t = self.table.blocking_read();
-        if let Some(graph) = t.get(&query_id) {
-            let plan = Arc::clone(&graph.borrow().stages[stage_id as usize].plan);
-            executor::block_on(async{
-                match serialize_physical_plan(plan).await {
-                    Ok(p) => Ok(p),
-                    Err(e) => Err(SchedulerError::DfError(e))
-                }})
-        } else {
-            Err(SchedulerError::Error("Graph not found.".to_string()))
-        }
+        executor::block_on(async{
+            let t = self.table.read().await;
+            if let Some(graph) = t.get(&query_id) {
+                let plan = Arc::clone(&graph.borrow().stages[stage_id as usize].plan);
+                    match serialize_physical_plan(plan).await {
+                        Ok(p) => Ok(p),
+                        Err(e) => Err(SchedulerError::DfError(e))
+                    }
+            } else {
+                Err(SchedulerError::Error("Graph not found.".to_string()))
+            }
+        })
     }
 
     pub async fn cancel_query(&mut self, query_id: u64) -> bool {

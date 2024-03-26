@@ -47,14 +47,14 @@ impl QueryGraph {
 
     // Atomically clear frontier vector and return old frontier.
     pub fn get_frontier(&mut self) -> Vec<Task> {
-        let _ = self.frontier_lock.blocking_write();
+        let _ = self.frontier_lock.write();
         let mut old_frontier = Vec::new();
         mem::swap(&mut self.frontier, &mut old_frontier);
         self.frontier = Vec::new();
         old_frontier
     }
 
-    pub fn update_stage_status(
+    pub async fn update_stage_status(
         &mut self,
         stage_id: u64,
         status: StageStatus,
@@ -87,7 +87,7 @@ impl QueryGraph {
                                     stage_id: *output_stage_id,
                                     status: TaskStatus::Ready,
                                 };
-                                let _ = self.frontier_lock.blocking_write();
+                                let _ = self.frontier_lock.write();
                                 self.frontier.push(new_output_task);
                             }
                         } else {
