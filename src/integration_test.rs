@@ -20,13 +20,53 @@ use crate::api::composable_database::TaskId;
 use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
-use crate::parser::{get_execution_plan_from_file, list_all_slt_files};
+use crate::parser::{get_execution_plan_from_file, list_all_slt_files, deserialize_physical_plan};
 use crate::scheduler::Scheduler;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::env;
 use std::fs;
 use tonic::transport::{Channel, Server};
+use walkdir::WalkDir;
+use datafusion::prelude::CsvReadOptions;
+
+
+
+/**
+
+Executors and the scheduler communicate using this gRPC:
+rpc NotifyTaskState(NotifyTaskStateArgs) returns (NotifyTaskStateRet);
+
+
+executor -> scheduler message:
+message NotifyTaskStateArgs {
+    TaskID task = 1;
+    bool success = 2; // if the query succeeded
+    bytes result = 3; // bytes for the result
+}
+It tells the scheduler if a task (with the associated taskID) is successfully executed, and also
+sends the bytes in the form of Vec<RecordBatch>.
+
+
+
+scheduler -> executor message
+message NotifyTaskStateRet {
+    bool has_new_task = 1; // true if there is a new task (details given below)
+    TaskID task = 2;
+    bytes physical_plan = 3;
+}
+This message is used for the scheduler to assign tasks to an executor.
+
+
+
+Establishing connection:
+In the integration test, each executor uses NotifyTaskStateArgs to do handshakes with the scheduler.
+The first message always has the HANDSHAKE_TASK_ID, and upon receving the scheduler would start
+assigning tasks with NotifyTaskStateRet messages.
+
+ */
+
+
 
 lazy_static! {
     static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
@@ -40,6 +80,19 @@ lazy_static! {
 
     static ref
 }
+
+// Checks if the message is a handshake message
+fn is_handshake_message(task: TaskId) -> bool {
+    return task.query_id == *HANDSHAKE_QUERY_ID && task.task_id == *HANDSHAKE_TASK_ID;
+}
+
+
+
+/**
+In this integration test, the addresses of the executors and scheduler are hardcoded as a config file under the
+project root directory (in real systems this information would be obtained from the catalog). This
+secion handles parsing the config file.
+ */
 
 // Format definitions for the config file
 #[derive(Deserialize)]
@@ -67,6 +120,8 @@ fn read_config() -> Config {
     toml::from_str(&config_str).expect("Failed to parse config file")
 }
 
+
+
 // Starts the scheduler gRPC service
 async fn start_scheduler_server(addr: &str) {
     let addr = addr.parse().expect("Invalid address");
@@ -80,6 +135,41 @@ async fn start_scheduler_server(addr: &str) {
         .await
         .expect("unable to start scheduler gRPC server");
 }
+
+// Initialize an executor and load the data from csv
+async fn initialize_executor() -> DatafusionExecutor {
+
+    let executor = DatafusionExecutor::new();
+
+    for entry in WalkDir::new("./test_files/data") {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "csv") {
+            let file_path = entry.path().to_str().unwrap();
+
+            // Extract the table name from the file name without the extension
+            let table_name = entry.path()
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap();
+
+            let options = CsvReadOptions::new();
+
+            // Register the CSV file as a table
+            let result = executor.register_csv(table_name, file_path, options).await;
+            assert!(result.is_ok(), "Failed to register CSV file: {:?}", file_path);
+        }
+    }
+
+    executor
+}
+
+
+// Sends out the handshake message
+async fn executor_handshake_message() {
+
+}
+
 
 
 
@@ -100,10 +190,9 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
     // Create a client using the channel
     let mut client = SchedulerApiClient::new(channel);
 
-    let executor = DatafusionExecutor::new();
+    let executor = initialize_executor().await;
 
     // Send initial request with handshake task ID
-
     let handshake_req = NotifyTaskStateArgs {
         task: Some(TaskId {
             query_id: *HANDSHAKE_QUERY_ID,
@@ -120,7 +209,7 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
 
     loop {
         let request =
-            if task_id.query_id == *HANDSHAKE_QUERY_ID && task_id.task_id == *HANDSHAKE_TASK_ID {
+            if is_handshake_message(task_id) == *HANDSHAKE_TASK_ID {
                 tonic::Request::new(handshake_req.clone())
             } else {
                 tonic::Request::new(NotifyTaskStateArgs {
@@ -135,6 +224,25 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
                 let response_inner = response.into_inner();
                 if response_inner.has_new_task {
                     task_id = response_inner.task.unwrap_or_default();
+
+                    let plan_result = deserialize_physical_plan(response_inner.physical_plan).await;
+                    let plan = match plan_result {
+                        Ok(plan) => plan,
+                        Err(e) => {
+                            panic!("Error deserializing physical plan: {:?}", e);
+                        }
+                    };
+
+                    let execution_result = executor.execute_plan(plan).await;
+                    let res = match execution_result {
+                        Ok(batches) => batches,
+                        Err(e) => {
+                            panic!("Execution failed: {:?}", e);
+                        }
+                    };
+
+
+
 
                     // TODO: execute the physical plan
 
