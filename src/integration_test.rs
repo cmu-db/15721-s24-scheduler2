@@ -20,17 +20,15 @@ use crate::api::composable_database::TaskId;
 use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
-use crate::parser::{get_execution_plan_from_file, list_all_slt_files, deserialize_physical_plan};
+use crate::parser::{deserialize_physical_plan, get_execution_plan_from_file, list_all_slt_files};
 use crate::scheduler::Scheduler;
+use datafusion::prelude::CsvReadOptions;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::env;
 use std::fs;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
-use datafusion::prelude::CsvReadOptions;
-
-
 
 /**
 
@@ -66,13 +64,9 @@ assigning tasks with NotifyTaskStateRet messages.
 
  */
 
-
-
 lazy_static! {
     static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
-
     static ref HANDSHAKE_TASK_ID: u64 = -1i64 as u64;
-
     static ref HANDSHAKE_TASK: TaskId = TaskId {
         query_id: *HANDSHAKE_QUERY_ID,
         task_id: *HANDSHAKE_TASK_ID,
@@ -83,8 +77,6 @@ lazy_static! {
 fn is_handshake_message(task: &TaskId) -> bool {
     return task.query_id == *HANDSHAKE_QUERY_ID && task.task_id == *HANDSHAKE_TASK_ID;
 }
-
-
 
 /**
 In this integration test, the addresses of the executors and scheduler are hardcoded as a config file under the
@@ -118,8 +110,6 @@ fn read_config() -> Config {
     toml::from_str(&config_str).expect("Failed to parse config file")
 }
 
-
-
 // Starts the scheduler gRPC service
 async fn start_scheduler_server(addr: &str) {
     let addr = addr.parse().expect("Invalid address");
@@ -136,7 +126,6 @@ async fn start_scheduler_server(addr: &str) {
 
 // Initialize an executor and load the data from csv
 async fn initialize_executor() -> DatafusionExecutor {
-
     let executor = DatafusionExecutor::new();
 
     for entry in WalkDir::new("./test_files/data") {
@@ -145,24 +134,22 @@ async fn initialize_executor() -> DatafusionExecutor {
             let file_path = entry.path().to_str().unwrap();
 
             // Extract the table name from the file name without the extension
-            let table_name = entry.path()
-                .file_stem()
-                .unwrap()
-                .to_str()
-                .unwrap();
+            let table_name = entry.path().file_stem().unwrap().to_str().unwrap();
 
             let options = CsvReadOptions::new();
 
             // Register the CSV file as a table
             let result = executor.register_csv(table_name, file_path, options).await;
-            assert!(result.is_ok(), "Failed to register CSV file: {:?}", file_path);
+            assert!(
+                result.is_ok(),
+                "Failed to register CSV file: {:?}",
+                file_path
+            );
         }
     }
 
     executor
 }
-
-
 
 // Starts the executor gRPC service
 async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
@@ -199,19 +186,18 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
     };
 
     loop {
-        let request =
-            if is_handshake_message(&task_id) {
-                tonic::Request::new(handshake_req.clone())
-            } else {
-                tonic::Request::new(NotifyTaskStateArgs {
-                    task: Some(TaskId {
-                        task_id : task_id.task_id,
-                        query_id : task_id.query_id
-                    }),
-                    success: true,
-                    result: Vec::new(),
-                })
-            };
+        let request = if is_handshake_message(&task_id) {
+            tonic::Request::new(handshake_req.clone())
+        } else {
+            tonic::Request::new(NotifyTaskStateArgs {
+                task: Some(TaskId {
+                    task_id: task_id.task_id,
+                    query_id: task_id.query_id,
+                }),
+                success: true,
+                result: Vec::new(),
+            })
+        };
 
         match client.notify_task_state(request).await {
             Ok(response) => {
@@ -234,9 +220,6 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
                             panic!("Execution failed: {:?}", e);
                         }
                     };
-
-
-
 
                     // TODO: execute the physical plan
 
@@ -337,5 +320,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-
