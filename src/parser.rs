@@ -46,9 +46,9 @@ impl ColumnType for DFColumnType {
     }
 }
 
-pub async fn deserialize_physical_plan(bytes: &[u8]) -> Result<Arc<dyn ExecutionPlan>> {
+pub async fn deserialize_physical_plan(bytes: Vec<u8>) -> Result<Arc<dyn ExecutionPlan>> {
     let ctx = SessionContext::new();
-    physical_plan_from_bytes(bytes, &ctx)
+    physical_plan_from_bytes(&*bytes, &ctx)
 }
 
 pub async fn serialize_physical_plan(plan: Arc<dyn ExecutionPlan>) -> Result<Vec<u8>> {
