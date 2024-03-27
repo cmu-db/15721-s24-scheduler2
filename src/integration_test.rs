@@ -77,12 +77,10 @@ lazy_static! {
         query_id: *HANDSHAKE_QUERY_ID,
         task_id: *HANDSHAKE_TASK_ID,
     };
-
-    static ref
 }
 
 // Checks if the message is a handshake message
-fn is_handshake_message(task: TaskId) -> bool {
+fn is_handshake_message(task: &TaskId) -> bool {
     return task.query_id == *HANDSHAKE_QUERY_ID && task.task_id == *HANDSHAKE_TASK_ID;
 }
 
@@ -165,13 +163,6 @@ async fn initialize_executor() -> DatafusionExecutor {
 }
 
 
-// Sends out the handshake message
-async fn executor_handshake_message() {
-
-}
-
-
-
 
 // Starts the executor gRPC service
 async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
@@ -209,11 +200,14 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
 
     loop {
         let request =
-            if is_handshake_message(task_id) == *HANDSHAKE_TASK_ID {
+            if is_handshake_message(&task_id) {
                 tonic::Request::new(handshake_req.clone())
             } else {
                 tonic::Request::new(NotifyTaskStateArgs {
-                    task: Some(task_id.clone()),
+                    task: Some(TaskId {
+                        task_id : task_id.task_id,
+                        query_id : task_id.query_id
+                    }),
                     success: true,
                     result: Vec::new(),
                 })
@@ -343,3 +337,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+

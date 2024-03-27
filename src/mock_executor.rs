@@ -18,14 +18,14 @@ impl DatafusionExecutor {
         }
     }
 
-    // pub async fn register_csv(
-    //     &self,
-    //     table_name: &str,
-    //     file_path: &str,
-    //     options: CsvReadOptions<'_>,
-    // ) -> Result<()> {
-    //     self.ctx.register_csv(table_name, file_path, options).await
-    // }
+    pub async fn register_csv(
+        &self,
+        table_name: &str,
+        file_path: &str,
+        options: CsvReadOptions<'_>,
+    ) -> Result<()> {
+        self.ctx.register_csv(table_name, file_path, options).await
+    }
 
     // Function to execute a query from a SQL string
     pub async fn execute_query(&self, query: &str) -> Result<Vec<RecordBatch>> {

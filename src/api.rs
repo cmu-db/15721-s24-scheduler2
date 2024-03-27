@@ -51,7 +51,7 @@ impl SchedulerApi for SchedulerService {
                 "Got a request with priority {:?} and cost {:?}",
                 priority, cost
             );
-            let plan = deserialize_physical_plan(physical_plan.as_slice())
+            let plan = deserialize_physical_plan(physical_plan.as_slice().to_vec())
                 .await
                 .unwrap();
             let qid = next_query_id();
