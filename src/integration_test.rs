@@ -26,6 +26,7 @@ use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::env;
 use std::fs;
+use datafusion::arrow::record_batch::RecordBatch;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
 
@@ -149,6 +150,20 @@ async fn initialize_executor() -> DatafusionExecutor {
         }
     }
     executor
+}
+
+// Compares the results of cur with ref_sol, return true if all record batches are equal
+fn is_result_correct(ref_sol: Vec<RecordBatch>, cur: Vec<RecordBatch>) -> bool {
+    if ref_sol.len() != cur.len() {
+        return false;
+    }
+
+    for (ref_batch, cur_batch) in ref_sol.iter().zip(cur.iter()) {
+        if ref_batch != cur_batch {
+            return false;
+        }
+    }
+    true
 }
 
 // fn executor_handshake() {
@@ -341,3 +356,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+
+
+

@@ -138,13 +138,16 @@ mod tests {
             }
         };
 
-        eprintln!("I am still good at this point!");
-
         let result = executor.execute_plan(plan).await;
         assert!(result.is_ok());
         let batches = result.unwrap();
         assert!(!batches.is_empty()); // Ensure that we get some results
-        assert_eq!(batches[0].num_columns(), 2); // Check the number of columns
-        assert_eq!(batches[0].num_rows(), 2); // Check the number of rows
+        assert_eq!(batches[0].num_columns(), 2);
+        assert_eq!(batches[0].num_rows(), 2);
     }
 }
+
+
+
+
+
