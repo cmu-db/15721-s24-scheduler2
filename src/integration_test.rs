@@ -358,5 +358,87 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use datafusion::arrow::array::Int32Array;
+    use datafusion::arrow::datatypes::{DataType, Field, Schema};
+    use datafusion::arrow::record_batch::RecordBatch;
+    use crate::integration_test::{is_result_correct, read_config};
+
+    #[test]
+    fn test_read_config() {
+
+        // TODO: add a test config file in test_files and do some asserts
+
+        let config = read_config();
+
+
+
+
+    }
+    #[test]
+    fn test_is_result_correct_basic() {
+        // TODO: handcraft two record batches and compare
+
+        let id_array = Int32Array::from(vec![1, 2, 3, 4, 5]);
+        let schema = Schema::new(vec![
+            Field::new("id", DataType::Int32, false)
+        ]);
+
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![Arc::new(id_array)]
+        ).unwrap();
+
+
+        let id_array_2 = Int32Array::from(vec![1, 2, 3, 4, 5]);
+        let schema_2 = Schema::new(vec![
+            Field::new("id", DataType::Int32, false)
+        ]);
+
+        let batch_2 = RecordBatch::try_new(
+            Arc::new(schema_2),
+            vec![Arc::new(id_array_2)]
+        ).unwrap();
+
+        assert_eq!(true, is_result_correct(vec![batch], vec![batch_2]));
+    }
+
+    #[test]
+    fn test_is_result_correct_sql() {
+        // TODO: run 1 query with sql, run another one with the converted physical plan and then assert results are equal
+
+        let executor = crate::mock_executor::tests::create_executor().await;
+
+        let query = "SELECT * FROM mock_executor_test_table";
+
+        let plan_result = executor.get_session_context().sql(&query).await;
+        let plan = match plan_result {
+            Ok(plan) => plan,
+            Err(e) => {
+                panic!("Failed to create plan: {:?}", e);
+            }
+        };
+
+
+
+    }
+
+
+    #[test]
+    fn test_handshake() {
+        // TODO: set up executors and the scheduler, see if the scheduler can get the handshake
+    }
+
+
+
+
+
+
+
+}
+
+
 
 
