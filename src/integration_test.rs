@@ -21,7 +21,6 @@ use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
 use crate::parser::{deserialize_physical_plan, get_execution_plan_from_file, list_all_slt_files};
-use crate::scheduler::Scheduler;
 use datafusion::prelude::CsvReadOptions;
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -81,7 +80,7 @@ fn is_handshake_message(task: &TaskId) -> bool {
 /**
 In this integration test, the addresses of the executors and scheduler are hardcoded as a config file under the
 project root directory (in real systems this information would be obtained from the catalog). This
-secion handles parsing the config file.
+section handles parsing the config file.
  */
 
 // Format definitions for the config file
@@ -104,6 +103,8 @@ struct ExecutorConfig {
     port: u16,
     numa_node: u32,
 }
+
+
 
 fn read_config() -> Config {
     let config_str = fs::read_to_string("config.toml").expect("Failed to read config file");
@@ -147,9 +148,29 @@ async fn initialize_executor() -> DatafusionExecutor {
             );
         }
     }
-
     executor
 }
+
+// fn executor_handshake() {
+//
+//     let handshake_req = NotifyTaskStateArgs {
+//         task: Some(TaskId {
+//             query_id: *HANDSHAKE_QUERY_ID,
+//             task_id: *HANDSHAKE_TASK_ID,
+//         }),
+//         success: true,
+//         result: Vec::new(),
+//     };
+//
+//     let request = tonic::Request::new(handshake_req);
+//
+//
+//
+//     match client.notify_task_state(request).await
+//
+//
+//
+// }
 
 // Starts the executor gRPC service
 async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
@@ -168,7 +189,7 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
     // Create a client using the channel
     let mut client = SchedulerApiClient::new(channel);
 
-    let executor = initialize_executor().await;
+    let mock_executor = initialize_executor().await;
 
     // Send initial request with handshake task ID
     let handshake_req = NotifyTaskStateArgs {
@@ -213,7 +234,7 @@ async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
                         }
                     };
 
-                    let execution_result = executor.execute_plan(plan).await;
+                    let execution_result = mock_executor.execute_plan(plan).await;
                     let res = match execution_result {
                         Ok(batches) => batches,
                         Err(e) => {
