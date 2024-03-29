@@ -23,12 +23,12 @@ use crate::mock_executor::DatafusionExecutor;
 use crate::parser::{deserialize_physical_plan, get_execution_plan_from_file, list_all_slt_files};
 use datafusion::prelude::CsvReadOptions;
 use lazy_static::lazy_static;
-use serde::Deserialize;
 use std::env;
 use std::fs;
 use datafusion::arrow::record_batch::RecordBatch;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
+use serde::{Deserialize, Serialize};
 
 /**
 
@@ -85,30 +85,30 @@ section handles parsing the config file.
  */
 
 // Format definitions for the config file
-#[derive(Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Config {
-    scheduler: Vec<SchedulerConfig>,
-    executors: Vec<ExecutorConfig>,
+    scheduler: Scheduler,
+    executors: Vec<Executor>,
 }
 
-#[derive(Deserialize)]
-struct SchedulerConfig {
-    ip_addr: String,
+#[derive(Debug, Serialize, Deserialize)]
+struct Scheduler {
+    id_addr: String,
     port: u16,
 }
 
-#[derive(Deserialize)]
-struct ExecutorConfig {
-    id: u32,
+#[derive(Debug, Serialize, Deserialize)]
+struct Executor {
+    id: u8,
     ip_addr: String,
     port: u16,
-    numa_node: u32,
+    numa_node: u8,
 }
 
 
 
 fn read_config() -> Config {
-    let config_str = fs::read_to_string("config.toml").expect("Failed to read config file");
+    let config_str = fs::read_to_string("executors.toml").expect("Failed to read config file");
     toml::from_str(&config_str).expect("Failed to parse config file")
 }
 
@@ -130,7 +130,7 @@ async fn start_scheduler_server(addr: &str) {
 async fn initialize_executor() -> DatafusionExecutor {
     let executor = DatafusionExecutor::new();
 
-    for entry in WalkDir::new("./test_files/data") {
+    for entry in WalkDir::new("./test_files") {
         let entry = entry.unwrap();
         if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "csv") {
             let file_path = entry.path().to_str().unwrap();
@@ -188,7 +188,7 @@ fn is_result_correct(ref_sol: Vec<RecordBatch>, cur: Vec<RecordBatch>) -> bool {
 // }
 
 // Starts the executor gRPC service
-async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
+async fn start_executor_client(executor: Executor, scheduler_addr: &str) {
     println!(
         "Executor {} connecting to scheduler at {}",
         executor.id, scheduler_addr
@@ -297,7 +297,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let scheduler_addr = format!(
         "{}:{}",
-        config.scheduler[0].ip_addr, config.scheduler[0].port
+        config.scheduler.id_addr, config.scheduler.port
     );
 
     let scheduler_addr_for_server = scheduler_addr.clone();
@@ -364,18 +364,14 @@ mod tests {
     use datafusion::arrow::array::Int32Array;
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use datafusion::arrow::record_batch::RecordBatch;
-    use crate::integration_test::{is_result_correct, read_config};
+    use datafusion::physical_plan::ExecutionPlan;
+    use crate::integration_test::{initialize_executor, is_result_correct, read_config};
+    use crate::mock_executor::DatafusionExecutor;
 
     #[test]
     fn test_read_config() {
-
-        // TODO: add a test config file in test_files and do some asserts
-
         let config = read_config();
-
-
-
-
+        assert_eq!("127.0.0.1", config.scheduler.id_addr);
     }
     #[test]
     fn test_is_result_correct_basic() {
@@ -405,13 +401,16 @@ mod tests {
         assert_eq!(true, is_result_correct(vec![batch], vec![batch_2]));
     }
 
-    #[test]
-    fn test_is_result_correct_sql() {
+    #[tokio::test]
+    async fn test_is_result_correct_sql() {
         // TODO: run 1 query with sql, run another one with the converted physical plan and then assert results are equal
 
-        let executor = crate::mock_executor::tests::create_executor().await;
+        let executor = initialize_executor().await;
 
         let query = "SELECT * FROM mock_executor_test_table";
+        let res_with_sql = executor.execute_query(query).await.expect("fail to execute sql");
+
+
 
         let plan_result = executor.get_session_context().sql(&query).await;
         let plan = match plan_result {
@@ -421,8 +420,20 @@ mod tests {
             }
         };
 
+        let plan: Arc<dyn ExecutionPlan> = match plan.create_physical_plan().await {
+            Ok(plan) => plan,
+            Err(e) => {
+                panic!("Failed to create physical plan: {:?}", e);
+            }
+        };
 
+        let result = executor.execute_plan(plan).await;
+        assert!(result.is_ok());
+        let batches = result.unwrap();
 
+        assert!(!batches.is_empty());
+
+        assert_eq!(true, is_result_correct(res_with_sql, batches));
     }
 
 
