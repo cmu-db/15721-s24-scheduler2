@@ -146,8 +146,3 @@ mod tests {
         assert_eq!(batches[0].num_rows(), 2);
     }
 }
-
-
-
-
-

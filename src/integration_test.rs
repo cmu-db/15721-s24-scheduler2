@@ -21,14 +21,14 @@ use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
 use crate::parser::{deserialize_physical_plan, get_execution_plan_from_file, list_all_slt_files};
+use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::prelude::CsvReadOptions;
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
-use datafusion::arrow::record_batch::RecordBatch;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
-use serde::{Deserialize, Serialize};
 
 /**
 
@@ -104,8 +104,6 @@ struct Executor {
     port: u16,
     numa_node: u8,
 }
-
-
 
 fn read_config() -> Config {
     let config_str = fs::read_to_string("executors.toml").expect("Failed to read config file");
@@ -295,10 +293,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start the scheduler server
 
-    let scheduler_addr = format!(
-        "{}:{}",
-        config.scheduler.id_addr, config.scheduler.port
-    );
+    let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
 
     let scheduler_addr_for_server = scheduler_addr.clone();
     tokio::spawn(async move {
@@ -357,16 +352,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use crate::integration_test::{initialize_executor, is_result_correct, read_config};
+    use crate::mock_executor::DatafusionExecutor;
     use datafusion::arrow::array::Int32Array;
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use datafusion::arrow::record_batch::RecordBatch;
     use datafusion::physical_plan::ExecutionPlan;
-    use crate::integration_test::{initialize_executor, is_result_correct, read_config};
-    use crate::mock_executor::DatafusionExecutor;
+    use std::sync::Arc;
 
     #[test]
     fn test_read_config() {
@@ -375,28 +369,17 @@ mod tests {
     }
     #[test]
     fn test_is_result_correct_basic() {
-        // TODO: handcraft two record batches and compare
-
+        // Handcraft a record batch
         let id_array = Int32Array::from(vec![1, 2, 3, 4, 5]);
-        let schema = Schema::new(vec![
-            Field::new("id", DataType::Int32, false)
-        ]);
+        let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
 
-        let batch = RecordBatch::try_new(
-            Arc::new(schema),
-            vec![Arc::new(id_array)]
-        ).unwrap();
+        let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(id_array)]).unwrap();
 
-
+        // Construct another equivalent record batch
         let id_array_2 = Int32Array::from(vec![1, 2, 3, 4, 5]);
-        let schema_2 = Schema::new(vec![
-            Field::new("id", DataType::Int32, false)
-        ]);
+        let schema_2 = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
 
-        let batch_2 = RecordBatch::try_new(
-            Arc::new(schema_2),
-            vec![Arc::new(id_array_2)]
-        ).unwrap();
+        let batch_2 = RecordBatch::try_new(Arc::new(schema_2), vec![Arc::new(id_array_2)]).unwrap();
 
         assert_eq!(true, is_result_correct(vec![batch], vec![batch_2]));
     }
@@ -408,9 +391,10 @@ mod tests {
         let executor = initialize_executor().await;
 
         let query = "SELECT * FROM mock_executor_test_table";
-        let res_with_sql = executor.execute_query(query).await.expect("fail to execute sql");
-
-
+        let res_with_sql = executor
+            .execute_query(query)
+            .await
+            .expect("fail to execute sql");
 
         let plan_result = executor.get_session_context().sql(&query).await;
         let plan = match plan_result {
@@ -436,20 +420,8 @@ mod tests {
         assert_eq!(true, is_result_correct(res_with_sql, batches));
     }
 
-
     #[test]
     fn test_handshake() {
         // TODO: set up executors and the scheduler, see if the scheduler can get the handshake
     }
-
-
-
-
-
-
-
 }
-
-
-
-
