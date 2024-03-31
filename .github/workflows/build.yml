@@ -34,7 +34,7 @@ jobs:
     - name: Upload to codecov
       uses: codecov/codecov-action@v3
       with:
-        token: be8874e2-10d6-434f-9d52-db6094de31d6
+        token: f6189762-fa72-4a9b-b74d-a112118c42e1
         files: lcov.info
         name: codecov-umbrella # optional
         fail_ci_if_error: true
