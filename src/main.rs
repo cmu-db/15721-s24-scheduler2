@@ -59,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let crate_root = env!("CARGO_MANIFEST_DIR");
     println!("Path to crate's root: {}", crate_root);
     let addr = "[::1]:50051".parse()?;
-    let scheduler_service = SchedulerService::default();
+    let scheduler_service = SchedulerService::new();
     Server::builder()
         .add_service(SchedulerApiServer::new(scheduler_service))
         .serve(addr)

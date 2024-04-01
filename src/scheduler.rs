@@ -8,6 +8,7 @@ use crate::task_queue::TaskQueue;
 use crate::SchedulerError;
 use datafusion::physical_plan::ExecutionPlan;
 
+#[derive(Debug)]
 pub enum TaskStatus {
     Waiting,
     Ready,
@@ -17,6 +18,7 @@ pub enum TaskStatus {
     Aborted,
 }
 
+#[derive(Debug)]
 pub struct Task {
     pub(crate) id: u64,
     pub(crate) query_id: u64,

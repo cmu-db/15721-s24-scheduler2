@@ -2,6 +2,7 @@ use crate::scheduler::Task;
 use std::collections::VecDeque;
 use std::sync::{Condvar, Mutex};
 
+#[derive(Debug)]
 pub struct TaskQueue {
     queue: Mutex<VecDeque<Task>>,
     pub avail: Condvar,

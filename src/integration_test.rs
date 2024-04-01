@@ -21,12 +21,12 @@ use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
 use crate::parser::{deserialize_physical_plan, get_execution_plan_from_file, list_all_slt_files};
+use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::prelude::CsvReadOptions;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::env;
 use std::fs;
-use datafusion::arrow::record_batch::RecordBatch;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
 
@@ -105,8 +105,6 @@ struct ExecutorConfig {
     numa_node: u32,
 }
 
-
-
 fn read_config() -> Config {
     let config_str = fs::read_to_string("config.toml").expect("Failed to read config file");
     toml::from_str(&config_str).expect("Failed to parse config file")
@@ -118,7 +116,7 @@ async fn start_scheduler_server(addr: &str) {
 
     println!("Scheduler listening on {}", addr);
 
-    let scheduler_service = SchedulerService::default();
+    let scheduler_service = SchedulerService::new();
     Server::builder()
         .add_service(SchedulerApiServer::new(scheduler_service))
         .serve(addr)
@@ -356,7 +354,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-
-
-

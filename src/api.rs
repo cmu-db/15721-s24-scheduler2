@@ -9,8 +9,14 @@ use composable_database::{
     TaskId,
 };
 
+use crate::query_graph::{QueryGraph, QueryStage, StageStatus};
+use crate::query_table::QueryTable;
+use crate::task_queue::TaskQueue;
+use crate::SchedulerError;
+use datafusion::physical_plan::ExecutionPlan;
+
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, Once};
+use std::sync::{Arc, Mutex, Once};
 
 use crate::parser::deserialize_physical_plan;
 use crate::scheduler::Scheduler;
@@ -33,8 +39,23 @@ pub mod composable_database {
     tonic::include_proto!("composable_database");
 }
 
-#[derive(Debug, Default)]
-pub struct SchedulerService {}
+#[derive(Debug)]
+pub struct SchedulerService {
+    // Internal state of queries.
+    query_table: QueryTable,
+
+    // Task queue
+    task_queue: TaskQueue,
+}
+
+impl SchedulerService {
+    pub fn new() -> Self {
+        Self {
+            query_table: QueryTable::new(),
+            task_queue: TaskQueue::new(),
+        }
+    }
+}
 
 #[tonic::async_trait]
 impl SchedulerApi for SchedulerService {
@@ -54,6 +75,7 @@ impl SchedulerApi for SchedulerService {
             let plan = deserialize_physical_plan(physical_plan.as_slice().to_vec())
                 .await
                 .unwrap();
+            println!("schedule_query: received plan {:?}", plan);
             let qid = next_query_id();
             // Generate query graph and schedule
             SCHEDULER.lock().unwrap().schedule_plan(qid, plan);
@@ -147,14 +169,15 @@ mod tests {
         deserialize_physical_plan, get_execution_plan_from_file, serialize_physical_plan,
     };
     use tonic::Request;
+
     #[tokio::test]
     async fn test_scheduler() {
-        let scheduler_service = Box::new(SchedulerService::default());
-        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/select.slt");
+        let scheduler_service = Box::new(SchedulerService::new());
+        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
         println!("test_scheduler: Testing file {}", test_file);
         if let Ok(physical_plans) = get_execution_plan_from_file(&test_file).await {
-            for plan in physical_plans {
-                let plan_f = serialize_physical_plan(plan).await;
+            for plan in &physical_plans {
+                let plan_f = serialize_physical_plan(plan.clone()).await;
                 if plan_f.is_err() {
                     println!(
                         "test_scheduler: Unable to serialize plan in file {}.",
@@ -162,7 +185,9 @@ mod tests {
                     );
                     continue;
                 }
+                println!("plan: {:?}", plan.clone());
                 let plan_bytes: Vec<u8> = plan_f.unwrap();
+                println!("Serialized plan is {} bytes.", plan_bytes.len());
                 let query = ScheduleQueryArgs {
                     physical_plan: plan_bytes,
                     metadata: Some(QueryInfo {
@@ -180,6 +205,9 @@ mod tests {
                 }
                 let query_id = response.unwrap().into_inner().query_id;
                 println!("test_scheduler: Queued query {}.", query_id);
+                if query_id == 125 {
+                    return;
+                }
             }
         } else {
             println!(
@@ -187,5 +215,6 @@ mod tests {
                 test_file
             );
         }
+        println!("test_scheduler: ok.");
     }
 }
