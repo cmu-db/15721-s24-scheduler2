@@ -164,27 +164,6 @@ fn is_result_correct(ref_sol: Vec<RecordBatch>, cur: Vec<RecordBatch>) -> bool {
     true
 }
 
-// fn executor_handshake() {
-//
-//     let handshake_req = NotifyTaskStateArgs {
-//         task: Some(TaskId {
-//             query_id: *HANDSHAKE_QUERY_ID,
-//             task_id: *HANDSHAKE_TASK_ID,
-//         }),
-//         success: true,
-//         result: Vec::new(),
-//     };
-//
-//     let request = tonic::Request::new(handshake_req);
-//
-//
-//
-//     match client.notify_task_state(request).await
-//
-//
-//
-// }
-
 // Starts the executor gRPC service
 async fn start_executor_client(executor: Executor, scheduler_addr: &str) {
     println!(
@@ -271,13 +250,28 @@ async fn start_executor_client(executor: Executor, scheduler_addr: &str) {
     }
 }
 
-// TODO: add a function to run a sql query on a single executor
+async fn generate_refsol(file_path: &str) -> Vec<Vec<RecordBatch>>{
+    // start a reference executor instance to verify correctness
+    let reference_executor = initialize_executor().await;
 
-// TODO: research function to compare equality of two results (apache arrow?)
+    // get all the execution plans and pre-compute all the reference results
+    let execution_plans = get_execution_plan_from_file(file_path)
+        .await
+        .expect("Failed to get execution plans");
+    let mut results = Vec::new();
+    for plan in execution_plans {
+        match reference_executor.execute_plan(plan).await {
+            Ok(dataframe) => {
+                results.push(dataframe);
+            }
+            Err(e) => eprintln!("Failed to execute plan: {}", e),
+        }
+    }
+    results
+}
 
-fn generate_refsol() {}
 
-// Make this into a command line app
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = read_config();
@@ -309,22 +303,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    // start an reference executor instance to verify correctness
-    let reference_executor = DatafusionExecutor::new();
 
-    // get all the execution plans and pre-compute all the reference results
-    let execution_plans = get_execution_plan_from_file(file_path)
-        .await
-        .expect("Failed to get execution plans");
-    let mut results = Vec::new();
-    for plan in execution_plans {
-        match reference_executor.execute_plan(plan).await {
-            Ok(dataframe) => {
-                results.push(dataframe);
-            }
-            Err(e) => eprintln!("Failed to execute plan: {}", e),
-        }
-    }
 
     // TODO: make this a command line program where it runs a file, verify files by comparing recordbatches
 
@@ -354,7 +333,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::integration_test::{initialize_executor, is_result_correct, read_config};
+    use crate::integration_test::{generate_refsol, initialize_executor, is_result_correct, read_config, start_executor_client, start_scheduler_server};
     use crate::mock_executor::DatafusionExecutor;
     use datafusion::arrow::array::Int32Array;
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
@@ -386,7 +365,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_result_correct_sql() {
-        // TODO: run 1 query with sql, run another one with the converted physical plan and then assert results are equal
 
         let executor = initialize_executor().await;
 
@@ -420,8 +398,30 @@ mod tests {
         assert_eq!(true, is_result_correct(res_with_sql, batches));
     }
 
-    #[test]
-    fn test_handshake() {
-        // TODO: set up executors and the scheduler, see if the scheduler can get the handshake
+    #[tokio::test]
+    async fn test_handshake() {
+        let config = read_config();
+        let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
+
+        let scheduler_addr_for_server = scheduler_addr.clone();
+        tokio::spawn(async move {
+            start_scheduler_server(&scheduler_addr_for_server).await;
+        });
+
+        // Start executor clients
+        for executor in config.executors {
+            // Clone the scheduler_addr for each executor client
+            let scheduler_addr_for_client = scheduler_addr.clone();
+            tokio::spawn(async move {
+                start_executor_client(executor, &scheduler_addr_for_client).await;
+            });
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_refsol() {
+        let res = generate_refsol("./test_files/select.slt").await;
+        assert_eq!(false, res.is_empty());
+        eprintln!("Number of arguments is {}", res.len());
     }
 }
