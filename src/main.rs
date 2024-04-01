@@ -19,6 +19,9 @@ use tonic::transport::Server;
 use crate::api::{composable_database::scheduler_api_server::SchedulerApiServer, SchedulerService};
 use crate::integration_test::{read_config, start_executor_client, start_scheduler_server};
 use std::io::{self, Write};
+use datafusion::prelude::CsvReadOptions;
+use walkdir::WalkDir;
+use crate::mock_executor::DatafusionExecutor;
 
 pub enum SchedulerError {
     Error(String),
@@ -72,6 +75,52 @@ const EXECUTOR_CONFIG: &str = "executors.toml";
 // }
 //
 
+fn load_context() {}
+
+
+
+
+
+
+async fn initialize_executor() -> DatafusionExecutor {
+    let executor = DatafusionExecutor::new();
+
+    for entry in WalkDir::new("./test_files") {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "csv") {
+            let file_path = entry.path().to_str().unwrap();
+
+            // Extract the table name from the file name without the extension
+            let table_name = entry.path().file_stem().unwrap().to_str().unwrap();
+
+            let options = CsvReadOptions::new();
+
+            // Register the CSV file as a table
+            let result = executor.register_csv(table_name, file_path, options).await;
+            assert!(
+                result.is_ok(),
+                "Failed to register CSV file: {:?}",
+                file_path
+            );
+        }
+    }
+    executor
+}
+
+/**
+
+    Config:
+    config file parser, can start mock executors and mock gRPC server
+
+    "front-end"
+    Step 2: enter either interactive mode / file mode
+    interactive mode: run SQL query in command line, plan and send to scheduler as gRPC
+    file mode: .slt files containing SQL statements, plan and send to scheduler as gRPC
+
+    "mock executor":
+    can do handshakes, and execute executionplans but HOW TO PASS RESULT and how to verify result after the scheduler finishes a query
+
+*/
 #[tokio::main]
 async fn main() {
     let matches = App::new("DBMS Test CLI")
@@ -148,9 +197,9 @@ fn interactive_mode() {
         println!("You entered: {}", trimmed_input);
 
 
+
+
     }
-
-
 
 }
 

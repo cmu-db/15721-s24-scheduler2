@@ -6,7 +6,7 @@ use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
 use crate::parser::{deserialize_physical_plan, get_execution_plan_from_file, list_all_slt_files};
 use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::prelude::CsvReadOptions;
+use datafusion::prelude::{CsvReadOptions, SessionContext};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -15,6 +15,7 @@ use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /**
 This gRPC facilitates communication between executors and the scheduler:
@@ -49,10 +50,21 @@ lazy_static! {
     };
 }
 
+
 // Checks if the message is a handshake message
 fn is_handshake_message(task: &TaskId) -> bool {
     return task.query_id == *HANDSHAKE_QUERY_ID && task.task_id == *HANDSHAKE_TASK_ID;
 }
+
+
+struct IntegrationTest {
+    ctx: Arc<SessionContext>,
+    config: Config
+}
+
+// TODO: organize functions in this file into methods for the struct
+// new: create a new integration test instance
+
 
 /**
 This integration test uses hardcoded addresses for executors and the scheduler,
@@ -269,64 +281,6 @@ async fn generate_refsol(file_path: &str) -> Vec<Vec<RecordBatch>> {
 // ============================================
 // ====== MOCK FRONTEND + OPTIMIZER CODE ======
 // ============================================
-
-
-// #[tokio::main]
-// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     let config = read_config();
-//
-//     let args: Vec<String> = env::args().collect();
-//     // Check if at least one argument was provided (excluding the program name)
-//     if args.len() != 1 {
-//         panic!("Usage: pass in the .slt file you want to test");
-//     }
-//
-//     let file_path = &args[1];
-//     eprintln!("Start running file {}", file_path);
-//
-//     // Start the scheduler server
-//
-//     let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
-//
-//     let scheduler_addr_for_server = scheduler_addr.clone();
-//     tokio::spawn(async move {
-//         start_scheduler_server(&scheduler_addr_for_server).await;
-//     });
-//
-//     // Start executor clients
-//     for executor in config.executors {
-//         // Clone the scheduler_addr for each executor client
-//         let scheduler_addr_for_client = scheduler_addr.clone();
-//         tokio::spawn(async move {
-//             start_executor_client(executor, &scheduler_addr_for_client).await;
-//         });
-//     }
-//
-//     // TODO: make this a command line program where it runs a file, verify files by comparing recordbatches
-//
-//     let test_files = list_all_slt_files("./test_files");
-//
-//     for file_path in test_files {
-//         let file_path_str = file_path
-//             .to_str()
-//             .expect("Failed to convert path to string");
-//
-//         eprintln!("Processing test file: {}", file_path_str);
-//
-//         match get_execution_plan_from_file(file_path_str).await {
-//             Ok(plans) => {}
-//             Err(e) => {
-//                 eprintln!(
-//                     "Failed to get execution plans from file {}: {}",
-//                     file_path_str, e
-//                 );
-//                 panic!("Test failed due to error with file: {}", file_path_str);
-//             }
-//         }
-//     }
-//
-//     Ok(())
-// }
 
 
 
