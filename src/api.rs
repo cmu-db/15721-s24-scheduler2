@@ -112,6 +112,7 @@ impl SchedulerApi for SchedulerService {
                 "Executor: Failed to execute query fragment.",
             ));
         }
+
         let mut scheduler = SCHEDULER.lock().unwrap();
         scheduler.store_result(result);
         scheduler.update_task_state(task_id.query_id, task_id.task_id);

@@ -205,7 +205,26 @@ fn interactive_mode() {
 
 fn file_mode(file_path: PathBuf) {
     println!("Executing tests from file: {:?}", file_path);
-    // Implement test execution logic
-    // On failure, log the error and exit
+
+    let config = read_config();
+
+    // Start the scheduler
+    let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
+    let scheduler_addr_for_server = scheduler_addr.clone();
+    tokio::spawn(async move {
+        start_scheduler_server(&scheduler_addr_for_server).await;
+    });
+
+    // Start executor clients
+    for executor in config.executors {
+        // Clone the scheduler_addr for each executor client
+        let scheduler_addr_for_client = scheduler_addr.clone();
+        tokio::spawn(async move {
+            start_executor_client(executor, &scheduler_addr_for_client).await;
+        });
+    }
+
+    // parse
+
 }
 
