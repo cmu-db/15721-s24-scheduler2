@@ -19,6 +19,7 @@ use crate::api::composable_database::QueryStatus::NotFound;
 use crate::intermediate_results::{get_results, TaskKey};
 use datafusion::arrow::json::writer::record_batches_to_json_rows;
 use datafusion::arrow::util::pretty::print_batches;
+use lazy_static::lazy_static;
 
 
 use crate::SchedulerError;
@@ -26,6 +27,18 @@ use crate::SchedulerError;
 // Static query_id generator
 static QID_COUNTER: AtomicU64 = AtomicU64::new(0);
 static QID_COUNTER_INIT: Once = Once::new();
+
+
+lazy_static! {
+    static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
+    static ref HANDSHAKE_TASK_ID: u64 = -1i64 as u64;
+    static ref HANDSHAKE_STAGE_ID: u64 = -1i64 as u64;
+    static ref HANDSHAKE_TASK: TaskId = TaskId {
+        query_id: *HANDSHAKE_QUERY_ID,
+        stage_id: *HANDSHAKE_STAGE_ID,
+        task_id: *HANDSHAKE_TASK_ID,
+    };
+}
 
 fn next_query_id() -> u64 {
     QID_COUNTER_INIT.call_once(|| {});
@@ -187,8 +200,13 @@ impl SchedulerApi for SchedulerService {
                 "Executor: Failed to execute query fragment.",
             ));
         }
-        self.update_task_state(task_id.query_id, task_id.task_id)
-            .await;
+
+        if task_id.task_id != *HANDSHAKE_TASK_ID && task_id.query_id != *HANDSHAKE_QUERY_ID &&
+            task_id.stage_id != *HANDSHAKE_STAGE_ID {
+            self.update_task_state(task_id.query_id, task_id.task_id)
+                .await;
+        }
+
         if let Ok((task, bytes)) = self.next_task().await {
             let response = NotifyTaskStateRet {
                 has_new_task: true,

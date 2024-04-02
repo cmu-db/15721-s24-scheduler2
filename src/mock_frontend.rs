@@ -30,13 +30,15 @@ struct SqlExecutionRequest {
 
 impl MockFrontend {
     pub async fn new(catalog_path: &str, scheduler_addr: &str) -> Self {
-        let channel = Channel::from_shared(scheduler_addr.to_string())
-            .expect("Invalid scheduler address")
-            .connect()
-            .await
-            .expect("Failed to connect to scheduler");
+        let full_address = format!("http://{}", scheduler_addr);
+        println!("The full address is {}", full_address);
+        // let channel = Channel::from_shared(full_address)
+        //     .expect("Invalid scheduler address")
+        //     .connect()
+        //     .await
+        //     .expect("Failed to connect to scheduler");
 
-        let mut client = SchedulerApiClient::new(channel);
+        let mut client = SchedulerApiClient::connect("http://0.0.0.0:15721").await.expect("Fail to connect to scheduler");
 
         let (sender, mut receiver) = mpsc::channel::<SqlExecutionRequest>(32);
 
