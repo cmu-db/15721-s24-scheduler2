@@ -29,18 +29,16 @@ impl QueryTable {
     }
 
     #[must_use]
-    pub fn add_query(&mut self, graph: QueryGraph) -> Vec<Task> {
-        executor::block_on(async {
-            let mut t = self.table.write().await;
-            let frontier = graph.get_frontier();
-            (*t).insert(graph.query_id, RwLock::new(graph));
-            frontier
-        })
+    pub async fn add_query(&self, graph: QueryGraph) -> Vec<Task> {
+        let mut t = self.table.write().await;
+        let frontier = graph.get_frontier();
+        (*t).insert(graph.query_id, RwLock::new(graph));
+        frontier
     }
 
     #[must_use]
     pub async fn update_stage_status(
-        &mut self,
+        &self,
         query_id: u64,
         stage_id: u64,
         status: StageStatus,
@@ -58,23 +56,21 @@ impl QueryTable {
         }
     }
 
-    pub fn get_plan_bytes(
-        &mut self,
+    pub async fn get_plan_bytes(
+        &self,
         query_id: u64,
         stage_id: u64,
     ) -> Result<Vec<u8>, SchedulerError> {
-        executor::block_on(async {
-            let t = self.table.read().await;
-            if let Some(graph) = t.get(&query_id) {
-                let plan = Arc::clone(&graph.read().await.stages[stage_id as usize].plan);
-                match serialize_physical_plan(plan).await {
-                    Ok(p) => Ok(p),
-                    Err(e) => Err(SchedulerError::DfError(e)),
-                }
-            } else {
-                Err(SchedulerError::Error("Graph not found.".to_string()))
+        let t = self.table.read().await;
+        if let Some(graph) = t.get(&query_id) {
+            let plan = Arc::clone(&graph.read().await.stages[stage_id as usize].plan);
+            match serialize_physical_plan(plan).await {
+                Ok(p) => Ok(p),
+                Err(e) => Err(SchedulerError::DfError(e)),
             }
-        })
+        } else {
+            Err(SchedulerError::Error("Graph not found.".to_string()))
+        }
     }
 
     pub async fn cancel_query(&mut self, query_id: u64) -> bool {

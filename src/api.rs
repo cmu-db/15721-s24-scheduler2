@@ -1,34 +1,28 @@
-use lazy_static::lazy_static;
-use prost::Message;
-use tonic::{transport::Server, Request, Response, Status};
 
-use composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
+use tonic::{Request, Response, Status};
+
+use composable_database::scheduler_api_server::SchedulerApi;
 use composable_database::{
     AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
     QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
     TaskId,
 };
 
-use crate::query_graph::{QueryGraph, QueryStage, StageStatus};
+use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
+use crate::scheduler::Task;
 use crate::task_queue::TaskQueue;
 use crate::SchedulerError;
-use datafusion::physical_plan::ExecutionPlan;
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, Once};
+use std::sync::Once;
 
 use crate::parser::deserialize_physical_plan;
-use crate::scheduler::Scheduler;
 
 // Static query_id generator
 static QID_COUNTER: AtomicU64 = AtomicU64::new(0);
 static QID_COUNTER_INIT: Once = Once::new();
 
-// TODO: find better way to do this
-lazy_static! {
-    static ref SCHEDULER: Mutex<Scheduler> = Mutex::new(Scheduler::new());
-}
 
 fn next_query_id() -> u64 {
     QID_COUNTER_INIT.call_once(|| {});
@@ -55,6 +49,27 @@ impl SchedulerService {
             task_queue: TaskQueue::new(),
         }
     }
+
+    async fn update_task_state(&self, query_id: u64, task_id: u64) {
+        // Update the status of the stage in the query graph.
+        self.query_table
+            .update_stage_status(query_id, task_id, StageStatus::Finished(0))
+            .await
+            .expect("Graph not found.");
+
+        // If new tasks are available, add them to the queue
+        let frontier = self.query_table.get_frontier(query_id);
+        self.task_queue.add_tasks(frontier);
+    }
+
+    async fn next_task(&self) -> Result<(Task, Vec<u8>), SchedulerError> {
+        let task = self.task_queue.next_task();
+        let stage = self
+            .query_table
+            .get_plan_bytes(task.query_id, task.stage_id)
+            .await?;
+        Ok((task, stage))
+    }
 }
 
 #[tonic::async_trait]
@@ -77,8 +92,15 @@ impl SchedulerApi for SchedulerService {
                 .unwrap();
             println!("schedule_query: received plan {:?}", plan);
             let qid = next_query_id();
+
             // Generate query graph and schedule
-            SCHEDULER.lock().unwrap().schedule_plan(qid, plan);
+            // Build a query graph from the plan.
+            let query = QueryGraph::new(qid, plan);
+            let frontier = self.query_table.add_query(query).await;
+
+            // Add the query to the task queue.
+            self.task_queue.add_tasks(frontier);
+
             let response = ScheduleQueryRet { query_id: qid };
             return Ok(Response::new(response));
         } else {
@@ -115,7 +137,7 @@ impl SchedulerApi for SchedulerService {
         let NotifyTaskStateArgs {
             task,
             success,
-            result,
+            result: _,
         } = request.into_inner();
 
         let task_id = match task {
@@ -134,10 +156,9 @@ impl SchedulerApi for SchedulerService {
                 "Executor: Failed to execute query fragment.",
             ));
         }
-        let mut scheduler = SCHEDULER.lock().unwrap();
-        scheduler.store_result(result);
-        scheduler.update_task_state(task_id.query_id, task_id.task_id);
-        if let Ok((task, bytes)) = scheduler.next_task() {
+        self.update_task_state(task_id.query_id, task_id.task_id)
+            .await;
+        if let Ok((task, bytes)) = self.next_task().await {
             let response = NotifyTaskStateRet {
                 has_new_task: true,
                 task: Some(TaskId {

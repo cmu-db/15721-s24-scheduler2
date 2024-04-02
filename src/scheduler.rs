@@ -44,11 +44,11 @@ impl Scheduler {
 
     pub fn schedule_plan(&mut self, query_id: u64, plan: Arc<dyn ExecutionPlan>) {
         // Build a query graph from the plan.
-        let query = QueryGraph::new(query_id, plan);
-        let frontier = self.query_table.add_query(query);
+        // let query = QueryGraph::new(query_id, plan);
+        // let frontier = self.query_table.add_query(query);
 
         // Add the query to the task queue.
-        self.task_queue.add_tasks(frontier);
+        // self.task_queue.add_tasks(frontier);
     }
 
     pub fn update_stage_status(&mut self, query_id: u64, stage_id: u64, status: StageStatus) {
@@ -71,11 +71,12 @@ impl Scheduler {
         self.task_queue.add_tasks(frontier);
     }
 
-    pub fn next_task(&mut self) -> Result<(Task, Vec<u8>), SchedulerError> {
+    pub async fn next_task(&mut self) -> Result<(Task, Vec<u8>), SchedulerError> {
         let task = self.task_queue.next_task();
         let stage = self
             .query_table
-            .get_plan_bytes(task.query_id, task.stage_id)?;
+            .get_plan_bytes(task.query_id, task.stage_id)
+            .await?;
         Ok((task, stage))
     }
 }
