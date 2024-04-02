@@ -1,21 +1,23 @@
-use crate::parser::serialize_physical_plan;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::task::Task;
 use crate::SchedulerError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use crate::parser::Parser;
 
 #[derive(Debug, Default)]
 pub struct QueryTable {
     // Maps query IDs to query graphs
     table: RwLock<HashMap<u64, RwLock<QueryGraph>>>,
+    parser: Parser
 }
 
 impl QueryTable {
-    pub fn new() -> Self {
+    pub async fn new(catalog_path: &str) -> Self {
         Self {
             table: RwLock::new(HashMap::new()),
+            parser: Parser::new(catalog_path).await
         }
     }
 
@@ -69,7 +71,7 @@ impl QueryTable {
         let t = self.table.read().await;
         if let Some(graph) = t.get(&query_id) {
             let plan = Arc::clone(&graph.read().await.stages[stage_id as usize].plan);
-            match serialize_physical_plan(plan).await {
+            match self.parser.serialize_physical_plan(plan).await {
                 Ok(p) => Ok(p),
                 Err(e) => Err(SchedulerError::DfError(e)),
             }

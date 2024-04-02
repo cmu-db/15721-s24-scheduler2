@@ -1,356 +1,258 @@
-/*
-
-Steps for integration testing:
-1. Start the scheduler gRPC
-2. Start executors according to the config file
-
-
-Task 1: figure out how to import mock executor
-Task 2: write unit tests for mock executor
-Task 3: make integration tests compile
-
-
-
-
-*/
-
 use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
 use crate::api::composable_database::scheduler_api_server::SchedulerApiServer;
-use crate::api::composable_database::TaskId;
 use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
+use crate::api::composable_database::{NotifyTaskStateRet, TaskId};
 use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
-use crate::parser::{deserialize_physical_plan, get_execution_plan_from_file, list_all_slt_files};
 use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::prelude::CsvReadOptions;
+use datafusion::prelude::{CsvReadOptions, SessionContext};
 use lazy_static::lazy_static;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
+use std::sync::Arc;
+use crate::mock_frontend::MockFrontend;
+use crate::project_config::{read_config, load_catalog};
+use crate::project_config::{Config, Executor};
+
 
 /**
-
-Executors and the scheduler communicate using this gRPC:
+This gRPC facilitates communication between executors and the scheduler:
 rpc NotifyTaskState(NotifyTaskStateArgs) returns (NotifyTaskStateRet);
 
-
-executor -> scheduler message:
+Executor to scheduler message:
 message NotifyTaskStateArgs {
-    TaskID task = 1;
-    bool success = 2; // if the query succeeded
-    bytes result = 3; // bytes for the result
+    TaskID task = 1; // Task identifier
+    bool success = 2; // Indicates if the task was executed successfully
+    bytes result = 3; // Result data as bytes
 }
-It tells the scheduler if a task (with the associated taskID) is successfully executed, and also
-sends the bytes in the form of Vec<RecordBatch>.
+- Notifies the scheduler of the task's execution xwstatus using the associated TaskID and transmits the result data.
 
-
-
-scheduler -> executor message
+Scheduler to executor message:
 message NotifyTaskStateRet {
-    bool has_new_task = 1; // true if there is a new task (details given below)
-    TaskID task = 2;
-    bytes physical_plan = 3;
+    bool has_new_task = 1; // Indicates the presence of a new task
+    TaskID task = 2; // New task identifier
+    bytes physical_plan = 3; // Task execution plan
 }
-This message is used for the scheduler to assign tasks to an executor.
-
-
+- Enables the scheduler to assign new tasks to the executor.
 
 Establishing connection:
-In the integration test, each executor uses NotifyTaskStateArgs to do handshakes with the scheduler.
-The first message always has the HANDSHAKE_TASK_ID, and upon receving the scheduler would start
-assigning tasks with NotifyTaskStateRet messages.
-
+During integration tests, executors utilize NotifyTaskStateArgs to establish initial communication with the scheduler. The initial message contains the HANDSHAKE_TASK_ID. Upon receipt, the scheduler begins assigning tasks using NotifyTaskStateRet messages.
  */
 
 lazy_static! {
     static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
     static ref HANDSHAKE_TASK_ID: u64 = -1i64 as u64;
+    static ref HANDSHAKE_STAGE_ID: u64 = -1i64 as u64;
     static ref HANDSHAKE_TASK: TaskId = TaskId {
         query_id: *HANDSHAKE_QUERY_ID,
+        stage_id: *HANDSHAKE_STAGE_ID,
         task_id: *HANDSHAKE_TASK_ID,
     };
 }
 
-// Checks if the message is a handshake message
-fn is_handshake_message(task: &TaskId) -> bool {
-    return task.query_id == *HANDSHAKE_QUERY_ID && task.task_id == *HANDSHAKE_TASK_ID;
+pub struct IntegrationTest {
+    catalog_path: String,
+    config_path: String,
+    ctx: Arc<SessionContext>,
+    config: Config,
 }
+
 
 /**
-In this integration test, the addresses of the executors and scheduler are hardcoded as a config file under the
-project root directory (in real systems this information would be obtained from the catalog). This
-section handles parsing the config file.
- */
+This integration test uses hardcoded addresses for executors and the scheduler,
+specified in a config file located in the project root directory. In production
+systems, these addresses would typically be retrieved from a catalog. This section'
+is responsible for parsing the config file.*/
 
-// Format definitions for the config file
-#[derive(Deserialize)]
-struct Config {
-    scheduler: Vec<SchedulerConfig>,
-    executors: Vec<ExecutorConfig>,
-}
 
-#[derive(Deserialize)]
-struct SchedulerConfig {
-    ip_addr: String,
-    port: u16,
-}
+impl IntegrationTest {
 
-#[derive(Deserialize)]
-struct ExecutorConfig {
-    id: u32,
-    ip_addr: String,
-    port: u16,
-    numa_node: u32,
-}
-
-fn read_config() -> Config {
-    let config_str = fs::read_to_string("config.toml").expect("Failed to read config file");
-    toml::from_str(&config_str).expect("Failed to parse config file")
-}
-
-// Starts the scheduler gRPC service
-async fn start_scheduler_server(addr: &str) {
-    let addr = addr.parse().expect("Invalid address");
-
-    println!("Scheduler listening on {}", addr);
-
-    let scheduler_service = SchedulerService::new();
-    Server::builder()
-        .add_service(SchedulerApiServer::new(scheduler_service))
-        .serve(addr)
-        .await
-        .expect("unable to start scheduler gRPC server");
-}
-
-// Initialize an executor and load the data from csv
-async fn initialize_executor() -> DatafusionExecutor {
-    let executor = DatafusionExecutor::new();
-
-    for entry in WalkDir::new("./test_files/data") {
-        let entry = entry.unwrap();
-        if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "csv") {
-            let file_path = entry.path().to_str().unwrap();
-
-            // Extract the table name from the file name without the extension
-            let table_name = entry.path().file_stem().unwrap().to_str().unwrap();
-
-            let options = CsvReadOptions::new();
-
-            // Register the CSV file as a table
-            let result = executor.register_csv(table_name, file_path, options).await;
-            assert!(
-                result.is_ok(),
-                "Failed to register CSV file: {:?}",
-                file_path
-            );
+    // Given the paths to the catalog (containing all db files) and a path to the config file,
+    // create a new instance of IntegrationTester
+    pub async fn new(catalog_path: String, config_path: String) -> Self {
+        let ctx = load_catalog(&catalog_path).await;
+        let config = read_config(&config_path);
+        Self {
+            ctx,
+            config,
+            catalog_path,
+            config_path
         }
     }
-    executor
+
+    pub async fn run_server(&self) {
+        let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        let catalog_path = self.catalog_path.clone();
+        tokio::spawn(async move {
+            // Starts the scheduler gRPC service
+            let addr = scheduler_addr.parse().expect("Invalid address");
+            println!("Scheduler listening on {}", addr);
+
+            let scheduler_service = SchedulerService::new(&catalog_path).await;
+            Server::builder()
+                .add_service(SchedulerApiServer::new(scheduler_service))
+                .serve(addr)
+                .await
+                .expect("unable to start scheduler gRPC server");
+        });
+    }
+    pub async fn run_client(&self) {
+        let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        // Start executor clients
+        for executor in &self.config.executors {
+            // Clone the scheduler_addr for each executor client
+            let mut mock_executor = DatafusionExecutor::new("./test_files/", executor.id).await;
+            let scheduler_addr_copy = scheduler_addr.clone();
+            tokio::spawn(async move {
+                mock_executor.run_mock_executor_service(&scheduler_addr_copy).await;
+            });
+        }
+    }
+
+    pub async fn run_frontend(&self) -> MockFrontend {
+        let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        let catalog_path = self.config_path.clone();
+
+        let frontend = tokio::spawn(async move {
+            MockFrontend::new(&catalog_path, &scheduler_addr).await
+        })
+            .await
+            .expect("Failed to join the async task");
+
+        frontend
+    }
+
 }
+
+
+
+
+// TODO for next update: logic for verifying correctness
 
 // Compares the results of cur with ref_sol, return true if all record batches are equal
-fn is_result_correct(ref_sol: Vec<RecordBatch>, cur: Vec<RecordBatch>) -> bool {
-    if ref_sol.len() != cur.len() {
-        return false;
-    }
+// fn is_result_correct(ref_sol: Vec<RecordBatch>, cur: Vec<RecordBatch>) -> bool {
+//     if ref_sol.len() != cur.len() {
+//         return false;
+//     }
+//
+//     for (ref_batch, cur_batch) in ref_sol.iter().zip(cur.iter()) {
+//         if ref_batch != cur_batch {
+//             return false;
+//         }
+//     }
+//     true
+// }
 
-    for (ref_batch, cur_batch) in ref_sol.iter().zip(cur.iter()) {
-        if ref_batch != cur_batch {
-            return false;
-        }
-    }
-    true
-}
-
-// fn executor_handshake() {
+// async fn generate_refsol(file_path: &str) -> Vec<Vec<RecordBatch>> {
+//     // start a reference executor instance to verify correctness
+//     let reference_executor = initialize_executor().await;
 //
-//     let handshake_req = NotifyTaskStateArgs {
-//         task: Some(TaskId {
-//             query_id: *HANDSHAKE_QUERY_ID,
-//             task_id: *HANDSHAKE_TASK_ID,
-//         }),
-//         success: true,
-//         result: Vec::new(),
-//     };
-//
-//     let request = tonic::Request::new(handshake_req);
-//
-//
-//
-//     match client.notify_task_state(request).await
-//
-//
+//     // get all the execution plans and pre-compute all the reference results
+//     let execution_plans = get_execution_plan_from_file(file_path)
+//         .await
+//         .expect("Failed to get execution plans");
+//     let mut results = Vec::new();
+//     for plan in execution_plans {
+//         match reference_executor.execute_plan(plan).await {
+//             Ok(dataframe) => {
+//                 results.push(dataframe);
+//             }
+//             Err(e) => eprintln!("Failed to execute plan: {}", e),
+//         }
+//     }
+//     results
 //
 // }
 
-// Starts the executor gRPC service
-async fn start_executor_client(executor: ExecutorConfig, scheduler_addr: &str) {
-    println!(
-        "Executor {} connecting to scheduler at {}",
-        executor.id, scheduler_addr
-    );
 
-    // Create a connection to the scheduler
-    let channel = Channel::from_shared(scheduler_addr.to_string())
-        .expect("Invalid scheduler address")
-        .connect()
-        .await
-        .expect("Failed to connect to scheduler");
+#[cfg(test)]
+mod tests {
+    // use crate::mock_executor::DatafusionExecutor;
+    // use datafusion::arrow::array::Int32Array;
+    // use datafusion::arrow::datatypes::{DataType, Field, Schema};
+    // use datafusion::arrow::record_batch::RecordBatch;
+    // use datafusion::physical_plan::ExecutionPlan;
+    // use std::sync::Arc;
+    // use datafusion::physical_plan::test::exec::MockExec;
 
-    // Create a client using the channel
-    let mut client = SchedulerApiClient::new(channel);
+    // #[test]
+    // fn test_is_result_correct_basic() {
+    //     // Handcraft a record batch
+    //     let id_array = Int32Array::from(vec![1, 2, 3, 4, 5]);
+    //     let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
+    //
+    //     let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(id_array)]).unwrap();
+    //
+    //     // Construct another equivalent record batch
+    //     let id_array_2 = Int32Array::from(vec![1, 2, 3, 4, 5]);
+    //     let schema_2 = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
+    //
+    //     let batch_2 = RecordBatch::try_new(Arc::new(schema_2), vec![Arc::new(id_array_2)]).unwrap();
+    //
+    //     assert_eq!(true, is_result_correct(vec![batch], vec![batch_2]));
+    // }
 
-    let mock_executor = initialize_executor().await;
+    // #[tokio::test]
+    // async fn test_is_result_correct_sql() {
+    //     let executor = DatafusionExecutor::new("./test_files/");
+    //
+    //     let query = "SELECT * FROM mock_executor_test_table";
+    //     let res_with_sql = executor
+    //         .execute_query(query)
+    //         .await
+    //         .expect("fail to execute sql");
+    //
+    //     let plan_result = executor.get_session_context().sql(&query).await;
+    //     let plan = match plan_result {
+    //         Ok(plan) => plan,
+    //         Err(e) => {
+    //             panic!("Failed to create plan: {:?}", e);
+    //         }
+    //     };
+    //
+    //     let plan: Arc<dyn ExecutionPlan> = match plan.create_physical_plan().await {
+    //         Ok(plan) => plan,
+    //         Err(e) => {
+    //             panic!("Failed to create physical plan: {:?}", e);
+    //         }
+    //     };
+    //
+    //     let result = executor.execute_plan(plan).await;
+    //     assert!(result.is_ok());
+    //     let batches = result.unwrap();
+    //
+    //     assert!(!batches.is_empty());
+    //
+    //     assert_eq!(true, is_result_correct(res_with_sql, batches));
+    // }
 
-    // Send initial request with handshake task ID
-    let handshake_req = NotifyTaskStateArgs {
-        task: Some(TaskId {
-            query_id: *HANDSHAKE_QUERY_ID,
-            task_id: *HANDSHAKE_TASK_ID,
-        }),
-        success: true,
-        result: Vec::new(),
-    };
+    // #[tokio::test]
+    // async fn test_handshake() {
+    //     let config = read_config();
+    //     let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
+    //
+    //     let scheduler_addr_for_server = scheduler_addr.clone();
+    //     tokio::spawn(async move {
+    //         start_scheduler_server(&scheduler_addr_for_server).await;
+    //     });
+    //
+    //     // Start executor clients
+    //     for executor in config.executors {
+    //         // Clone the scheduler_addr for each executor client
+    //         let scheduler_addr_for_client = scheduler_addr.clone();
+    //         tokio::spawn(async move {
+    //             start_executor_client(executor, &scheduler_addr_for_client).await;
+    //         });
+    //     }
+    // }
 
-    let mut task_id = TaskId {
-        query_id: *HANDSHAKE_QUERY_ID,
-        task_id: *HANDSHAKE_TASK_ID,
-    };
-
-    loop {
-        let request = if is_handshake_message(&task_id) {
-            tonic::Request::new(handshake_req.clone())
-        } else {
-            tonic::Request::new(NotifyTaskStateArgs {
-                task: Some(TaskId {
-                    task_id: task_id.task_id,
-                    query_id: task_id.query_id,
-                }),
-                success: true,
-                result: Vec::new(),
-            })
-        };
-
-        match client.notify_task_state(request).await {
-            Ok(response) => {
-                let response_inner = response.into_inner();
-                if response_inner.has_new_task {
-                    task_id = response_inner.task.unwrap_or_default();
-
-                    let plan_result = deserialize_physical_plan(response_inner.physical_plan).await;
-                    let plan = match plan_result {
-                        Ok(plan) => plan,
-                        Err(e) => {
-                            panic!("Error deserializing physical plan: {:?}", e);
-                        }
-                    };
-
-                    let execution_result = mock_executor.execute_plan(plan).await;
-                    let res = match execution_result {
-                        Ok(batches) => batches,
-                        Err(e) => {
-                            panic!("Execution failed: {:?}", e);
-                        }
-                    };
-
-                    // TODO: execute the physical plan
-
-                    // let new_result
-                } else {
-                    // No new task available
-                    break;
-                }
-            }
-            Err(e) => {
-                eprintln!("Failed to send task state: {}", e);
-                break;
-            }
-        }
-    }
-}
-
-// TODO: add a function to run a sql query on a single executor
-
-// TODO: research function to compare equality of two results (apache arrow?)
-
-fn generate_refsol() {}
-
-// Make this into a command line app
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = read_config();
-
-    let args: Vec<String> = env::args().collect();
-    // Check if at least one argument was provided (excluding the program name)
-    if args.len() != 1 {
-        panic!("Usage: pass in the .slt file you want to test");
-    }
-
-    let file_path = &args[1];
-    eprintln!("Start running file {}", file_path);
-
-    // Start the scheduler server
-
-    let scheduler_addr = format!(
-        "{}:{}",
-        config.scheduler[0].ip_addr, config.scheduler[0].port
-    );
-
-    let scheduler_addr_for_server = scheduler_addr.clone();
-    tokio::spawn(async move {
-        start_scheduler_server(&scheduler_addr_for_server).await;
-    });
-
-    // Start executor clients
-    for executor in config.executors {
-        // Clone the scheduler_addr for each executor client
-        let scheduler_addr_for_client = scheduler_addr.clone();
-        tokio::spawn(async move {
-            start_executor_client(executor, &scheduler_addr_for_client).await;
-        });
-    }
-
-    // start an reference executor instance to verify correctness
-    let reference_executor = DatafusionExecutor::new();
-
-    // get all the execution plans and pre-compute all the reference results
-    let execution_plans = get_execution_plan_from_file(file_path)
-        .await
-        .expect("Failed to get execution plans");
-    let mut results = Vec::new();
-    for plan in execution_plans {
-        match reference_executor.execute_plan(plan).await {
-            Ok(dataframe) => {
-                results.push(dataframe);
-            }
-            Err(e) => eprintln!("Failed to execute plan: {}", e),
-        }
-    }
-
-    // TODO: make this a command line program where it runs a file, verify files by comparing recordbatches
-
-    let test_files = list_all_slt_files("./test_files");
-
-    for file_path in test_files {
-        let file_path_str = file_path
-            .to_str()
-            .expect("Failed to convert path to string");
-
-        eprintln!("Processing test file: {}", file_path_str);
-
-        match get_execution_plan_from_file(file_path_str).await {
-            Ok(plans) => {}
-            Err(e) => {
-                eprintln!(
-                    "Failed to get execution plans from file {}: {}",
-                    file_path_str, e
-                );
-                panic!("Test failed due to error with file: {}", file_path_str);
-            }
-        }
-    }
-
-    Ok(())
+    // #[tokio::test]
+    // async fn test_generate_refsol() {
+    //     let res = generate_refsol("./test_files/select.slt").await;
+    //     assert_eq!(false, res.is_empty());
+    //     eprintln!("Number of arguments is {}", res.len());
+    // }
 }

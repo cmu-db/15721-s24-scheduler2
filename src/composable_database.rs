@@ -6,6 +6,8 @@ pub struct TaskId {
     pub query_id: u64,
     #[prost(uint64, tag = "2")]
     pub task_id: u64,
+    #[prost(uint64, tag = "3")]
+    pub stage_id: u64,
 }
 /// Task execution and status messages
 #[allow(clippy::derive_partial_eq_without_eq)]

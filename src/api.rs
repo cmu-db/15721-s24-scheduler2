@@ -11,12 +11,12 @@ use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
 use crate::task::Task;
 use crate::task_queue::TaskQueue;
-use crate::SchedulerError;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Once;
+use crate::parser::Parser;
 
-use crate::parser::deserialize_physical_plan;
+use crate::SchedulerError;
 
 // Static query_id generator
 static QID_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -38,13 +38,16 @@ pub struct SchedulerService {
 
     // Task queue
     task_queue: TaskQueue,
+
+    pub parser: Parser
 }
 
 impl SchedulerService {
-    pub fn new() -> Self {
+    pub async fn new(catalog_path: &str) -> Self {
         Self {
-            query_table: QueryTable::new(),
+            query_table: QueryTable::new(catalog_path).await,
             task_queue: TaskQueue::new(),
+            parser: Parser::new(catalog_path).await
         }
     }
 
@@ -85,7 +88,7 @@ impl SchedulerApi for SchedulerService {
                 "Got a request with priority {:?} and cost {:?}",
                 priority, cost
             );
-            let plan = deserialize_physical_plan(physical_plan.as_slice().to_vec())
+            let plan = self.parser.deserialize_physical_plan(physical_plan.as_slice().to_vec())
                 .await
                 .unwrap();
             println!("schedule_query: received plan {:?}", plan);
@@ -161,6 +164,7 @@ impl SchedulerApi for SchedulerService {
                 has_new_task: true,
                 task: Some(TaskId {
                     query_id: task.query_id,
+                    stage_id: task.stage_id,
                     task_id: task.id,
                 }),
                 physical_plan: bytes,
@@ -184,19 +188,19 @@ mod tests {
         TaskId,
     };
     use crate::api::SchedulerService;
-    use crate::parser::{
-        deserialize_physical_plan, get_execution_plan_from_file, serialize_physical_plan,
-    };
+    use crate::parser::Parser;
     use tonic::Request;
 
     #[tokio::test]
     async fn test_scheduler() {
-        let scheduler_service = Box::new(SchedulerService::new());
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
+        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
+        let scheduler_service = Box::new(SchedulerService::new(catalog_path));
+        let parser = Parser::new(catalog_path).await;
         println!("test_scheduler: Testing file {}", test_file);
-        if let Ok(physical_plans) = get_execution_plan_from_file(&test_file).await {
+        if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
             for plan in &physical_plans {
-                let plan_f = serialize_physical_plan(plan.clone()).await;
+                let plan_f = parser.serialize_physical_plan(plan.clone()).await;
                 if plan_f.is_err() {
                     println!(
                         "test_scheduler: Unable to serialize plan in file {}.",
