@@ -121,6 +121,7 @@ impl SchedulerApi for SchedulerService {
                 has_new_task: true,
                 task: Some(TaskId {
                     query_id: task.query_id,
+                    stage_id: task.stage_id,
                     task_id: task.id,
                 }),
                 physical_plan: bytes,

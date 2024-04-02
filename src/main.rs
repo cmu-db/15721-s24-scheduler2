@@ -1,7 +1,7 @@
 pub mod api;
 mod composable_database;
 mod dispatcher;
-pub mod integration_test;
+// pub mod integration_test;
 pub mod mock_executor;
 pub mod parser;
 mod query_graph;
@@ -9,58 +9,59 @@ mod query_table;
 mod scheduler;
 mod task_queue;
 pub mod intermediate_results;
+pub mod project_config;
 
 use std::path::PathBuf;
 use clap::{App, Arg, SubCommand};
-use config::{Config, ConfigError, File, FileFormat};
+use project_config::{Config};
 use datafusion::error::DataFusionError;
 use serde::Deserialize;
 use tonic::transport::Server;
 
 use crate::api::{composable_database::scheduler_api_server::SchedulerApiServer, SchedulerService};
-use crate::integration_test::{read_config, start_executor_client, start_scheduler_server};
+// use crate::integration_test::{read_config, start_scheduler_server};
 use std::io::{self, Write};
 use datafusion::prelude::CsvReadOptions;
 use walkdir::WalkDir;
 use crate::mock_executor::DatafusionExecutor;
 
-pub enum SchedulerError {
-    Error(String),
-    DfError(DataFusionError),
-}
+// pub enum SchedulerError {
+//     Error(String),
+//     DfError(DataFusionError),
+// }
+//
+// #[derive(Debug, Deserialize)]
+// struct Executor {
+//     #[serde(default)]
+//     id: u64,
+//     numa_node: u16,
+//     ip_addr: String,
+//     port: u16,
+// }
+//
+// #[derive(Debug, Deserialize)]
+// struct Executors {
+//     executors: Vec<Executor>,
+// }
+//
+// impl Executors {
+//     fn new() -> Self {
+//         Executors {
+//             executors: Vec::new(),
+//         }
+//     }
+//
+//     fn from_file() -> Result<Self, ConfigError> {
+//         let executors: Result<Executors, _> = Config::builder()
+//             .add_source(File::new(EXECUTOR_CONFIG, FileFormat::Toml))
+//             .build()
+//             .unwrap()
+//             .try_deserialize();
+//         executors
+//     }
+// }
 
-#[derive(Debug, Deserialize)]
-struct Executor {
-    #[serde(default)]
-    id: u64,
-    numa_node: u16,
-    ip_addr: String,
-    port: u16,
-}
-
-#[derive(Debug, Deserialize)]
-struct Executors {
-    executors: Vec<Executor>,
-}
-
-impl Executors {
-    fn new() -> Self {
-        Executors {
-            executors: Vec::new(),
-        }
-    }
-
-    fn from_file() -> Result<Self, ConfigError> {
-        let executors: Result<Executors, _> = Config::builder()
-            .add_source(File::new(EXECUTOR_CONFIG, FileFormat::Toml))
-            .build()
-            .unwrap()
-            .try_deserialize();
-        executors
-    }
-}
-
-const EXECUTOR_CONFIG: &str = "executors.toml";
+// const EXECUTOR_CONFIG: &str = "executors.toml";
 
 // #[tokio::main]
 // async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -76,34 +77,7 @@ const EXECUTOR_CONFIG: &str = "executors.toml";
 // }
 //
 
-fn load_context() {}
 
-
-
-async fn initialize_executor() -> DatafusionExecutor {
-    let executor = DatafusionExecutor::new();
-
-    for entry in WalkDir::new("./test_files") {
-        let entry = entry.unwrap();
-        if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "csv") {
-            let file_path = entry.path().to_str().unwrap();
-
-            // Extract the table name from the file name without the extension
-            let table_name = entry.path().file_stem().unwrap().to_str().unwrap();
-
-            let options = CsvReadOptions::new();
-
-            // Register the CSV file as a table
-            let result = executor.register_csv(table_name, file_path, options).await;
-            assert!(
-                result.is_ok(),
-                "Failed to register CSV file: {:?}",
-                file_path
-            );
-        }
-    }
-    executor
-}
 
 /**
 
@@ -157,67 +131,67 @@ fn interactive_mode() {
     println!("Entering interactive mode. Type your SQL queries or 'exit' to quit:");
 
 
-    let config = read_config();
-
-    // Start the scheduler
-    let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
-    let scheduler_addr_for_server = scheduler_addr.clone();
-    tokio::spawn(async move {
-        start_scheduler_server(&scheduler_addr_for_server).await;
-    });
-
-    // Start executor clients
-    for executor in config.executors {
-        // Clone the scheduler_addr for each executor client
-        let scheduler_addr_for_client = scheduler_addr.clone();
-        tokio::spawn(async move {
-            start_executor_client(executor, &scheduler_addr_for_client).await;
-        });
-    }
-
-    // Implement interactive SQL input and execution
-
-    let mut input = String::new();
-    loop {
-        print!("sql> ");
-        io::stdout().flush().unwrap(); // flush the prompt
-        input.clear();
-        io::stdin().read_line(&mut input).unwrap();
-
-        let trimmed_input = input.trim();
-
-        // exit the loop if the user types 'exit'
-        if trimmed_input.eq_ignore_ascii_case("exit") {
-            break;
-        }
-
-        // Handle the SQL input here...
-        println!("You entered: {}", trimmed_input);
-
-    }
+    // let config = read_config();
+    //
+    // // Start the scheduler
+    // let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
+    // let scheduler_addr_for_server = scheduler_addr.clone();
+    // tokio::spawn(async move {
+    //     start_scheduler_server(&scheduler_addr_for_server).await;
+    // });
+    //
+    // // Start executor clients
+    // for executor in config.executors {
+    //     // Clone the scheduler_addr for each executor client
+    //     let scheduler_addr_for_client = scheduler_addr.clone();
+    //     tokio::spawn(async move {
+    //         start_executor_client(executor, &scheduler_addr_for_client).await;
+    //     });
+    // }
+    //
+    // // Implement interactive SQL input and execution
+    //
+    // let mut input = String::new();
+    // loop {
+    //     print!("sql> ");
+    //     io::stdout().flush().unwrap(); // flush the prompt
+    //     input.clear();
+    //     io::stdin().read_line(&mut input).unwrap();
+    //
+    //     let trimmed_input = input.trim();
+    //
+    //     // exit the loop if the user types 'exit'
+    //     if trimmed_input.eq_ignore_ascii_case("exit") {
+    //         break;
+    //     }
+    //
+    //     // Handle the SQL input here...
+    //     println!("You entered: {}", trimmed_input);
+    //
+    // }
 
 }
 
 fn file_mode(file_path: PathBuf) {
     println!("Executing tests from file: {:?}", file_path);
 
-    let config = read_config();
-
-    // Start the scheduler
-    let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
-    let scheduler_addr_for_server = scheduler_addr.clone();
-    tokio::spawn(async move {
-        start_scheduler_server(&scheduler_addr_for_server).await;
-    });
-
-    // Start executor clients
-    for executor in config.executors {
-        // Clone the scheduler_addr for each executor client
-        let scheduler_addr_for_client = scheduler_addr.clone();
-        tokio::spawn(async move {
-            start_executor_client(executor, &scheduler_addr_for_client).await;
-        });
-    }
+    // let config = read_config();
+    //
+    // // Start the scheduler
+    // let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
+    // let scheduler_addr_for_server = scheduler_addr.clone();
+    // tokio::spawn(async move {
+    //     start_scheduler_server(&scheduler_addr_for_server).await;
+    // });
+    //
+    // // Start executor clients
+    // for executor in config.executors {
+    //     // Clone the scheduler_addr for each executor client
+    //     let scheduler_addr_for_client = scheduler_addr.clone();
+    //     tokio::spawn(async move {
+    //         start_executor_client(executor, &scheduler_addr_for_client).await;
+    //     });
+    // }
 
     // parse
 

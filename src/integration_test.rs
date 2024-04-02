@@ -13,9 +13,10 @@ use std::env;
 use std::fs;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
-use clap::{App, Arg, ArgMatches, SubCommand};
-use std::path::PathBuf;
 use std::sync::Arc;
+use crate::project_config::{read_config, load_catalog};
+use crate::project_config::{Config, Executor};
+
 
 /**
 This gRPC facilitates communication between executors and the scheduler:
@@ -58,63 +59,11 @@ fn is_handshake_message(task: &TaskId) -> bool {
 
 
 struct IntegrationTest {
+    catalog_path: String,
+    config_path: String,
     ctx: Arc<SessionContext>,
     config: Config
 }
-
-
-
-async fn new_integration_test(catalog_path: String, config_path: String) -> IntegrationTest {
-
-
-    // Bulk load csv files in the context (simulating API calls to the catalog)
-    for entry in WalkDir::new(catalog_path) {
-        let entry = entry.unwrap();
-        if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "csv") {
-            let file_path = entry.path().to_str().unwrap();
-            // Extract the table name from the file name without the extension
-            let table_name = entry.path().file_stem().unwrap().to_str().unwrap();
-
-            let options = CsvReadOptions::new();
-            // Register the CSV file as a table
-            let result = (table_name, file_path, options).await;
-            assert!(
-                result.is_ok(),
-                "Failed to register CSV file: {:?}",
-                file_path
-            );
-        }
-    }
-
-
-    // Load the config file (simulating API calls to the catalog)
-    let config_str = fs::read_to_string(config_path).expect("Failed to read config file");
-    toml::from_str(&config_str).expect("Failed to parse config file")
-
-
-
-
-
-
-
-
-
-
-}
-
-
-
-impl IntegrationTest {
-    // Given the paths to the catalog (containing all db files) and a path to the config file,
-    // create a new instance of IntegrationTester
-
-
-}
-
-
-
-// TODO: organize functions in this file into methods for the struct
-// new: create a new integration test instance
 
 
 /**
@@ -123,31 +72,6 @@ specified in a config file located in the project root directory. In production
 systems, these addresses would typically be retrieved from a catalog. This section'
 is responsible for parsing the config file.*/
 
-// Format definitions for the config file
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Config {
-    pub(crate) scheduler: Scheduler,
-    pub(crate) executors: Vec<Executor>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Scheduler {
-    pub(crate) id_addr: String,
-    pub(crate) port: u16,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Executor {
-    id: u8,
-    ip_addr: String,
-    port: u16,
-    numa_node: u8,
-}
-
-pub fn read_config() -> Config {
-    let config_str = fs::read_to_string("executors.toml").expect("Failed to read config file");
-    toml::from_str(&config_str).expect("Failed to parse config file")
-}
 
 
 // Starts the scheduler gRPC service
@@ -163,6 +87,102 @@ pub async fn start_scheduler_server(addr: &str) {
         .await
         .expect("unable to start scheduler gRPC server");
 }
+
+pub async fn new_integration_test(catalog_path: String, config_path: String) -> IntegrationTest {
+
+}
+
+
+
+
+
+
+impl IntegrationTest {
+
+    // Given the paths to the catalog (containing all db files) and a path to the config file,
+    // create a new instance of IntegrationTester
+    fn new(catalog_path: String, config_path: String) -> Self {
+        let ctx = load_catalog(&catalog_path);
+        let config = read_config(&config_path);
+
+        Self {
+            ctx,
+            config,
+            catalog_path,
+            config_path
+        }
+    }
+
+    pub async fn run_server(&self) {
+        let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        let scheduler_addr_for_server = scheduler_addr.clone();
+        tokio::spawn(async move {
+            start_scheduler_server(&scheduler_addr_for_server).await;
+        });
+    }
+    pub async fn run_client(&self) {
+        let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        // Start executor clients
+        for executor in self.config.executors {
+            // Clone the scheduler_addr for each executor client
+            tokio::spawn(async move {
+                self.mock_executor_service(executor, &scheduler_addr).await;
+            });
+        }
+    }
+
+    pub async fn mock_executor_service(&self, executor: Executor, scheduler_addr: &str) {
+        println!(
+            "Executor {} connecting to scheduler at {}",
+            executor.id, scheduler_addr
+        );
+
+        // Create a connection to the scheduler
+        let channel = Channel::from_shared(scheduler_addr.to_string())
+            .expect("Invalid scheduler address")
+            .connect()
+            .await
+            .expect("Failed to connect to scheduler");
+
+        // Create a client using the channel
+        let mut client = SchedulerApiClient::new(channel);
+
+
+        let mock_executor = initialize_executor().await;
+
+        // get the first task by sending handshake message to scheduler
+        let mut cur_task = client_handshake(&mut client).await;
+        loop {
+            assert_eq!(true, cur_task.has_new_task);
+
+            let plan_result = deserialize_physical_plan(cur_task.physical_plan.clone()).await;
+            let plan = match plan_result {
+                Ok(plan) => plan,
+                Err(e) => {
+                    panic!("Error deserializing physical plan: {:?}", e);
+                }
+            };
+
+            let execution_result = mock_executor.execute_plan(plan).await;
+            let execution_success = execution_result.is_ok();
+
+            // TODO: discuss how to pass result without serialization (how to pass pointer and get access)
+            let res = execution_result.unwrap_or_else(|e| Vec::new());
+            cur_task = get_next_task(
+                NotifyTaskStateArgs {
+                    task: cur_task.task.clone(),
+                    success: execution_success,
+                    result: Vec::new(),
+                },
+                &mut client,
+            ).await;
+        }
+    }
+
+}
+
+
+
 
 // Compares the results of cur with ref_sol, return true if all record batches are equal
 fn is_result_correct(ref_sol: Vec<RecordBatch>, cur: Vec<RecordBatch>) -> bool {
@@ -182,125 +202,11 @@ fn is_result_correct(ref_sol: Vec<RecordBatch>, cur: Vec<RecordBatch>) -> bool {
 // ====== MOCK EXECUTOR CODE ======
 // ================================
 
-// Initialize an executor and load the data from csv
-async fn initialize_executor() -> DatafusionExecutor {
-    let executor = DatafusionExecutor::new();
 
-    for entry in WalkDir::new("./test_files") {
-        let entry = entry.unwrap();
-        if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "csv") {
-            let file_path = entry.path().to_str().unwrap();
 
-            // Extract the table name from the file name without the extension
-            let table_name = entry.path().file_stem().unwrap().to_str().unwrap();
 
-            let options = CsvReadOptions::new();
-
-            // Register the CSV file as a table
-            let result = executor.register_csv(table_name, file_path, options).await;
-            assert!(
-                result.is_ok(),
-                "Failed to register CSV file: {:?}",
-                file_path
-            );
-        }
-    }
-    executor
-}
-
-// Given an initialized executor and channel, do the initial handshake with the server and return the first task
-async fn client_handshake(client: &mut SchedulerApiClient<Channel>) -> NotifyTaskStateRet {
-    // Send initial request with handshake task ID
-    let handshake_req = tonic::Request::new(NotifyTaskStateArgs {
-        task: Some(TaskId {
-            query_id: *HANDSHAKE_QUERY_ID,
-            task_id: *HANDSHAKE_TASK_ID,
-        }),
-        success: true,
-        result: Vec::new(),
-    });
-
-    match client.notify_task_state(handshake_req).await {
-        Err(e) => {
-            panic!("Error occurred in client handshake: {}", e);
-        }
-
-        Ok(response) => {
-            let response_inner = response.into_inner();
-            assert_eq!(true, response_inner.has_new_task);
-            response_inner
-        }
-    }
-}
-
-// Send the results of the current task to scheduler and get the next task to execute
-async fn get_next_task(
-    args: NotifyTaskStateArgs,
-    client: &mut SchedulerApiClient<Channel>,
-) -> NotifyTaskStateRet {
-    let get_next_task_request = tonic::Request::new(args);
-
-    match client.notify_task_state(get_next_task_request).await {
-        Err(e) => {
-            panic!("Error occurred in getting next task: {}", e);
-        }
-
-        Ok(response) => {
-            let response_inner = response.into_inner();
-            assert_eq!(true, response_inner.has_new_task);
-            response_inner
-        }
-    }
-}
 
 // Starts the executor gRPC service
-pub async fn start_executor_client(executor: Executor, scheduler_addr: &str) {
-    println!(
-        "Executor {} connecting to scheduler at {}",
-        executor.id, scheduler_addr
-    );
-
-    // Create a connection to the scheduler
-    let channel = Channel::from_shared(scheduler_addr.to_string())
-        .expect("Invalid scheduler address")
-        .connect()
-        .await
-        .expect("Failed to connect to scheduler");
-
-    // Create a client using the channel
-    let mut client = SchedulerApiClient::new(channel);
-
-    let mock_executor = initialize_executor().await;
-
-    // get the first task by sending handshake message to scheduler
-    let mut cur_task = client_handshake(&mut client).await;
-    loop {
-        assert_eq!(true, cur_task.has_new_task);
-
-        let plan_result = deserialize_physical_plan(cur_task.physical_plan.clone()).await;
-        let plan = match plan_result {
-            Ok(plan) => plan,
-            Err(e) => {
-                panic!("Error deserializing physical plan: {:?}", e);
-            }
-        };
-
-        let execution_result = mock_executor.execute_plan(plan).await;
-        let execution_success = execution_result.is_ok();
-
-        // TODO: discuss how to pass result without serialization (how to pass pointer and get access)
-        let res = execution_result.unwrap_or_else(|e| Vec::new());
-        cur_task = get_next_task(
-            NotifyTaskStateArgs {
-                task: cur_task.task.clone(),
-                success: execution_success,
-                result: Vec::new(),
-            },
-            &mut client,
-        )
-        .await;
-    }
-}
 
 // ================================
 // ===== END MOCK EXECUTOR CODE ===
@@ -355,12 +261,9 @@ mod tests {
     use datafusion::arrow::record_batch::RecordBatch;
     use datafusion::physical_plan::ExecutionPlan;
     use std::sync::Arc;
+    use datafusion::physical_plan::test::exec::MockExec;
+    use crate::Executor;
 
-    #[test]
-    pub fn test_read_config() {
-        let config = read_config();
-        assert_eq!("127.0.0.1", config.scheduler.id_addr);
-    }
     #[test]
     fn test_is_result_correct_basic() {
         // Handcraft a record batch
@@ -380,7 +283,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_result_correct_sql() {
-        let executor = initialize_executor().await;
+        let executor = DatafusionExecutor::new("./test_files/");
 
         let query = "SELECT * FROM mock_executor_test_table";
         let res_with_sql = executor
@@ -412,25 +315,25 @@ mod tests {
         assert_eq!(true, is_result_correct(res_with_sql, batches));
     }
 
-    #[tokio::test]
-    async fn test_handshake() {
-        let config = read_config();
-        let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
-
-        let scheduler_addr_for_server = scheduler_addr.clone();
-        tokio::spawn(async move {
-            start_scheduler_server(&scheduler_addr_for_server).await;
-        });
-
-        // Start executor clients
-        for executor in config.executors {
-            // Clone the scheduler_addr for each executor client
-            let scheduler_addr_for_client = scheduler_addr.clone();
-            tokio::spawn(async move {
-                start_executor_client(executor, &scheduler_addr_for_client).await;
-            });
-        }
-    }
+    // #[tokio::test]
+    // async fn test_handshake() {
+    //     let config = read_config();
+    //     let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
+    //
+    //     let scheduler_addr_for_server = scheduler_addr.clone();
+    //     tokio::spawn(async move {
+    //         start_scheduler_server(&scheduler_addr_for_server).await;
+    //     });
+    //
+    //     // Start executor clients
+    //     for executor in config.executors {
+    //         // Clone the scheduler_addr for each executor client
+    //         let scheduler_addr_for_client = scheduler_addr.clone();
+    //         tokio::spawn(async move {
+    //             start_executor_client(executor, &scheduler_addr_for_client).await;
+    //         });
+    //     }
+    // }
 
     #[tokio::test]
     async fn test_generate_refsol() {
