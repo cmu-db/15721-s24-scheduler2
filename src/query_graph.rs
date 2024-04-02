@@ -1,32 +1,36 @@
 #![allow(dead_code)]
 
-use crate::scheduler::{Task, TaskStatus};
+use crate::task::{Task, TaskStatus};
 use datafusion::physical_plan::ExecutionPlan;
+use futures::executor;
 use std::collections::HashSet;
+use std::ops::DerefMut;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{mem, sync::Arc};
 use tokio::sync::RwLock;
 
+#[derive(Debug, Default)]
 pub enum StageStatus {
+    #[default]
     NotStarted,
     Running(u64),
     Finished(u64), // More detailed datatype to describe location(s) of ALL output data.
 }
-
+#[derive(Debug)]
 pub struct QueryStage {
     pub plan: Arc<dyn ExecutionPlan>,
     status: StageStatus,
     outputs: HashSet<u64>,
     inputs: HashSet<u64>,
 }
-
+#[derive(Debug)]
 pub struct QueryGraph {
     pub query_id: u64,
     tid_counter: AtomicU64, // TODO: add mutex to stages and make elements pointers to avoid copying
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
-    frontier: Vec<Task>,
-    frontier_lock: tokio::sync::RwLock<()>,
+    frontier: tokio::sync::RwLock<Vec<Task>>,
+    // frontier_lock: tokio::sync::RwLock<()>,
 }
 
 impl QueryGraph {
@@ -36,8 +40,8 @@ impl QueryGraph {
             plan,
             tid_counter: AtomicU64::new(0),
             stages: Vec::new(),
-            frontier: Vec::new(),
-            frontier_lock: RwLock::new(()),
+            frontier: RwLock::new(Vec::new()),
+            // frontier_lock: RwLock::new(()),
         }
     }
 
@@ -46,11 +50,12 @@ impl QueryGraph {
     }
 
     // Atomically clear frontier vector and return old frontier.
-    pub fn get_frontier(&mut self) -> Vec<Task> {
-        let _ = self.frontier_lock.write();
+    pub fn get_frontier(&self) -> Vec<Task> {
+        let f = self.frontier.write();
         let mut old_frontier = Vec::new();
-        mem::swap(&mut self.frontier, &mut old_frontier);
-        self.frontier = Vec::new();
+        executor::block_on(async {
+            mem::swap(f.await.deref_mut(), &mut old_frontier);
+        });
         old_frontier
     }
 
@@ -87,8 +92,10 @@ impl QueryGraph {
                                     stage_id: *output_stage_id,
                                     status: TaskStatus::Ready,
                                 };
-                                let _ = self.frontier_lock.write();
-                                self.frontier.push(new_output_task);
+                                // let _ = self.frontier_lock.write();
+                                executor::block_on(async {
+                                    self.frontier.write().await.push(new_output_task);
+                                });
                             }
                         } else {
                             return Err("Output stage not found.");

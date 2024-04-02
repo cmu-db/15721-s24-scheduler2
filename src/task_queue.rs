@@ -1,7 +1,8 @@
-use crate::scheduler::Task;
+use crate::task::Task;
 use std::collections::VecDeque;
 use std::sync::{Condvar, Mutex};
 
+#[derive(Debug)]
 pub struct TaskQueue {
     queue: Mutex<VecDeque<Task>>,
     pub avail: Condvar,
@@ -15,7 +16,7 @@ impl TaskQueue {
         }
     }
 
-    pub fn add_tasks(&mut self, tasks: Vec<Task>) -> bool {
+    pub fn add_tasks(&self, tasks: Vec<Task>) -> bool {
         let task_count = tasks.len();
         if task_count == 0 {
             return false;
@@ -29,7 +30,7 @@ impl TaskQueue {
         return true;
     }
 
-    pub fn next_task(&mut self) -> Task {
+    pub fn next_task(&self) -> Task {
         let mut queue = self.queue.lock().unwrap();
         // Correct rust syntax?
         while queue.is_empty() {

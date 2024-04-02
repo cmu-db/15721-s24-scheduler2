@@ -6,10 +6,11 @@ pub mod mock_executor;
 pub mod parser;
 mod query_graph;
 mod query_table;
-mod scheduler;
 mod task_queue;
 pub mod intermediate_results;
 pub mod project_config;
+
+mod task;
 
 use std::path::PathBuf;
 use clap::{App, Arg, SubCommand};
@@ -81,18 +82,18 @@ use crate::mock_executor::DatafusionExecutor;
 
 /**
 
-    Config:
-    config file parser, can start mock executors and mock gRPC server
+Config:
+config file parser, can start mock executors and mock gRPC server
 
-    "front-end"
-    Step 2: enter either interactive mode / file mode
-    interactive mode: run SQL query in command line, plan and send to scheduler as gRPC
-    file mode: .slt files containing SQL statements, plan and send to scheduler as gRPC
+"front-end"
+Step 2: enter either interactive mode / file mode
+interactive mode: run SQL query in command line, plan and send to scheduler as gRPC
+file mode: .slt files containing SQL statements, plan and send to scheduler as gRPC
 
-    "mock executor":
-    can do handshakes, and execute executionplans but HOW TO PASS RESULT and how to verify result after the scheduler finishes a query
+"mock executor":
+can do handshakes, and execute executionplans but HOW TO PASS RESULT and how to verify result after the scheduler finishes a query
 
-*/
+ */
 #[tokio::main]
 async fn main() {
     let matches = App::new("DBMS Test CLI")
@@ -196,4 +197,3 @@ fn file_mode(file_path: PathBuf) {
     // parse
 
 }
-

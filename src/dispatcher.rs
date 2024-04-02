@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::scheduler::Task;
+use crate::task::Task;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
