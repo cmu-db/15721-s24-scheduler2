@@ -25,6 +25,7 @@ pub struct QueryStage {
 #[derive(Debug)]
 pub struct QueryGraph {
     pub query_id: u64,
+    pub done: bool,
     tid_counter: AtomicU64, // TODO: add mutex to stages and make elements pointers to avoid copying
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
@@ -35,11 +36,16 @@ impl QueryGraph {
     pub fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
         Self {
             query_id,
+            done: false,
             plan,
             tid_counter: AtomicU64::new(0),
             stages: Vec::new(),
             frontier: RwLock::new(Vec::new()),
         }
+    }
+
+    pub fn num_stages(&self) -> u64 {
+        self.stages.len() as u64
     }
 
     fn next_task_id(&mut self) -> u64 {
@@ -72,6 +78,10 @@ impl QueryGraph {
                         stage.status = status;
                         stage.outputs.clone()
                     };
+
+                    if outputs.is_empty() {
+                        self.done = true;
+                    }
                     // stage.status = status;
                     // Remove this stage from each output stage's input stage
                     for output_stage_id in &outputs {

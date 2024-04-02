@@ -15,6 +15,11 @@ use crate::task_queue::TaskQueue;
 use crate::parser::Parser;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Once;
+use crate::api::composable_database::QueryStatus::NotFound;
+use crate::intermediate_results::{get_results, TaskKey};
+use datafusion::arrow::json::writer::record_batches_to_json_rows;
+use datafusion::arrow::util::pretty::print_batches;
+
 
 use crate::SchedulerError;
 
@@ -115,13 +120,35 @@ impl SchedulerApi for SchedulerService {
 
     async fn query_job_status(
         &self,
-        _request: Request<QueryJobStatusArgs>,
+        request: Request<QueryJobStatusArgs>,
     ) -> Result<Response<QueryJobStatusRet>, Status> {
-        // Get actual status from queryID table
-        let response = QueryJobStatusRet {
-            query_status: QueryStatus::Done.into(),
-        };
-        Ok(Response::new(response))
+        let QueryJobStatusArgs{query_id} = request.into_inner();
+        let graph_opt_guard = self.query_table.table.read().await;
+        let graph_opt = &graph_opt_guard.get(&query_id);
+        if graph_opt.is_none() {
+            return Ok(Response::new(QueryJobStatusRet{
+                        query_status: QueryStatus::NotFound.into(),
+                        query_result: Vec::new()
+                    }))
+        }
+
+        let graph = graph_opt.unwrap().read().await;
+        let is_done = graph.done;
+        if is_done {
+            let stage_id = graph.num_stages() - 1;
+            let final_result_opt = get_results(&TaskKey{stage_id, query_id}).await;
+            let final_result = final_result_opt.expect("api.rs: query is done but no results in table");
+            print_batches(&final_result);
+            Ok(Response::new(QueryJobStatusRet{
+                query_status: QueryStatus::Done.into(),
+                query_result: Vec::new()
+            }))
+        } else {
+            Ok(Response::new(QueryJobStatusRet{
+                query_status: QueryStatus::InProgress.into(),
+                query_result: Vec::new()
+            }))
+        }
     }
 
     async fn abort_query(

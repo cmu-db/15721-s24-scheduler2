@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 #[derive(Debug, Default)]
 pub struct QueryTable {
     // Maps query IDs to query graphs
-    table: RwLock<HashMap<u64, RwLock<QueryGraph>>>,
+    pub table: RwLock<HashMap<u64, RwLock<QueryGraph>>>,
     parser: Parser,
 }
 
