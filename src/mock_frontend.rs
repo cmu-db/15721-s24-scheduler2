@@ -50,6 +50,7 @@ impl MockFrontend {
             let parser = Parser::new(&catalog_path_owned).await;
 
             while let Some(request) = receiver.recv().await {
+                println!("Got request from frontend {:?}", request.plan);
                 let plan_bytes = parser
                     .serialize_physical_plan(request.plan)
                     .await
@@ -66,13 +67,25 @@ impl MockFrontend {
                     Ok(response) => {
 
                         let query_id = response.into_inner().query_id;
+                        println!("FrontEnd: Got response from scheduler, query id is {}", query_id);
 
-                        while client.query_job_status(tonic::Request::new(QueryJobStatusArgs{ query_id }))
-                            .await
-                            .expect("invalid query job status response")
-                            .into_inner().query_status != Done as i32 {
-                            time::sleep(Duration::from_millis(10)).await;
+
+                        loop {
+
+                            let status = client.query_job_status(tonic::Request::new(QueryJobStatusArgs{ query_id }))
+                                .await
+                                .expect("invalid query job status response")
+                                .into_inner().query_status;
+
+                            println!("Status of current query is {:?}", status);
+
+                            if status == Done as i32 {
+                                break;
+                            }
+
+                            tokio::time::sleep(Duration::from_millis(1000)).await;
                         }
+
                         let _ = request.response.send(Ok(vec![])); // Replace vec![] with actual processing of response
                     }
                     Err(e) => {
@@ -101,6 +114,8 @@ impl MockFrontend {
             plan: physical_plan,
             response: response_tx,
         };
+
+        println!("Request sent to the background thread");
 
         self.sender
             .send(request)

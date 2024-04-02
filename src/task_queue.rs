@@ -36,6 +36,7 @@ impl TaskQueue {
     }
 
     pub fn next_task(&self) -> Task {
+        //println!("Getting next task");
         let mut queue = self.queue.lock().unwrap();
         // Correct rust syntax?
         while queue.is_empty() {

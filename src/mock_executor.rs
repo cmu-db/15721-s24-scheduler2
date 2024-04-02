@@ -48,15 +48,7 @@ impl DatafusionExecutor {
         let full_address = format!("http://{}", scheduler_addr);
         println!("full address is {}", full_address);
 
-        // // Create a connection to the scheduler
-        // let channel = Channel::from_shared(full_address)
-        //     .expect("Invalid address")
-        //     .connect()
-        //     .await
-        //     .expect("Failed to connect to scheduler");
-
         let client = SchedulerApiClient::connect("http://0.0.0.0:15721").await.expect("Oh NO fail");
-        println!("YES!!!!");
 
         // Create a client using the channel
         self.client = Some(client);
@@ -64,6 +56,8 @@ impl DatafusionExecutor {
         // get the first task by sending handshake message to scheduler
         let mut cur_task = self.client_handshake().await;
         loop {
+
+            println!("Got new task {:?}", cur_task);
             assert_eq!(true, cur_task.has_new_task);
 
             let plan_result = self
@@ -81,6 +75,8 @@ impl DatafusionExecutor {
 
             let execution_result = self.execute_plan(plan).await;
             let execution_success = execution_result.is_ok();
+
+            println!("Finish executing, status {}", execution_success);
 
             if execution_success {
                 let result = execution_result.unwrap();
@@ -157,6 +153,7 @@ impl DatafusionExecutor {
             }
 
             Ok(response) => {
+                println!("Executor handshake success");
                 let response_inner = response.into_inner();
                 assert_eq!(true, response_inner.has_new_task);
                 response_inner
@@ -166,6 +163,8 @@ impl DatafusionExecutor {
 
     // Send the results of the current task to scheduler and get the next task to execute
     async fn get_next_task(&mut self, args: NotifyTaskStateArgs) -> NotifyTaskStateRet {
+
+        println!("Sending message back to scheduler {:?}", args);
         assert!(self.client.is_some());
         let client = self
             .client
