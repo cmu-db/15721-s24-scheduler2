@@ -178,6 +178,7 @@ impl SchedulerApi for SchedulerService {
         &self,
         request: Request<NotifyTaskStateArgs>,
     ) -> Result<Response<NotifyTaskStateRet>, Status> {
+        //println!("Notify task state called");
         let NotifyTaskStateArgs {
             task,
             success,
@@ -208,6 +209,8 @@ impl SchedulerApi for SchedulerService {
         }
 
         if let Ok((task, bytes)) = self.next_task().await {
+            //println!("Scheduler: sending task to executor: {:?}", task);
+            self.query_table.update_stage_status(task.task_id.query_id, task.task_id.stage_id, StageStatus::Running(0)).await.expect("TODO: panic message");
             let response = NotifyTaskStateRet {
                 has_new_task: true,
                 task: Some(TaskId {

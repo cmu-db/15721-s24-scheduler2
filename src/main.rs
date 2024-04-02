@@ -117,15 +117,15 @@ async fn interactive_mode() {
 
         println!("You entered: {}", trimmed_input);
 
-        // match frontend.run_sql(trimmed_input).await {
-        //     Ok(res) => {
-        //         println!("Result: {:?}", res);
-        //     }
-        //
-        //     Err(e) => {
-        //         println!("Error in running query: {}", e);
-        //     }
-        // }
+        match frontend.run_sql(trimmed_input).await {
+            Ok(res) => {
+                println!("Result: {:?}", res);
+            }
+
+            Err(e) => {
+                println!("Error in running query: {}", e);
+            }
+        }
     }
 }
 
