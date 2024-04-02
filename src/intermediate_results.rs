@@ -9,8 +9,8 @@ use std::hash::{Hash, Hasher};
 // Definition of the key used in the map
 #[derive(Debug, Clone, Copy)]
 pub struct TaskKey {
-    pub stage_id: i32,
-    pub query_id: i32,
+    pub stage_id: u64,
+    pub query_id: u64,
 }
 
 impl PartialEq for TaskKey {

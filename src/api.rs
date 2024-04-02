@@ -11,12 +11,12 @@ use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
 use crate::task::Task;
 use crate::task_queue::TaskQueue;
-use crate::SchedulerError;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Once;
 
 use crate::parser::deserialize_physical_plan;
+use crate::SchedulerError;
 
 // Static query_id generator
 static QID_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -161,6 +161,7 @@ impl SchedulerApi for SchedulerService {
                 has_new_task: true,
                 task: Some(TaskId {
                     query_id: task.query_id,
+                    stage_id: task.stage_id,
                     task_id: task.id,
                 }),
                 physical_plan: bytes,

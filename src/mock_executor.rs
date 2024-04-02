@@ -21,7 +21,7 @@ lazy_static! {
     static ref HANDSHAKE_STAGE_ID: u64 = -1i64 as u64;
     static ref HANDSHAKE_TASK: TaskId = TaskId {
         query_id: *HANDSHAKE_QUERY_ID,
-        stage_id: *HANDHSAKE_STAGE_ID,
+        stage_id: *HANDSHAKE_STAGE_ID,
         task_id: *HANDSHAKE_TASK_ID,
     };
 }
@@ -34,9 +34,9 @@ pub struct DatafusionExecutor {
 }
 
 impl DatafusionExecutor {
-    pub fn new(catalog_path: &str, id: i32) -> Self {
+    pub async fn new(catalog_path: &str, id: i32) -> Self {
         Self {
-            ctx: load_catalog(catalog_path),
+            ctx: load_catalog(catalog_path).await,
             id,
             client: None
         }
@@ -94,10 +94,10 @@ impl DatafusionExecutor {
     }
 
     // Given an initialized executor and channel, do the initial handshake with the server and return the first task
-    pub async fn client_handshake(&self) -> NotifyTaskStateRet {
+    pub async fn client_handshake(&mut self) -> NotifyTaskStateRet {
 
         assert!(self.client.is_some());
-        let mut client = self.client.as_ref().expect("Client is expected to be initialized");
+        let client: &mut SchedulerApiClient<Channel> = self.client.as_mut().expect("Client is expected to be initialized");
 
         // Send initial request with handshake task ID
         let handshake_req = tonic::Request::new(NotifyTaskStateArgs {
@@ -125,13 +125,12 @@ impl DatafusionExecutor {
 
     // Send the results of the current task to scheduler and get the next task to execute
     async fn get_next_task(
-        &self,
+        &mut self,
         args: NotifyTaskStateArgs,
     ) -> NotifyTaskStateRet {
 
         assert!(self.client.is_some());
-
-        let mut client = self.client.as_ref().expect("Client is expected to be initialized");
+        let client = self.client.as_mut().expect("Client is expected to be initialized");
 
         let get_next_task_request = tonic::Request::new(args);
 
@@ -166,6 +165,8 @@ impl DatafusionExecutor {
         loop {
             assert_eq!(true, cur_task.has_new_task);
 
+
+
             let plan_result = deserialize_physical_plan(cur_task.physical_plan.clone()).await;
             let plan = match plan_result {
                 Ok(plan) => plan,
@@ -174,16 +175,18 @@ impl DatafusionExecutor {
                 }
             };
 
+            let cur_task_inner = cur_task.task.clone().unwrap();
+
             let execution_result = self.execute_plan(plan).await;
             let execution_success = execution_result.is_ok();
 
             // TODO: discuss how to pass result without serialization (how to pass pointer and get access)
 
             if execution_success {
-                insert_results(TaskKey{stage_id: cur_task.task.stage_id, query_id: cur_task.task.query_id}).await;
+                let result = execution_result.unwrap();
+                insert_results(TaskKey{stage_id: cur_task_inner.stage_id, query_id: cur_task_inner.query_id}, result).await;
             }
 
-            let res = execution_result.unwrap_or_else(|e| Vec::new());
             cur_task = self.get_next_task(
                 NotifyTaskStateArgs {
                     task: cur_task.task.clone(),

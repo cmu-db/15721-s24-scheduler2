@@ -26,10 +26,10 @@ use datafusion::prelude::CsvReadOptions;
 use walkdir::WalkDir;
 use crate::mock_executor::DatafusionExecutor;
 
-// pub enum SchedulerError {
-//     Error(String),
-//     DfError(DataFusionError),
-// }
+pub enum SchedulerError {
+    Error(String),
+    DfError(DataFusionError),
+}
 //
 // #[derive(Debug, Deserialize)]
 // struct Executor {
