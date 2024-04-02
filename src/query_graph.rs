@@ -7,6 +7,8 @@ use std::ops::DerefMut;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{mem, sync::Arc};
 use tokio::sync::RwLock;
+use crate::api::composable_database::TaskId;
+use crate::query_graph::StageStatus::NotStarted;
 
 #[derive(Debug, Default)]
 pub enum StageStatus {
@@ -34,12 +36,13 @@ pub struct QueryGraph {
 
 impl QueryGraph {
     pub fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
+
         Self {
             query_id,
             done: false,
-            plan,
+            plan: plan.clone(),
             tid_counter: AtomicU64::new(0),
-            stages: Vec::new(),
+            stages: vec![QueryStage{plan: plan.clone(), status: NotStarted, outputs: HashSet::new(), inputs: HashSet::new()}],
             frontier: RwLock::new(Vec::new()),
         }
     }
@@ -92,9 +95,11 @@ impl QueryGraph {
                             if output_stage.inputs.len() == 0 {
                                 output_stage.status = StageStatus::Running(0); // TODO: "ready stage status?"
                                 let new_output_task = Task {
-                                    id: *output_stage_id, // same as stage ID for now
-                                    query_id: self.query_id,
-                                    stage_id: *output_stage_id,
+                                    task_id: TaskId{
+                                        query_id: self.query_id,
+                                        task_id: *output_stage_id,
+                                        stage_id: *output_stage_id
+                                    },
                                     status: TaskStatus::Ready,
                                 };
                                 self.frontier.write().await.push(new_output_task);

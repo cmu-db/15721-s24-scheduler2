@@ -1,3 +1,5 @@
+use crate::api::composable_database::TaskId;
+
 #[derive(Debug)]
 pub enum TaskStatus {
     Waiting,
@@ -10,8 +12,6 @@ pub enum TaskStatus {
 
 #[derive(Debug)]
 pub struct Task {
-    pub(crate) id: u64,
-    pub(crate) query_id: u64,
-    pub(crate) stage_id: u64,
+    pub(crate) task_id: TaskId,
     pub(crate) status: TaskStatus,
 }

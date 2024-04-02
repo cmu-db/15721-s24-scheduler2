@@ -53,6 +53,7 @@ message QueryJobStatusArgs {
 
 message QueryJobStatusRet {
     QueryStatus query_status = 1;
+    bytes query_result = 2;
 }
 
 message AbortQueryArgs {

@@ -72,7 +72,7 @@ impl SchedulerService {
         let task = self.task_queue.next_task();
         let stage = self
             .query_table
-            .get_plan_bytes(task.query_id, task.stage_id)
+            .get_plan_bytes(task.task_id.query_id, task.task_id.stage_id)
             .await?;
         Ok((task, stage))
     }
@@ -192,9 +192,9 @@ impl SchedulerApi for SchedulerService {
             let response = NotifyTaskStateRet {
                 has_new_task: true,
                 task: Some(TaskId {
-                    query_id: task.query_id,
-                    stage_id: task.stage_id,
-                    task_id: task.id,
+                    query_id: task.task_id.query_id,
+                    stage_id: task.task_id.stage_id,
+                    task_id: task.task_id.task_id,
                 }),
                 physical_plan: bytes,
             };
