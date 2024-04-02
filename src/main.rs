@@ -8,6 +8,7 @@ mod query_graph;
 mod query_table;
 mod scheduler;
 mod task_queue;
+pub mod intermediate_results;
 
 use std::path::PathBuf;
 use clap::{App, Arg, SubCommand};
@@ -76,9 +77,6 @@ const EXECUTOR_CONFIG: &str = "executors.toml";
 //
 
 fn load_context() {}
-
-
-
 
 
 
@@ -195,9 +193,6 @@ fn interactive_mode() {
 
         // Handle the SQL input here...
         println!("You entered: {}", trimmed_input);
-
-
-
 
     }
 

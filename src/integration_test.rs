@@ -62,6 +62,57 @@ struct IntegrationTest {
     config: Config
 }
 
+
+
+async fn new_integration_test(catalog_path: String, config_path: String) -> IntegrationTest {
+
+
+    // Bulk load csv files in the context (simulating API calls to the catalog)
+    for entry in WalkDir::new(catalog_path) {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "csv") {
+            let file_path = entry.path().to_str().unwrap();
+            // Extract the table name from the file name without the extension
+            let table_name = entry.path().file_stem().unwrap().to_str().unwrap();
+
+            let options = CsvReadOptions::new();
+            // Register the CSV file as a table
+            let result = (table_name, file_path, options).await;
+            assert!(
+                result.is_ok(),
+                "Failed to register CSV file: {:?}",
+                file_path
+            );
+        }
+    }
+
+
+    // Load the config file (simulating API calls to the catalog)
+    let config_str = fs::read_to_string(config_path).expect("Failed to read config file");
+    toml::from_str(&config_str).expect("Failed to parse config file")
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+impl IntegrationTest {
+    // Given the paths to the catalog (containing all db files) and a path to the config file,
+    // create a new instance of IntegrationTester
+
+
+}
+
+
+
 // TODO: organize functions in this file into methods for the struct
 // new: create a new integration test instance
 
