@@ -97,6 +97,7 @@ impl DatafusionExecutor {
     pub async fn client_handshake(&self) -> NotifyTaskStateRet {
 
         assert!(self.client.is_some());
+        let mut client = self.client.as_ref().expect("Client is expected to be initialized");
 
         // Send initial request with handshake task ID
         let handshake_req = tonic::Request::new(NotifyTaskStateArgs {
@@ -109,9 +110,7 @@ impl DatafusionExecutor {
             result: Vec::new(),
         });
 
-        let Some(client) = self.client;
-
-        match self.client.notify_task_state(handshake_req).await {
+        match client.notify_task_state(handshake_req).await {
             Err(e) => {
                 panic!("Error occurred in client handshake: {}", e);
             }
@@ -132,9 +131,11 @@ impl DatafusionExecutor {
 
         assert!(self.client.is_some());
 
+        let mut client = self.client.as_ref().expect("Client is expected to be initialized");
+
         let get_next_task_request = tonic::Request::new(args);
 
-        match self.client.notify_task_state(get_next_task_request).await {
+        match client.notify_task_state(get_next_task_request).await {
             Err(e) => {
                 panic!("Error occurred in getting next task: {}", e);
             }
