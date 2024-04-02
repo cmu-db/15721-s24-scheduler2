@@ -4,13 +4,18 @@ use datafusion::arrow::array::RecordBatch;
 use datafusion::common::DataFusionError;
 use datafusion::physical_plan::ExecutionPlan;
 use std::sync::Arc;
+use std::thread::sleep;
 use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
+use tokio::time::{self, Duration};
 
 use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
 
 use crate::parser::Parser;
 use datafusion::error::Result;
+use crate::api::composable_database::QueryJobStatusArgs;
+use crate::api::composable_database::QueryStatus::Done;
+
 pub struct MockFrontend {
     parser: Parser,
     // Sender for sending SQL execution requests to the background task
@@ -57,6 +62,15 @@ impl MockFrontend {
                 // TODO: how does the scheduler store the query and return the result?
                 match client.schedule_query(schedule_query_request).await {
                     Ok(response) => {
+
+                        let query_id = response.into_inner().query_id;
+
+                        while client.query_job_status(tonic::Request::new(QueryJobStatusArgs{ query_id }))
+                            .await
+                            .expect("invalid query job status response")
+                            .into_inner().query_status != Done as i32 {
+                            time::sleep(Duration::from_millis(10)).await;
+                        }
                         let _ = request.response.send(Ok(vec![])); // Replace vec![] with actual processing of response
                     }
                     Err(e) => {
@@ -72,7 +86,7 @@ impl MockFrontend {
         });
 
         Self {
-            parser: Parser::new(catalog_path).await, // You might also want to handle this similarly if Parser::new requires ownership.
+            parser: Parser::new(catalog_path).await,
             sender,
         }
     }

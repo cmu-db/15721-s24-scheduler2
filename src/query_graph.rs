@@ -9,6 +9,7 @@ use std::{mem, sync::Arc};
 use tokio::sync::RwLock;
 use crate::api::composable_database::TaskId;
 use crate::query_graph::StageStatus::NotStarted;
+use crate::task::TaskStatus::Ready;
 
 #[derive(Debug, Default)]
 pub enum StageStatus {
@@ -37,13 +38,23 @@ pub struct QueryGraph {
 impl QueryGraph {
     pub fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
 
+        let tid_counter = AtomicU64::new(0);
+        let id = tid_counter.fetch_add(1, Ordering::SeqCst);
+        let task = Task {
+            task_id: TaskId {
+                task_id: id,
+                query_id: query_id,
+                stage_id: id,
+            },
+            status: Ready,
+        };
         Self {
             query_id,
             done: false,
             plan: plan.clone(),
-            tid_counter: AtomicU64::new(0),
+            tid_counter: tid_counter,
             stages: vec![QueryStage{plan: plan.clone(), status: NotStarted, outputs: HashSet::new(), inputs: HashSet::new()}],
-            frontier: RwLock::new(Vec::new()),
+            frontier: RwLock::new(vec![task]),
         }
     }
 
