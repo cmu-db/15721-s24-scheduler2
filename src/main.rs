@@ -32,6 +32,7 @@ use datafusion::execution::context::DataFilePaths;
 use datafusion::prelude::CsvReadOptions;
 use sqllogictest::Record;
 use std::io::{self, Write};
+use std::time::Duration;
 use walkdir::WalkDir;
 
 pub enum SchedulerError {
@@ -57,25 +58,30 @@ async fn main() {
         )
         .get_matches();
 
-    match matches.subcommand() {
-        Some(("interactive", _)) => {
-            interactive_mode();
-        }
-        Some(("file", file_matches)) => {
-            if let Some(file_path) = file_matches.value_of("FILE") {
-                file_mode(PathBuf::from(file_path));
-            } else {
-                eprintln!("File path not provided.");
-            }
-        }
-        None => {
-            panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
-        }
 
-        _ => {
-            panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
-        }
-    }
+    interactive_mode().await;
+
+    loop{}
+
+    // match matches.subcommand() {
+    //     Some(("interactive", _)) => {
+    //         interactive_mode();
+    //     }
+    //     Some(("file", file_matches)) => {
+    //         if let Some(file_path) = file_matches.value_of("FILE") {
+    //             file_mode(PathBuf::from(file_path));
+    //         } else {
+    //             eprintln!("File path not provided.");
+    //         }
+    //     }
+    //     None => {
+    //         panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
+    //     }
+    //
+    //     _ => {
+    //         panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
+    //     }
+    // }
 }
 
 const CONFIG_PATH: &str = "executors.toml";
@@ -86,8 +92,11 @@ async fn interactive_mode() {
 
     let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
     tester.run_server().await;
+    tokio::time::sleep(Duration::from_millis(2000));
     tester.run_client().await;
+    tokio::time::sleep(Duration::from_millis(2000));
     let frontend = tester.run_frontend().await;
+    tokio::time::sleep(Duration::from_millis(2000));
 
     let mut input = String::new();
     loop {

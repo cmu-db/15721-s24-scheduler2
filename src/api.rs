@@ -49,6 +49,7 @@ pub struct SchedulerService {
 
 impl SchedulerService {
     pub async fn new(catalog_path: &str) -> Self {
+        println!("Initialize scheduler!");
         Self {
             query_table: QueryTable::new(catalog_path).await,
             task_queue: TaskQueue::new(),

@@ -43,10 +43,13 @@ impl DatafusionExecutor {
 
     pub async fn run_mock_executor_service(&mut self, scheduler_addr: &str) {
         println!("Executor {} connecting to scheduler", self.id);
+        println!("Scheduler IP address is {}", scheduler_addr);
+
+        let full_address = format!("http://{}", scheduler_addr);
 
         // Create a connection to the scheduler
-        let channel = Channel::from_shared(scheduler_addr.to_string())
-            .expect("Invalid scheduler address")
+        let channel = Channel::from_shared(full_address)
+            .expect("Invalid address")
             .connect()
             .await
             .expect("Failed to connect to scheduler");

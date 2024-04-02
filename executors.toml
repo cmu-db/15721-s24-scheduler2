@@ -2,17 +2,17 @@
     path = "./test_files/"
 
 [scheduler]
-    id_addr = "127.0.0.1"
+    id_addr = "0.0.0.0"
     port = 15721
 
 [[executors]]
     id = 1
-    ip_addr = "127.0.0.1"
+    ip_addr = "0.0.0.0"
     port = 12345
     numa_node = 0
 
 [[executors]]
     id = 2
-    ip_addr = "192.168.0.1"
-    port = 65535
+    ip_addr = "0.0.0.0"
+    port = 65533
     numa_node = 1
