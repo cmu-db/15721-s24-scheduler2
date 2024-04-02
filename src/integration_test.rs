@@ -4,7 +4,6 @@ use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::composable_database::{NotifyTaskStateRet, TaskId};
 use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
-use crate::parser::{deserialize_physical_plan, get_execution_plan_from_file, list_all_slt_files};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::prelude::{CsvReadOptions, SessionContext};
 use lazy_static::lazy_static;
@@ -14,6 +13,7 @@ use std::fs;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
 use std::sync::Arc;
+use crate::mock_frontend::MockFrontend;
 use crate::project_config::{read_config, load_catalog};
 use crate::project_config::{Config, Executor};
 
@@ -53,11 +53,11 @@ lazy_static! {
     };
 }
 
-struct IntegrationTest {
+pub struct IntegrationTest {
     catalog_path: String,
     config_path: String,
     ctx: Arc<SessionContext>,
-    config: Config
+    config: Config,
 }
 
 
@@ -68,22 +68,6 @@ systems, these addresses would typically be retrieved from a catalog. This secti
 is responsible for parsing the config file.*/
 
 
-
-// Starts the scheduler gRPC service
-pub async fn start_scheduler_server(addr: &str) {
-    let addr = addr.parse().expect("Invalid address");
-
-    println!("Scheduler listening on {}", addr);
-
-    let scheduler_service = SchedulerService::new();
-    Server::builder()
-        .add_service(SchedulerApiServer::new(scheduler_service))
-        .serve(addr)
-        .await
-        .expect("unable to start scheduler gRPC server");
-}
-
-
 impl IntegrationTest {
 
     // Given the paths to the catalog (containing all db files) and a path to the config file,
@@ -91,7 +75,6 @@ impl IntegrationTest {
     pub async fn new(catalog_path: String, config_path: String) -> Self {
         let ctx = load_catalog(&catalog_path).await;
         let config = read_config(&config_path);
-
         Self {
             ctx,
             config,
@@ -102,9 +85,17 @@ impl IntegrationTest {
 
     pub async fn run_server(&self) {
         let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
-        let scheduler_addr_for_server = scheduler_addr.clone();
         tokio::spawn(async move {
-            start_scheduler_server(&scheduler_addr_for_server).await;
+            // Starts the scheduler gRPC service
+            let addr = scheduler_addr.parse().expect("Invalid address");
+            println!("Scheduler listening on {}", addr);
+
+            let scheduler_service = SchedulerService::new(&self.catalog_path);
+            Server::builder()
+                .add_service(SchedulerApiServer::new(scheduler_service))
+                .serve(addr)
+                .await
+                .expect("unable to start scheduler gRPC server");
         });
     }
     pub async fn run_client(&self) {
@@ -119,6 +110,20 @@ impl IntegrationTest {
             });
         }
     }
+
+    pub async fn run_frontend(&self) -> MockFrontend {
+        let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+
+        let frontend = tokio::spawn(async move {
+            MockFrontend::new(&self.catalog_path, &scheduler_addr).await
+        })
+            .await
+            .expect("Failed to join the async task")
+            .expect("Failed to create MockFrontend");
+
+        frontend
+    }
+
 }
 
 

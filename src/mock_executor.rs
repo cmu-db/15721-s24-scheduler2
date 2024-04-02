@@ -1,14 +1,13 @@
 use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
 use crate::api::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, TaskId};
 use crate::intermediate_results::{insert_results, TaskKey};
-use crate::parser::deserialize_physical_plan;
+use crate::parser::Parser;
 use crate::project_config::load_catalog;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::error::DataFusionError;
 use datafusion::error::Result;
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
-use datafusion::prelude::CsvReadOptions;
 use futures::stream::StreamExt;
 use lazy_static::lazy_static;
 use std::sync::Arc;
@@ -29,6 +28,7 @@ pub struct DatafusionExecutor {
     ctx: Arc<SessionContext>,
     id: i32,
     client: Option<SchedulerApiClient<Channel>>, // api client for the scheduler
+    parser: Parser
 }
 
 impl DatafusionExecutor {
@@ -37,27 +37,63 @@ impl DatafusionExecutor {
             ctx: load_catalog(catalog_path).await,
             id,
             client: None,
+            parser: Parser::new(catalog_path)
         }
     }
 
-    // Function to execute a query from a SQL string
-    pub async fn execute_query(&self, query: &str) -> Result<Vec<RecordBatch>> {
-        let df = match self.ctx.sql(query).await {
-            Ok(dataframe) => dataframe,
-            Err(e) => {
-                eprintln!("Error executing query: {}", e);
-                return Err(e);
-            }
-        };
+    pub async fn run_mock_executor_service(&mut self, scheduler_addr: &str) {
+        println!("Executor {} connecting to scheduler", self.id);
 
-        match df.collect().await {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                eprintln!("Error collecting results: {}", e);
-                Err(e)
+        // Create a connection to the scheduler
+        let channel = Channel::from_shared(scheduler_addr.to_string())
+            .expect("Invalid scheduler address")
+            .connect()
+            .await
+            .expect("Failed to connect to scheduler");
+
+        // Create a client using the channel
+        self.client = Some(SchedulerApiClient::new(channel));
+
+        // get the first task by sending handshake message to scheduler
+        let mut cur_task = self.client_handshake().await;
+        loop {
+            assert_eq!(true, cur_task.has_new_task);
+
+            let plan_result = self.parser.deserialize_physical_plan(cur_task.physical_plan.clone()).await;
+            let plan = match plan_result {
+                Ok(plan) => plan,
+                Err(e) => {
+                    panic!("Error deserializing physical plan: {:?}", e);
+                }
+            };
+
+            let cur_task_inner = cur_task.task.clone().unwrap();
+
+            let execution_result = self.execute_plan(plan).await;
+            let execution_success = execution_result.is_ok();
+
+            if execution_success {
+                let result = execution_result.unwrap();
+                insert_results(
+                    TaskKey {
+                        stage_id: cur_task_inner.stage_id,
+                        query_id: cur_task_inner.query_id,
+                    },
+                    result,
+                )
+                .await;
             }
+
+            cur_task = self
+                .get_next_task(NotifyTaskStateArgs {
+                    task: cur_task.task.clone(),
+                    success: execution_success,
+                    result: Vec::new(),
+                })
+                .await;
         }
     }
+
 
     // Function to execute a query from an ExecutionPlan
     pub async fn execute_plan(
@@ -85,10 +121,6 @@ impl DatafusionExecutor {
             Err(e) => eprintln!("Failed to execute plan: {}", e),
         }
         Ok(batches)
-    }
-
-    pub fn get_session_context(&self) -> Arc<SessionContext> {
-        self.ctx.clone()
     }
 
     // Given an initialized executor and channel, do the initial handshake with the server and return the first task
@@ -145,111 +177,6 @@ impl DatafusionExecutor {
             }
         }
     }
-
-    pub async fn run_mock_executor_service(&mut self, scheduler_addr: &str) {
-        println!("Executor {} connecting to scheduler", self.id);
-
-        // Create a connection to the scheduler
-        let channel = Channel::from_shared(scheduler_addr.to_string())
-            .expect("Invalid scheduler address")
-            .connect()
-            .await
-            .expect("Failed to connect to scheduler");
-
-        // Create a client using the channel
-        self.client = Some(SchedulerApiClient::new(channel));
-
-        // get the first task by sending handshake message to scheduler
-        let mut cur_task = self.client_handshake().await;
-        loop {
-            assert_eq!(true, cur_task.has_new_task);
-
-            let plan_result = deserialize_physical_plan(cur_task.physical_plan.clone()).await;
-            let plan = match plan_result {
-                Ok(plan) => plan,
-                Err(e) => {
-                    panic!("Error deserializing physical plan: {:?}", e);
-                }
-            };
-
-            let cur_task_inner = cur_task.task.clone().unwrap();
-
-            let execution_result = self.execute_plan(plan).await;
-            let execution_success = execution_result.is_ok();
-
-            // TODO: discuss how to pass result without serialization (how to pass pointer and get access)
-
-            if execution_success {
-                let result = execution_result.unwrap();
-                insert_results(
-                    TaskKey {
-                        stage_id: cur_task_inner.stage_id,
-                        query_id: cur_task_inner.query_id,
-                    },
-                    result,
-                )
-                .await;
-            }
-
-            cur_task = self
-                .get_next_task(NotifyTaskStateArgs {
-                    task: cur_task.task.clone(),
-                    success: execution_success,
-                    result: Vec::new(),
-                })
-                .await;
-        }
-    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-
-    // Test running a SQL query
-    #[tokio::test]
-    async fn test_execute_sql_query() {
-
-        let executor = DatafusionExecutor::new("./test_files/", 0).await;
-
-        let query = "SELECT * FROM mock_executor_test_table";
-        let result = executor.execute_query(query).await;
-
-        assert!(result.is_ok());
-        let batches = result.unwrap();
-        assert!(!batches.is_empty());
-        assert_eq!(batches[0].num_columns(), 2);
-        assert_eq!(batches[0].num_rows(), 2);
-    }
-
-    // Test executing a plan
-    #[tokio::test]
-    async fn test_execute_plan() {
-        let executor = DatafusionExecutor::new("./test_files/", 0).await;
-
-        let query = "SELECT * FROM mock_executor_test_table";
-
-        let plan_result = executor.get_session_context().sql(&query).await;
-        let plan = match plan_result {
-            Ok(plan) => plan,
-            Err(e) => {
-                panic!("Failed to create plan: {:?}", e);
-            }
-        };
-
-        let plan: Arc<dyn ExecutionPlan> = match plan.create_physical_plan().await {
-            Ok(plan) => plan,
-            Err(e) => {
-                panic!("Failed to create physical plan: {:?}", e);
-            }
-        };
-
-        let result = executor.execute_plan(plan).await;
-        assert!(result.is_ok());
-        let batches = result.unwrap();
-        assert!(!batches.is_empty()); // Ensure that we get some results
-        assert_eq!(batches[0].num_columns(), 2);
-        assert_eq!(batches[0].num_rows(), 2);
-    }
-}

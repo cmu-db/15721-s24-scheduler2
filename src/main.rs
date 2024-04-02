@@ -13,6 +13,8 @@ mod task_queue;
 pub mod integration_test;
 
 mod task;
+mod mock_frontend;
+mod reference_executor;
 
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
@@ -20,83 +22,28 @@ use project_config::Config;
 use serde::Deserialize;
 use std::path::PathBuf;
 use tonic::transport::Server;
+use crate::integration_test::IntegrationTest;
 
 use crate::api::{composable_database::scheduler_api_server::SchedulerApiServer, SchedulerService};
 // use crate::integration_test::{read_config, start_scheduler_server};
 use crate::mock_executor::DatafusionExecutor;
 use datafusion::prelude::CsvReadOptions;
 use std::io::{self, Write};
+use datafusion::execution::context::DataFilePaths;
+use sqllogictest::Record;
 use walkdir::WalkDir;
+use crate::parser::DFColumnType;
 
 pub enum SchedulerError {
     Error(String),
     DfError(DataFusionError),
 }
-//
-// #[derive(Debug, Deserialize)]
-// struct Executor {
-//     #[serde(default)]
-//     id: u64,
-//     numa_node: u16,
-//     ip_addr: String,
-//     port: u16,
-// }
-//
-// #[derive(Debug, Deserialize)]
-// struct Executors {
-//     executors: Vec<Executor>,
-// }
-//
-// impl Executors {
-//     fn new() -> Self {
-//         Executors {
-//             executors: Vec::new(),
-//         }
-//     }
-//
-//     fn from_file() -> Result<Self, ConfigError> {
-//         let executors: Result<Executors, _> = Config::builder()
-//             .add_source(File::new(EXECUTOR_CONFIG, FileFormat::Toml))
-//             .build()
-//             .unwrap()
-//             .try_deserialize();
-//         executors
-//     }
-// }
 
-// const EXECUTOR_CONFIG: &str = "executors.toml";
 
-// #[tokio::main]
-// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     let crate_root = env!("CARGO_MANIFEST_DIR");
-//     println!("Path to crate's root: {}", crate_root);
-//     let addr = "[::1]:50051".parse()?;
-//     let scheduler_service = SchedulerService::default();
-//     Server::builder()
-//         .add_service(SchedulerApiServer::new(scheduler_service))
-//         .serve(addr)
-//         .await?;
-//     Ok(())
-// }
-//
 
-/**
-
-Config:
-config file parser, can start mock executors and mock gRPC server
-
-"front-end"
-Step 2: enter either interactive mode / file mode
-interactive mode: run SQL query in command line, plan and send to scheduler as gRPC
-file mode: .slt files containing SQL statements, plan and send to scheduler as gRPC
-
-"mock executor":
-can do handshakes, and execute executionplans but HOW TO PASS RESULT and how to verify result after the scheduler finishes a query
-
- */
 #[tokio::main]
 async fn main() {
-    let matches = App::new("DBMS Test CLI")
+    let matches = App::new("Scheduler Test CLI")
         .version("0.1")
         .about("Command line tool for DBMS end-to-end testing")
         .subcommand(SubCommand::with_name("interactive").about("Enter interactive SQL mode"))
@@ -124,78 +71,70 @@ async fn main() {
             }
         }
         None => {
-            panic!("Usage: ./main interactive or ./main file <path-to-sqllogictest>");
+            panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
         }
 
         _ => {
-            panic!("Usage: ./main interactive or ./main file <path-to-sqllogictest>");
+            panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
         }
     }
 }
 
-fn interactive_mode() {
+const CONFIG_PATH: &str = "executors.toml";
+const CATALOG_PATH: &str = "./test_files/";
+
+
+async fn interactive_mode() {
     println!("Entering interactive mode. Type your SQL queries or 'exit' to quit:");
 
-    // let config = read_config();
-    //
-    // // Start the scheduler
-    // let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
-    // let scheduler_addr_for_server = scheduler_addr.clone();
-    // tokio::spawn(async move {
-    //     start_scheduler_server(&scheduler_addr_for_server).await;
-    // });
-    //
-    // // Start executor clients
-    // for executor in config.executors {
-    //     // Clone the scheduler_addr for each executor client
-    //     let scheduler_addr_for_client = scheduler_addr.clone();
-    //     tokio::spawn(async move {
-    //         start_executor_client(executor, &scheduler_addr_for_client).await;
-    //     });
-    // }
-    //
-    // // Implement interactive SQL input and execution
-    //
-    // let mut input = String::new();
-    // loop {
-    //     print!("sql> ");
-    //     io::stdout().flush().unwrap(); // flush the prompt
-    //     input.clear();
-    //     io::stdin().read_line(&mut input).unwrap();
-    //
-    //     let trimmed_input = input.trim();
-    //
-    //     // exit the loop if the user types 'exit'
-    //     if trimmed_input.eq_ignore_ascii_case("exit") {
-    //         break;
-    //     }
-    //
-    //     // Handle the SQL input here...
-    //     println!("You entered: {}", trimmed_input);
-    //
-    // }
+    let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
+    tester.run_server().await;
+    tester.run_client().await;
+    let frontend = tester.run_frontend().await;
+
+    let mut input = String::new();
+    loop {
+        print!("sql> ");
+        io::stdout().flush().unwrap(); // flush the prompt
+        input.clear();
+        io::stdin().read_line(&mut input).unwrap();
+
+        let trimmed_input = input.trim();
+
+        // exit the loop if the user types 'exit'
+        if trimmed_input.eq_ignore_ascii_case("exit") {
+            break;
+        }
+
+        println!("You entered: {}", trimmed_input);
+
+        match frontend.run_sql(trimmed_input) {
+            Ok(res) => {
+                println!("Result: {}", res);
+            }
+
+            Err(e) => {
+                println!("Error in running query: {}", e);
+            }
+        }
+
+    }
 }
 
-fn file_mode(file_path: PathBuf) {
+async fn file_mode(file_path: PathBuf) {
     println!("Executing tests from file: {:?}", file_path);
 
-    // let config = read_config();
-    //
-    // // Start the scheduler
-    // let scheduler_addr = format!("{}:{}", config.scheduler.id_addr, config.scheduler.port);
-    // let scheduler_addr_for_server = scheduler_addr.clone();
-    // tokio::spawn(async move {
-    //     start_scheduler_server(&scheduler_addr_for_server).await;
-    // });
-    //
-    // // Start executor clients
-    // for executor in config.executors {
-    //     // Clone the scheduler_addr for each executor client
-    //     let scheduler_addr_for_client = scheduler_addr.clone();
-    //     tokio::spawn(async move {
-    //         start_executor_client(executor, &scheduler_addr_for_client).await;
-    //     });
-    // }
+    let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
+    tester.run_server().await;
+    tester.run_client().await;
+    let frontend = tester.run_frontend().await;
 
-    // parse
+    let sql_statements: Vec<Record<DFColumnType>> =
+        sqllogictest::parse_file(file_path).expect("failed to parse file");
+
+
+
+
+
+
 }
