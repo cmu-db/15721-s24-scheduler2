@@ -1,23 +1,23 @@
+use crate::parser::Parser;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::task::Task;
 use crate::SchedulerError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::parser::Parser;
 
 #[derive(Debug, Default)]
 pub struct QueryTable {
     // Maps query IDs to query graphs
     table: RwLock<HashMap<u64, RwLock<QueryGraph>>>,
-    parser: Parser
+    parser: Parser,
 }
 
 impl QueryTable {
     pub async fn new(catalog_path: &str) -> Self {
         Self {
             table: RwLock::new(HashMap::new()),
-            parser: Parser::new(catalog_path).await
+            parser: Parser::new(catalog_path).await,
         }
     }
 

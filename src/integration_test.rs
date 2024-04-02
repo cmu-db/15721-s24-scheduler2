@@ -4,19 +4,18 @@ use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::composable_database::{NotifyTaskStateRet, TaskId};
 use crate::api::SchedulerService;
 use crate::mock_executor::DatafusionExecutor;
+use crate::mock_frontend::MockFrontend;
+use crate::project_config::{load_catalog, read_config};
+use crate::project_config::{Config, Executor};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::prelude::{CsvReadOptions, SessionContext};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
+use std::sync::Arc;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
-use std::sync::Arc;
-use crate::mock_frontend::MockFrontend;
-use crate::project_config::{read_config, load_catalog};
-use crate::project_config::{Config, Executor};
-
 
 /**
 This gRPC facilitates communication between executors and the scheduler:
@@ -60,16 +59,13 @@ pub struct IntegrationTest {
     config: Config,
 }
 
-
 /**
 This integration test uses hardcoded addresses for executors and the scheduler,
 specified in a config file located in the project root directory. In production
 systems, these addresses would typically be retrieved from a catalog. This section'
 is responsible for parsing the config file.*/
 
-
 impl IntegrationTest {
-
     // Given the paths to the catalog (containing all db files) and a path to the config file,
     // create a new instance of IntegrationTester
     pub async fn new(catalog_path: String, config_path: String) -> Self {
@@ -79,12 +75,15 @@ impl IntegrationTest {
             ctx,
             config,
             catalog_path,
-            config_path
+            config_path,
         }
     }
 
     pub async fn run_server(&self) {
-        let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        let scheduler_addr = format!(
+            "{}:{}",
+            self.config.scheduler.id_addr, self.config.scheduler.port
+        );
         let catalog_path = self.catalog_path.clone();
         tokio::spawn(async move {
             // Starts the scheduler gRPC service
@@ -100,35 +99,38 @@ impl IntegrationTest {
         });
     }
     pub async fn run_client(&self) {
-        let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        let scheduler_addr = format!(
+            "{}:{}",
+            self.config.scheduler.id_addr, self.config.scheduler.port
+        );
         // Start executor clients
         for executor in &self.config.executors {
             // Clone the scheduler_addr for each executor client
             let mut mock_executor = DatafusionExecutor::new("./test_files/", executor.id).await;
             let scheduler_addr_copy = scheduler_addr.clone();
             tokio::spawn(async move {
-                mock_executor.run_mock_executor_service(&scheduler_addr_copy).await;
+                mock_executor
+                    .run_mock_executor_service(&scheduler_addr_copy)
+                    .await;
             });
         }
     }
 
     pub async fn run_frontend(&self) -> MockFrontend {
-        let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        let scheduler_addr = format!(
+            "{}:{}",
+            self.config.scheduler.id_addr, self.config.scheduler.port
+        );
         let catalog_path = self.config_path.clone();
 
-        let frontend = tokio::spawn(async move {
-            MockFrontend::new(&catalog_path, &scheduler_addr).await
-        })
-            .await
-            .expect("Failed to join the async task");
+        let frontend =
+            tokio::spawn(async move { MockFrontend::new(&catalog_path, &scheduler_addr).await })
+                .await
+                .expect("Failed to join the async task");
 
         frontend
     }
-
 }
-
-
-
 
 // TODO for next update: logic for verifying correctness
 
@@ -166,7 +168,6 @@ impl IntegrationTest {
 //     results
 //
 // }
-
 
 #[cfg(test)]
 mod tests {

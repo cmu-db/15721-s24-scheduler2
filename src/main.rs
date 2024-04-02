@@ -12,34 +12,32 @@ mod task_queue;
 
 pub mod integration_test;
 
-mod task;
 mod mock_frontend;
 mod reference_executor;
+mod task;
 
+use crate::integration_test::IntegrationTest;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
 use project_config::Config;
 use serde::Deserialize;
 use std::path::PathBuf;
 use tonic::transport::Server;
-use crate::integration_test::IntegrationTest;
 
 use crate::api::{composable_database::scheduler_api_server::SchedulerApiServer, SchedulerService};
 // use crate::integration_test::{read_config, start_scheduler_server};
 use crate::mock_executor::DatafusionExecutor;
-use datafusion::prelude::CsvReadOptions;
-use std::io::{self, Write};
-use datafusion::execution::context::DataFilePaths;
-use sqllogictest::Record;
-use walkdir::WalkDir;
 use crate::parser::DFColumnType;
+use datafusion::execution::context::DataFilePaths;
+use datafusion::prelude::CsvReadOptions;
+use sqllogictest::Record;
+use std::io::{self, Write};
+use walkdir::WalkDir;
 
 pub enum SchedulerError {
     Error(String),
     DfError(DataFusionError),
 }
-
-
 
 #[tokio::main]
 async fn main() {
@@ -83,7 +81,6 @@ async fn main() {
 const CONFIG_PATH: &str = "executors.toml";
 const CATALOG_PATH: &str = "./test_files/";
 
-
 async fn interactive_mode() {
     println!("Entering interactive mode. Type your SQL queries or 'exit' to quit:");
 
@@ -117,7 +114,6 @@ async fn interactive_mode() {
                 println!("Error in running query: {}", e);
             }
         }
-
     }
 }
 
@@ -131,10 +127,4 @@ async fn file_mode(file_path: PathBuf) {
 
     let sql_statements: Vec<Record<DFColumnType>> =
         sqllogictest::parse_file(file_path).expect("failed to parse file");
-
-
-
-
-
-
 }

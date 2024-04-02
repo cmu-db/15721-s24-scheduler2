@@ -28,7 +28,7 @@ pub struct DatafusionExecutor {
     ctx: Arc<SessionContext>,
     id: i32,
     client: Option<SchedulerApiClient<Channel>>, // api client for the scheduler
-    parser: Parser
+    parser: Parser,
 }
 
 impl DatafusionExecutor {
@@ -37,7 +37,7 @@ impl DatafusionExecutor {
             ctx: load_catalog(catalog_path).await,
             id,
             client: None,
-            parser: Parser::new(catalog_path).await
+            parser: Parser::new(catalog_path).await,
         }
     }
 
@@ -59,7 +59,10 @@ impl DatafusionExecutor {
         loop {
             assert_eq!(true, cur_task.has_new_task);
 
-            let plan_result = self.parser.deserialize_physical_plan(cur_task.physical_plan.clone()).await;
+            let plan_result = self
+                .parser
+                .deserialize_physical_plan(cur_task.physical_plan.clone())
+                .await;
             let plan = match plan_result {
                 Ok(plan) => plan,
                 Err(e) => {
@@ -93,7 +96,6 @@ impl DatafusionExecutor {
                 .await;
         }
     }
-
 
     // Function to execute a query from an ExecutionPlan
     pub async fn execute_plan(
@@ -178,5 +180,3 @@ impl DatafusionExecutor {
         }
     }
 }
-
-

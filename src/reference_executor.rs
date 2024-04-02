@@ -7,7 +7,6 @@ use datafusion::physical_plan::ExecutionPlan;
 use futures::stream::StreamExt;
 use std::sync::Arc;
 
-
 // Reference executor for verifying correctness
 pub struct ReferenceExecutor {
     ctx: Arc<SessionContext>,
@@ -66,18 +65,15 @@ impl ReferenceExecutor {
         }
         Ok(batches)
     }
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-
     // Test running a SQL query
     #[tokio::test]
     async fn test_execute_sql_query() {
-
         let executor = ReferenceExecutor::new("./test_files/").await;
 
         let query = "SELECT * FROM mock_executor_test_table";

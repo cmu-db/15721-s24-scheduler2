@@ -1,13 +1,11 @@
-use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
+use crate::api::composable_database::scheduler_api_server::SchedulerApi;
+use crate::api::composable_database::{QueryInfo, ScheduleQueryArgs};
 use datafusion::arrow::array::RecordBatch;
 use datafusion::common::DataFusionError;
 use datafusion::physical_plan::ExecutionPlan;
+use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
-use crate::api::composable_database::scheduler_api_server::SchedulerApi;
-use crate::api::composable_database::{
-    QueryInfo, ScheduleQueryArgs
-};
 
 use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
 
@@ -16,7 +14,7 @@ use datafusion::error::Result;
 pub struct MockFrontend {
     parser: Parser,
     // Sender for sending SQL execution requests to the background task
-    sender: mpsc::Sender<SqlExecutionRequest>
+    sender: mpsc::Sender<SqlExecutionRequest>,
 }
 
 // Structure to encapsulate SQL execution requests
@@ -45,7 +43,10 @@ impl MockFrontend {
             let parser = Parser::new(&catalog_path_owned).await;
 
             while let Some(request) = receiver.recv().await {
-                let plan_bytes = parser.serialize_physical_plan(request.plan).await.expect("MockFrontend: fail to parse physical plan");
+                let plan_bytes = parser
+                    .serialize_physical_plan(request.plan)
+                    .await
+                    .expect("MockFrontend: fail to parse physical plan");
                 let schedule_query_request = tonic::Request::new(ScheduleQueryArgs {
                     physical_plan: plan_bytes,
                     metadata: Some(QueryInfo {
@@ -57,10 +58,15 @@ impl MockFrontend {
                 match client.schedule_query(schedule_query_request).await {
                     Ok(response) => {
                         let _ = request.response.send(Ok(vec![])); // Replace vec![] with actual processing of response
-                    },
+                    }
                     Err(e) => {
-                        let _ = request.response.send(Err(DataFusionError::Execution(format!("Failed to execute query: {}", e))));
-                    },
+                        let _ = request
+                            .response
+                            .send(Err(DataFusionError::Execution(format!(
+                                "Failed to execute query: {}",
+                                e
+                            ))));
+                    }
                 }
             }
         });
@@ -71,7 +77,6 @@ impl MockFrontend {
         }
     }
 
-
     pub async fn run_sql(&self, sql: &str) -> Result<Vec<RecordBatch>> {
         let physical_plan = self.parser.sql_to_physical_plan(sql).await?;
 
@@ -81,8 +86,13 @@ impl MockFrontend {
             response: response_tx,
         };
 
-        self.sender.send(request).await.expect("Failed to send request to background task");
+        self.sender
+            .send(request)
+            .await
+            .expect("Failed to send request to background task");
 
-        response_rx.await.expect("Failed to receive response from background task")
+        response_rx
+            .await
+            .expect("Failed to receive response from background task")
     }
 }

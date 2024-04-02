@@ -12,9 +12,9 @@ use crate::query_table::QueryTable;
 use crate::task::Task;
 use crate::task_queue::TaskQueue;
 
+use crate::parser::Parser;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Once;
-use crate::parser::Parser;
 
 use crate::SchedulerError;
 
@@ -39,7 +39,7 @@ pub struct SchedulerService {
     // Task queue
     task_queue: TaskQueue,
 
-    pub parser: Parser
+    pub parser: Parser,
 }
 
 impl SchedulerService {
@@ -47,7 +47,7 @@ impl SchedulerService {
         Self {
             query_table: QueryTable::new(catalog_path).await,
             task_queue: TaskQueue::new(),
-            parser: Parser::new(catalog_path).await
+            parser: Parser::new(catalog_path).await,
         }
     }
 
@@ -88,7 +88,9 @@ impl SchedulerApi for SchedulerService {
                 "Got a request with priority {:?} and cost {:?}",
                 priority, cost
             );
-            let plan = self.parser.deserialize_physical_plan(physical_plan.as_slice().to_vec())
+            let plan = self
+                .parser
+                .deserialize_physical_plan(physical_plan.as_slice().to_vec())
                 .await
                 .unwrap();
             println!("schedule_query: received plan {:?}", plan);

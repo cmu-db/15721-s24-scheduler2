@@ -1,3 +1,4 @@
+use crate::project_config::load_catalog;
 use datafusion::error::Result;
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
@@ -5,14 +6,13 @@ use datafusion::physical_planner::PhysicalPlanner;
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use sqllogictest::ColumnType;
 use sqllogictest::Record;
-use std::{fmt, fs};
 use std::path::PathBuf;
 use std::sync::Arc;
-use crate::project_config::load_catalog;
+use std::{fmt, fs};
 
 #[derive(Default)]
 pub struct Parser {
-    ctx: Arc<SessionContext>
+    ctx: Arc<SessionContext>,
 }
 
 impl fmt::Debug for Parser {
@@ -24,11 +24,14 @@ impl fmt::Debug for Parser {
 impl Parser {
     pub async fn new(catalog_path: &str) -> Self {
         Self {
-            ctx: load_catalog(catalog_path).await
+            ctx: load_catalog(catalog_path).await,
         }
     }
 
-    pub async fn deserialize_physical_plan(&self, bytes: Vec<u8>) -> Result<Arc<dyn ExecutionPlan>> {
+    pub async fn deserialize_physical_plan(
+        &self,
+        bytes: Vec<u8>,
+    ) -> Result<Arc<dyn ExecutionPlan>> {
         physical_plan_from_bytes(&*bytes, &self.ctx)
     }
 
@@ -43,7 +46,6 @@ impl Parser {
         &self,
         file_path: &str,
     ) -> std::result::Result<Vec<Arc<dyn ExecutionPlan>>, Box<dyn std::error::Error>> {
-
         let sql_statements: Vec<Record<DFColumnType>> =
             sqllogictest::parse_file(file_path).expect("failed to parse file");
 
@@ -90,7 +92,7 @@ impl Parser {
             Ok(plan) => plan,
             Err(e) => {
                 eprintln!("sql_to_physical_plan: invalid SQL statement: {}", e);
-                return Err(e)
+                return Err(e);
             }
         };
         plan.create_physical_plan().await
@@ -107,7 +109,6 @@ pub enum DFColumnType {
     Timestamp,
     Another,
 }
-
 
 impl ColumnType for DFColumnType {
     fn from_char(value: char) -> Option<Self> {
@@ -134,7 +135,6 @@ impl ColumnType for DFColumnType {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
