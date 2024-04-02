@@ -1,7 +1,7 @@
-use std::fs;
-use std::sync::Arc;
 use datafusion::prelude::{CsvReadOptions, SessionContext};
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::sync::Arc;
 use walkdir::WalkDir;
 
 // Format definitions for the config file
@@ -31,7 +31,6 @@ pub fn read_config(config_path: &str) -> Config {
 }
 
 pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
-
     let ctx = SessionContext::new();
     // Bulk load csv files in the context (simulating API calls to the catalog)
     for entry in WalkDir::new(catalog_path) {
@@ -55,7 +54,6 @@ pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
     Arc::new(ctx)
 }
 
-
 #[cfg(test)]
 mod tests {
 
@@ -66,4 +64,3 @@ mod tests {
         assert_eq!("127.0.0.1", config.scheduler.id_addr);
     }
 }
-

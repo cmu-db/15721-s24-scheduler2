@@ -1,3 +1,8 @@
+use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
+use crate::api::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, TaskId};
+use crate::intermediate_results::{insert_results, TaskKey};
+use crate::parser::deserialize_physical_plan;
+use crate::project_config::load_catalog;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::error::DataFusionError;
 use datafusion::error::Result;
@@ -5,15 +10,9 @@ use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::prelude::CsvReadOptions;
 use futures::stream::StreamExt;
-use std::sync::Arc;
 use lazy_static::lazy_static;
+use std::sync::Arc;
 use tonic::transport::Channel;
-use crate::api::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, TaskId};
-use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
-use crate::project_config::load_catalog;
-use crate::parser::deserialize_physical_plan;
-use crate::intermediate_results::{insert_results, TaskKey};
-
 
 lazy_static! {
     static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
@@ -26,11 +25,10 @@ lazy_static! {
     };
 }
 
-
 pub struct DatafusionExecutor {
     ctx: Arc<SessionContext>,
     id: i32,
-    client: Option<SchedulerApiClient<Channel>> // api client for the scheduler
+    client: Option<SchedulerApiClient<Channel>>, // api client for the scheduler
 }
 
 impl DatafusionExecutor {
@@ -38,7 +36,7 @@ impl DatafusionExecutor {
         Self {
             ctx: load_catalog(catalog_path).await,
             id,
-            client: None
+            client: None,
         }
     }
 
@@ -95,9 +93,11 @@ impl DatafusionExecutor {
 
     // Given an initialized executor and channel, do the initial handshake with the server and return the first task
     pub async fn client_handshake(&mut self) -> NotifyTaskStateRet {
-
         assert!(self.client.is_some());
-        let client: &mut SchedulerApiClient<Channel> = self.client.as_mut().expect("Client is expected to be initialized");
+        let client: &mut SchedulerApiClient<Channel> = self
+            .client
+            .as_mut()
+            .expect("Client is expected to be initialized");
 
         // Send initial request with handshake task ID
         let handshake_req = tonic::Request::new(NotifyTaskStateArgs {
@@ -124,13 +124,12 @@ impl DatafusionExecutor {
     }
 
     // Send the results of the current task to scheduler and get the next task to execute
-    async fn get_next_task(
-        &mut self,
-        args: NotifyTaskStateArgs,
-    ) -> NotifyTaskStateRet {
-
+    async fn get_next_task(&mut self, args: NotifyTaskStateArgs) -> NotifyTaskStateRet {
         assert!(self.client.is_some());
-        let client = self.client.as_mut().expect("Client is expected to be initialized");
+        let client = self
+            .client
+            .as_mut()
+            .expect("Client is expected to be initialized");
 
         let get_next_task_request = tonic::Request::new(args);
 
@@ -165,8 +164,6 @@ impl DatafusionExecutor {
         loop {
             assert_eq!(true, cur_task.has_new_task);
 
-
-
             let plan_result = deserialize_physical_plan(cur_task.physical_plan.clone()).await;
             let plan = match plan_result {
                 Ok(plan) => plan,
@@ -184,16 +181,23 @@ impl DatafusionExecutor {
 
             if execution_success {
                 let result = execution_result.unwrap();
-                insert_results(TaskKey{stage_id: cur_task_inner.stage_id, query_id: cur_task_inner.query_id}, result).await;
+                insert_results(
+                    TaskKey {
+                        stage_id: cur_task_inner.stage_id,
+                        query_id: cur_task_inner.query_id,
+                    },
+                    result,
+                )
+                .await;
             }
 
-            cur_task = self.get_next_task(
-                NotifyTaskStateArgs {
+            cur_task = self
+                .get_next_task(NotifyTaskStateArgs {
                     task: cur_task.task.clone(),
                     success: execution_success,
                     result: Vec::new(),
-                }
-            ).await;
+                })
+                .await;
         }
     }
 }

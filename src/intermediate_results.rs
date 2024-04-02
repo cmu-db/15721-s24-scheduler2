@@ -1,10 +1,9 @@
-use std::collections::HashMap;
-use std::sync::Arc;
 use datafusion::arrow::array::RecordBatch;
-use tokio::sync::Mutex as TokioMutex;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-
+use std::sync::Arc;
+use tokio::sync::Mutex as TokioMutex;
 
 // Definition of the key used in the map
 #[derive(Debug, Clone, Copy)]
@@ -28,9 +27,8 @@ impl Hash for TaskKey {
     }
 }
 
-pub static INTERMEDIATE_RESULTS: Lazy<Arc<TokioMutex<HashMap<TaskKey, Vec<RecordBatch>>>>> = Lazy::new(|| {
-    Arc::new(TokioMutex::new(HashMap::new()))
-});
+pub static INTERMEDIATE_RESULTS: Lazy<Arc<TokioMutex<HashMap<TaskKey, Vec<RecordBatch>>>>> =
+    Lazy::new(|| Arc::new(TokioMutex::new(HashMap::new())));
 
 pub async fn get_results(task_id: &TaskKey) -> Option<Vec<RecordBatch>> {
     let lock = INTERMEDIATE_RESULTS.lock().await;
@@ -56,31 +54,29 @@ pub async fn remove_results(task: &TaskKey) -> Option<Vec<RecordBatch>> {
     lock.remove(task)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use datafusion::arrow::record_batch::RecordBatch;
-    use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use datafusion::arrow::array::{Array, Int32Array};
+    use datafusion::arrow::datatypes::{DataType, Field, Schema};
+    use datafusion::arrow::record_batch::RecordBatch;
     use std::sync::Once;
 
     // Helper function to create a dummy RecordBatch
     fn create_dummy_record_batch() -> Vec<RecordBatch> {
-        let schema = Schema::new(vec![
-            Field::new("a", DataType::Int32, false),
-        ]);
+        let schema = Schema::new(vec![Field::new("a", DataType::Int32, false)]);
 
-        let data = vec![
-            Arc::new(Int32Array::from(vec![1, 2, 3])),
-        ];
+        let data = vec![Arc::new(Int32Array::from(vec![1, 2, 3]))];
 
         vec![RecordBatch::try_new(Arc::new(schema), data).unwrap()]
     }
 
     #[tokio::test]
     async fn test_insert_and_get_results() {
-        let task_key = TaskKey { stage_id: 1, query_id: 1 };
+        let task_key = TaskKey {
+            stage_id: 1,
+            query_id: 1,
+        };
         let results = create_dummy_record_batch();
 
         insert_results(task_key, results.clone()).await;
@@ -92,7 +88,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_append_results() {
-        let task_key = TaskKey { stage_id: 2, query_id: 2 };
+        let task_key = TaskKey {
+            stage_id: 2,
+            query_id: 2,
+        };
         let initial_results = create_dummy_record_batch();
         let additional_results = create_dummy_record_batch();
 
@@ -105,7 +104,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_results() {
-        let task_key = TaskKey { stage_id: 3, query_id: 3 };
+        let task_key = TaskKey {
+            stage_id: 3,
+            query_id: 3,
+        };
         let results = create_dummy_record_batch();
 
         insert_results(task_key, results.clone()).await;
@@ -118,7 +120,3 @@ mod tests {
         assert!(fetched_results_after_removal.is_none());
     }
 }
-
-
-
-

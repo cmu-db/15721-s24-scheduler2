@@ -1,11 +1,11 @@
 use crate::parser::serialize_physical_plan;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::task::Task;
+use crate::SchedulerError;
 use futures::executor;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::SchedulerError;
 
 #[derive(Debug, Default)]
 pub struct QueryTable {

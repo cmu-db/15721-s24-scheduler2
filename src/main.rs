@@ -2,29 +2,29 @@ pub mod api;
 mod composable_database;
 mod dispatcher;
 // pub mod integration_test;
+pub mod intermediate_results;
 pub mod mock_executor;
 pub mod parser;
+pub mod project_config;
 mod query_graph;
 mod query_table;
 mod task_queue;
-pub mod intermediate_results;
-pub mod project_config;
 
 mod task;
 
-use std::path::PathBuf;
 use clap::{App, Arg, SubCommand};
-use project_config::{Config};
 use datafusion::error::DataFusionError;
+use project_config::Config;
 use serde::Deserialize;
+use std::path::PathBuf;
 use tonic::transport::Server;
 
 use crate::api::{composable_database::scheduler_api_server::SchedulerApiServer, SchedulerService};
 // use crate::integration_test::{read_config, start_scheduler_server};
-use std::io::{self, Write};
-use datafusion::prelude::CsvReadOptions;
-use walkdir::WalkDir;
 use crate::mock_executor::DatafusionExecutor;
+use datafusion::prelude::CsvReadOptions;
+use std::io::{self, Write};
+use walkdir::WalkDir;
 
 pub enum SchedulerError {
     Error(String),
@@ -78,8 +78,6 @@ pub enum SchedulerError {
 // }
 //
 
-
-
 /**
 
 Config:
@@ -99,14 +97,17 @@ async fn main() {
     let matches = App::new("DBMS Test CLI")
         .version("0.1")
         .about("Command line tool for DBMS end-to-end testing")
-        .subcommand(SubCommand::with_name("interactive")
-            .about("Enter interactive SQL mode"))
-        .subcommand(SubCommand::with_name("file")
-            .about("Execute SQL logic tests from a file")
-            .arg(Arg::with_name("FILE")
-                .help("Sets the input file to use")
-                .required(true)
-                .index(1)))
+        .subcommand(SubCommand::with_name("interactive").about("Enter interactive SQL mode"))
+        .subcommand(
+            SubCommand::with_name("file")
+                .about("Execute SQL logic tests from a file")
+                .arg(
+                    Arg::with_name("FILE")
+                        .help("Sets the input file to use")
+                        .required(true)
+                        .index(1),
+                ),
+        )
         .get_matches();
 
     match matches.subcommand() {
@@ -124,13 +125,14 @@ async fn main() {
             panic!("Usage: ./main interactive or ./main file <path-to-sqllogictest>");
         }
 
-        _ => {panic!("Usage: ./main interactive or ./main file <path-to-sqllogictest>");}
+        _ => {
+            panic!("Usage: ./main interactive or ./main file <path-to-sqllogictest>");
+        }
     }
 }
 
 fn interactive_mode() {
     println!("Entering interactive mode. Type your SQL queries or 'exit' to quit:");
-
 
     // let config = read_config();
     //
@@ -170,7 +172,6 @@ fn interactive_mode() {
     //     println!("You entered: {}", trimmed_input);
     //
     // }
-
 }
 
 fn file_mode(file_path: PathBuf) {
@@ -195,5 +196,4 @@ fn file_mode(file_path: PathBuf) {
     // }
 
     // parse
-
 }
