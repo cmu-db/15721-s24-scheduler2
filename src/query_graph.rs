@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::scheduler::{Task, TaskStatus};
+use crate::task::{Task, TaskStatus};
 use datafusion::physical_plan::ExecutionPlan;
 use futures::executor;
 use std::collections::HashSet;
@@ -51,14 +51,11 @@ impl QueryGraph {
 
     // Atomically clear frontier vector and return old frontier.
     pub fn get_frontier(&self) -> Vec<Task> {
-        // let _ = self.frontier_lock.write();
         let f = self.frontier.write();
         let mut old_frontier = Vec::new();
         executor::block_on(async {
-            // let mut frontier = f.await.deref_mut();
             mem::swap(f.await.deref_mut(), &mut old_frontier);
         });
-        // self.frontier = Vec::new();
         old_frontier
     }
 

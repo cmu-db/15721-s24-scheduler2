@@ -1,6 +1,6 @@
 use crate::parser::serialize_physical_plan;
 use crate::query_graph::{QueryGraph, StageStatus};
-use crate::scheduler::Task;
+use crate::task::Task;
 use crate::SchedulerError;
 use futures::executor;
 use std::collections::HashMap;
@@ -20,12 +20,17 @@ impl QueryTable {
         }
     }
 
-    pub fn get_frontier(&self, query_id: u64) -> Vec<Task> {
-        executor::block_on(async {
-            let t = self.table.write().await;
-            let frontier = t.get(&query_id).unwrap().read().await.get_frontier();
-            frontier
-        })
+    pub async fn get_frontier(&self, query_id: u64) -> Vec<Task> {
+        let x = self
+            .table
+            .write()
+            .await
+            .get(&query_id)
+            .unwrap()
+            .read()
+            .await
+            .get_frontier();
+        x
     }
 
     #[must_use]

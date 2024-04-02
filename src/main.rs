@@ -6,7 +6,7 @@ pub mod mock_executor;
 pub mod parser;
 mod query_graph;
 mod query_table;
-mod scheduler;
+mod task;
 mod task_queue;
 
 use config::{Config, ConfigError, File, FileFormat};

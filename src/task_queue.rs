@@ -1,4 +1,4 @@
-use crate::scheduler::Task;
+use crate::task::Task;
 use std::collections::VecDeque;
 use std::sync::{Condvar, Mutex};
 

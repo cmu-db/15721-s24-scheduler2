@@ -1,4 +1,3 @@
-
 use tonic::{Request, Response, Status};
 
 use composable_database::scheduler_api_server::SchedulerApi;
@@ -10,7 +9,7 @@ use composable_database::{
 
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
-use crate::scheduler::Task;
+use crate::task::Task;
 use crate::task_queue::TaskQueue;
 use crate::SchedulerError;
 
@@ -22,7 +21,6 @@ use crate::parser::deserialize_physical_plan;
 // Static query_id generator
 static QID_COUNTER: AtomicU64 = AtomicU64::new(0);
 static QID_COUNTER_INIT: Once = Once::new();
-
 
 fn next_query_id() -> u64 {
     QID_COUNTER_INIT.call_once(|| {});
@@ -58,7 +56,7 @@ impl SchedulerService {
             .expect("Graph not found.");
 
         // If new tasks are available, add them to the queue
-        let frontier = self.query_table.get_frontier(query_id);
+        let frontier = self.query_table.get_frontier(query_id).await;
         self.task_queue.add_tasks(frontier);
     }
 
