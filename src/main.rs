@@ -92,11 +92,14 @@ async fn interactive_mode() {
 
     let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
     tester.run_server().await;
-    tokio::time::sleep(Duration::from_millis(2000));
-    tester.run_client().await;
-    tokio::time::sleep(Duration::from_millis(2000));
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
     let frontend = tester.run_frontend().await;
     tokio::time::sleep(Duration::from_millis(2000));
+
+    tester.run_client().await;
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
 
     let mut input = String::new();
     loop {
@@ -114,15 +117,15 @@ async fn interactive_mode() {
 
         println!("You entered: {}", trimmed_input);
 
-        match frontend.run_sql(trimmed_input).await {
-            Ok(res) => {
-                println!("Result: {:?}", res);
-            }
-
-            Err(e) => {
-                println!("Error in running query: {}", e);
-            }
-        }
+        // match frontend.run_sql(trimmed_input).await {
+        //     Ok(res) => {
+        //         println!("Result: {:?}", res);
+        //     }
+        //
+        //     Err(e) => {
+        //         println!("Error in running query: {}", e);
+        //     }
+        // }
     }
 }
 

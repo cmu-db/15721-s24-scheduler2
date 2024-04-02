@@ -46,16 +46,20 @@ impl DatafusionExecutor {
         println!("Scheduler IP address is {}", scheduler_addr);
 
         let full_address = format!("http://{}", scheduler_addr);
+        println!("full address is {}", full_address);
 
-        // Create a connection to the scheduler
-        let channel = Channel::from_shared(full_address)
-            .expect("Invalid address")
-            .connect()
-            .await
-            .expect("Failed to connect to scheduler");
+        // // Create a connection to the scheduler
+        // let channel = Channel::from_shared(full_address)
+        //     .expect("Invalid address")
+        //     .connect()
+        //     .await
+        //     .expect("Failed to connect to scheduler");
+
+        let client = SchedulerApiClient::connect("http://0.0.0.0:15721").await.expect("Oh NO fail");
+        println!("YES!!!!");
 
         // Create a client using the channel
-        self.client = Some(SchedulerApiClient::new(channel));
+        self.client = Some(client);
 
         // get the first task by sending handshake message to scheduler
         let mut cur_task = self.client_handshake().await;
