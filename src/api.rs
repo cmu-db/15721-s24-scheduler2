@@ -223,9 +223,10 @@ mod tests {
                     continue;
                 }
                 let query_id = response.unwrap().into_inner().query_id;
-                println!("test_scheduler: Queued query {}.", query_id);
+                println!("test_scheduler: Scheduled query {}.", query_id);
                 if query_id == 125 {
-                    return;
+                    // fails after 125 in expr.slt for some reason
+                    break;
                 }
             }
         } else {
@@ -234,6 +235,9 @@ mod tests {
                 test_file
             );
         }
-        println!("test_scheduler: ok.");
+        println!(
+            "test_scheduler: queued {} tasks.",
+            scheduler_service.task_queue.size()
+        );
     }
 }

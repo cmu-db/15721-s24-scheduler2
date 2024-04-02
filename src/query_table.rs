@@ -2,7 +2,6 @@ use crate::parser::serialize_physical_plan;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::task::Task;
 use crate::SchedulerError;
-use futures::executor;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -21,7 +20,7 @@ impl QueryTable {
     }
 
     pub async fn get_frontier(&self, query_id: u64) -> Vec<Task> {
-        let x = self
+        let frontier = self
             .table
             .write()
             .await
@@ -29,14 +28,15 @@ impl QueryTable {
             .unwrap()
             .read()
             .await
-            .get_frontier();
-        x
+            .get_frontier()
+            .await;
+        frontier
     }
 
     #[must_use]
     pub async fn add_query(&self, graph: QueryGraph) -> Vec<Task> {
+        let frontier = graph.get_frontier().await;
         let mut t = self.table.write().await;
-        let frontier = graph.get_frontier();
         (*t).insert(graph.query_id, RwLock::new(graph));
         frontier
     }

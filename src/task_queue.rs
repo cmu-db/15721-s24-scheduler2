@@ -16,6 +16,11 @@ impl TaskQueue {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn size(&self) -> usize {
+        self.queue.lock().unwrap().len()
+    }
+
     pub fn add_tasks(&self, tasks: Vec<Task>) -> bool {
         let task_count = tasks.len();
         if task_count == 0 {

@@ -2,7 +2,6 @@
 
 use crate::task::{Task, TaskStatus};
 use datafusion::physical_plan::ExecutionPlan;
-use futures::executor;
 use std::collections::HashSet;
 use std::ops::DerefMut;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,7 +29,6 @@ pub struct QueryGraph {
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
     frontier: tokio::sync::RwLock<Vec<Task>>,
-    // frontier_lock: tokio::sync::RwLock<()>,
 }
 
 impl QueryGraph {
@@ -41,7 +39,6 @@ impl QueryGraph {
             tid_counter: AtomicU64::new(0),
             stages: Vec::new(),
             frontier: RwLock::new(Vec::new()),
-            // frontier_lock: RwLock::new(()),
         }
     }
 
@@ -50,12 +47,10 @@ impl QueryGraph {
     }
 
     // Atomically clear frontier vector and return old frontier.
-    pub fn get_frontier(&self) -> Vec<Task> {
+    pub async fn get_frontier(&self) -> Vec<Task> {
         let f = self.frontier.write();
         let mut old_frontier = Vec::new();
-        executor::block_on(async {
-            mem::swap(f.await.deref_mut(), &mut old_frontier);
-        });
+        mem::swap(f.await.deref_mut(), &mut old_frontier);
         old_frontier
     }
 
@@ -92,10 +87,7 @@ impl QueryGraph {
                                     stage_id: *output_stage_id,
                                     status: TaskStatus::Ready,
                                 };
-                                // let _ = self.frontier_lock.write();
-                                executor::block_on(async {
-                                    self.frontier.write().await.push(new_output_task);
-                                });
+                                self.frontier.write().await.push(new_output_task);
                             }
                         } else {
                             return Err("Output stage not found.");
