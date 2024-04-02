@@ -205,32 +205,16 @@ impl DatafusionExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use datafusion::prelude::*;
 
-    // Helper function to create a DatafusionExecutor instance
-    async fn create_executor() -> DatafusionExecutor {
-        let executor = DatafusionExecutor::new("./test_files/", 0);
-        let table_name = "mock_executor_test_table";
-        let file_path = "./test_files/mock_executor_test_table.csv"; // Ensure this file exists in the test environment
-        let options = CsvReadOptions::new();
-        let result = executor.register_csv(table_name, file_path, options).await;
-        assert!(result.is_ok());
-        executor
-    }
-
-    // Test registering a CSV file
-    #[tokio::test]
-    async fn test_register_csv() {
-        let _ = create_executor();
-    }
 
     // Test running a SQL query
     #[tokio::test]
     async fn test_execute_sql_query() {
-        let executor = create_executor();
+
+        let executor = DatafusionExecutor::new("./test_files/", 0).await;
 
         let query = "SELECT * FROM mock_executor_test_table";
-        let result = executor.await.execute_query(query).await;
+        let result = executor.execute_query(query).await;
 
         assert!(result.is_ok());
         let batches = result.unwrap();
@@ -242,7 +226,7 @@ mod tests {
     // Test executing a plan
     #[tokio::test]
     async fn test_execute_plan() {
-        let executor = create_executor().await;
+        let executor = DatafusionExecutor::new("./test_files/", 0).await;
 
         let query = "SELECT * FROM mock_executor_test_table";
 

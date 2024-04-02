@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub(crate) scheduler: Scheduler,
-    pub(crate) executors: Executor,
+    pub(crate) executors: Vec<Executor>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,7 +19,7 @@ pub struct Scheduler {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Executor {
-    pub(crate) id: u8,
+    pub(crate) id: i32,
     ip_addr: String,
     port: u16,
     numa_node: u8,
@@ -60,7 +60,7 @@ mod tests {
     use crate::project_config::read_config;
     #[test]
     pub fn test_read_config() {
-        let config = read_config();
+        let config = read_config("./test_files/");
         assert_eq!("127.0.0.1", config.scheduler.id_addr);
     }
 }

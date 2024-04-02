@@ -110,49 +110,70 @@ pub fn list_all_slt_files(dir_path: &str) -> Vec<PathBuf> {
     entries
 }
 
-#[tokio::test]
-async fn test_get_execution_plans_from_files() {
-    // Define the directory that contains the .slt files.
-    let dir_path = "./test_files";
-    eprintln!("Parsing test files in directory: {}", dir_path);
 
-    let entries = list_all_slt_files(dir_path);
+#[cfg(test)]
+mod tests {
+    use tonic::Request;
+    use crate::api::composable_database::{QueryInfo, ScheduleQueryArgs};
+    use crate::parser::{get_execution_plan_from_file, list_all_slt_files, serialize_physical_plan};
 
-    // Check if there are any .slt files to process.
-    if entries.is_empty() {
-        eprintln!("No .slt files found in directory: {}", dir_path);
-        return;
-    }
+    #[tokio::test]
+    async fn test_get_execution_plans_from_files() {
+        // Define the directory that contains the .slt files.
+        let dir_path = "./test_files";
+        eprintln!("Parsing test files in directory: {}", dir_path);
 
-    let mut total_execution_plans = 0; // Counter for the total number of execution plans.
-    let mut files_scanned = 0; // Counter for the number of files scanned.
+        let entries = list_all_slt_files(dir_path);
 
-    for file_path in entries {
-        let file_path_str = file_path
-            .to_str()
-            .expect("Failed to convert path to string");
-        eprintln!("Processing test file: {}", file_path_str);
-
-        match get_execution_plan_from_file(file_path_str).await {
-            Ok(plans) => {
-                total_execution_plans += plans.len();
-            }
-            Err(e) => {
-                eprintln!(
-                    "Failed to get execution plans from file {}: {}",
-                    file_path_str, e
-                );
-                panic!("Test failed due to error with file: {}", file_path_str);
-            }
+        // Check if there are any .slt files to process.
+        if entries.is_empty() {
+            eprintln!("No .slt files found in directory: {}", dir_path);
+            return;
         }
 
-        files_scanned += 1;
+        let mut total_execution_plans = 0; // Counter for the total number of execution plans.
+        let mut files_scanned = 0; // Counter for the number of files scanned.
+
+        for file_path in entries {
+            let file_path_str = file_path
+                .to_str()
+                .expect("Failed to convert path to string");
+            eprintln!("Processing test file: {}", file_path_str);
+
+            match get_execution_plan_from_file(file_path_str).await {
+                Ok(plans) => {
+                    total_execution_plans += plans.len();
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Failed to get execution plans from file {}: {}",
+                        file_path_str, e
+                    );
+                    panic!("Test failed due to error with file: {}", file_path_str);
+                }
+            }
+
+            files_scanned += 1;
+        }
+
+        // Print out the total counts.
+        eprintln!(
+            "Total number of execution plans generated: {}",
+            total_execution_plans
+        );
+        eprintln!("Total number of files scanned: {}", files_scanned);
     }
 
-    // Print out the total counts.
-    eprintln!(
-        "Total number of execution plans generated: {}",
-        total_execution_plans
-    );
-    eprintln!("Total number of files scanned: {}", files_scanned);
+    #[tokio::test]
+    async fn test_serialize_deserialize_physical_plan() {
+        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "//select.slt");
+        let res = get_execution_plan_from_file(&test_file).await;
+        assert!(res.is_ok());
+        let plans = res.unwrap();
+        for plan in &plans {
+            eprintln!("Trying to serialize plan {:?}", plan.clone());
+            let serialization_result = serialize_physical_plan(plan.clone()).await;
+            assert!(serialization_result.is_ok());
+        }
+    }
 }

@@ -10,6 +10,8 @@ mod query_graph;
 mod query_table;
 mod task_queue;
 
+pub mod integration_test;
+
 mod task;
 
 use clap::{App, Arg, SubCommand};

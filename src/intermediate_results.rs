@@ -60,15 +60,13 @@ mod tests {
     use datafusion::arrow::array::{Array, Int32Array};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use datafusion::arrow::record_batch::RecordBatch;
-    use std::sync::Once;
 
     // Helper function to create a dummy RecordBatch
     fn create_dummy_record_batch() -> Vec<RecordBatch> {
-        let schema = Schema::new(vec![Field::new("a", DataType::Int32, false)]);
-
-        let data = vec![Arc::new(Int32Array::from(vec![1, 2, 3]))];
-
-        vec![RecordBatch::try_new(Arc::new(schema), data).unwrap()]
+        let id_array = Int32Array::from(vec![1, 2, 3, 4, 5]);
+        let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
+        let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(id_array)]).unwrap();
+        vec!(batch)
     }
 
     #[tokio::test]
