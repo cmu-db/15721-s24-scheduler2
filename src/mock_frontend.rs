@@ -34,26 +34,28 @@ impl MockFrontend {
             .expect("Failed to connect to scheduler");
 
         let mut client = SchedulerApiClient::new(channel);
-        let parser = Parser::new(catalog_path).await;
 
         let (sender, mut receiver) = mpsc::channel::<SqlExecutionRequest>(32);
 
-        // Background task for handling SQL execution
-        tokio::spawn(async move {
-            while let Some(request) = receiver.recv().await {
+        // Clone `catalog_path` and convert to `String` for ownership transfer to the async block.
+        let catalog_path_owned = catalog_path.to_owned();
 
-                let plan_bytes = parser.serialize_physical_plan(request.plan).await?;
-                let schedule_query_request = tonic::Request::new(ScheduleQueryArgs{
+        // Move the owned String into the async block
+        tokio::spawn(async move {
+            let parser = Parser::new(&catalog_path_owned).await;
+
+            while let Some(request) = receiver.recv().await {
+                let plan_bytes = parser.serialize_physical_plan(request.plan).await.expect("MockFrontend: fail to parse physical plan");
+                let schedule_query_request = tonic::Request::new(ScheduleQueryArgs {
                     physical_plan: plan_bytes,
                     metadata: Some(QueryInfo {
                         priority: 0,
                         cost: 0,
-                    })
+                    }),
                 });
-                // Simulating a gRPC call
+                // TODO: how does the scheduler store the query and return the result?
                 match client.schedule_query(schedule_query_request).await {
                     Ok(response) => {
-
                         let _ = request.response.send(Ok(vec![])); // Replace vec![] with actual processing of response
                     },
                     Err(e) => {
@@ -64,19 +66,18 @@ impl MockFrontend {
         });
 
         Self {
-            parser,
+            parser: Parser::new(catalog_path).await, // You might also want to handle this similarly if Parser::new requires ownership.
             sender,
         }
     }
 
+
     pub async fn run_sql(&self, sql: &str) -> Result<Vec<RecordBatch>> {
-        let plan = self.parser.sql_to_physical_plan(sql)?.to_logical_plan()?;
-        let plan = self.parser.optimize(plan)?;
-        let physical_plan = self.parser.to_physical_plan(plan)?;
+        let physical_plan = self.parser.sql_to_physical_plan(sql).await?;
 
         let (response_tx, response_rx) = oneshot::channel();
         let request = SqlExecutionRequest {
-            plan: Arc::new(physical_plan),
+            plan: physical_plan,
             response: response_tx,
         };
 

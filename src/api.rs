@@ -43,11 +43,11 @@ pub struct SchedulerService {
 }
 
 impl SchedulerService {
-    pub fn new(catalog_path: &str) -> Self {
+    pub async fn new(catalog_path: &str) -> Self {
         Self {
-            query_table: QueryTable::new(),
+            query_table: QueryTable::new(catalog_path).await,
             task_queue: TaskQueue::new(),
-            parser: Parser::new(catalog_path)
+            parser: Parser::new(catalog_path).await
         }
     }
 

@@ -5,13 +5,20 @@ use datafusion::physical_planner::PhysicalPlanner;
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use sqllogictest::ColumnType;
 use sqllogictest::Record;
-use std::fs;
+use std::{fmt, fs};
 use std::path::PathBuf;
 use std::sync::Arc;
 use crate::project_config::load_catalog;
 
+#[derive(Default)]
 pub struct Parser {
     ctx: Arc<SessionContext>
+}
+
+impl fmt::Debug for Parser {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Parser {{ ctx: Arc<SessionContext> }}")
+    }
 }
 
 impl Parser {

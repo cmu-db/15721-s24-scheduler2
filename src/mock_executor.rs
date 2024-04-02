@@ -37,7 +37,7 @@ impl DatafusionExecutor {
             ctx: load_catalog(catalog_path).await,
             id,
             client: None,
-            parser: Parser::new(catalog_path)
+            parser: Parser::new(catalog_path).await
         }
     }
 

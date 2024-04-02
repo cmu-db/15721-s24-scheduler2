@@ -85,12 +85,13 @@ impl IntegrationTest {
 
     pub async fn run_server(&self) {
         let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        let catalog_path = self.catalog_path.clone();
         tokio::spawn(async move {
             // Starts the scheduler gRPC service
             let addr = scheduler_addr.parse().expect("Invalid address");
             println!("Scheduler listening on {}", addr);
 
-            let scheduler_service = SchedulerService::new(&self.catalog_path);
+            let scheduler_service = SchedulerService::new(&catalog_path).await;
             Server::builder()
                 .add_service(SchedulerApiServer::new(scheduler_service))
                 .serve(addr)
@@ -113,13 +114,13 @@ impl IntegrationTest {
 
     pub async fn run_frontend(&self) -> MockFrontend {
         let scheduler_addr = format!("{}:{}", self.config.scheduler.id_addr, self.config.scheduler.port);
+        let catalog_path = self.config_path.clone();
 
         let frontend = tokio::spawn(async move {
-            MockFrontend::new(&self.catalog_path, &scheduler_addr).await
+            MockFrontend::new(&catalog_path, &scheduler_addr).await
         })
             .await
-            .expect("Failed to join the async task")
-            .expect("Failed to create MockFrontend");
+            .expect("Failed to join the async task");
 
         frontend
     }
