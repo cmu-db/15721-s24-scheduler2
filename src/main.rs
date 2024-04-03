@@ -100,6 +100,8 @@ async fn interactive_mode() {
     tester.run_client().await;
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
+    println!("I am about to enter the loop");
+
 
     let mut input = String::new();
     loop {

@@ -79,11 +79,11 @@ impl SchedulerService {
 
         // If new tasks are available, add them to the queue
         let frontier = self.query_table.get_frontier(query_id).await;
-        self.task_queue.add_tasks(frontier);
+        self.task_queue.add_tasks(frontier).await;
     }
 
     async fn next_task(&self) -> Result<(Task, Vec<u8>), SchedulerError> {
-        let task = self.task_queue.next_task();
+        let task = self.task_queue.next_task().await;
         let stage = self
             .query_table
             .get_plan_bytes(task.task_id.query_id, task.task_id.stage_id)
@@ -121,7 +121,7 @@ impl SchedulerApi for SchedulerService {
             let frontier = self.query_table.add_query(query).await;
 
             // Add the query to the task queue.
-            self.task_queue.add_tasks(frontier);
+            self.task_queue.add_tasks(frontier).await;
 
             let response = ScheduleQueryRet { query_id: qid };
             return Ok(Response::new(response));
@@ -246,7 +246,7 @@ mod tests {
     async fn test_scheduler() {
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
-        let scheduler_service = Box::new(SchedulerService::new(catalog_path));
+        let scheduler_service = Box::new(SchedulerService::new(catalog_path).await);
         let parser = Parser::new(catalog_path).await;
         println!("test_scheduler: Testing file {}", test_file);
         if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
@@ -292,7 +292,7 @@ mod tests {
         }
         println!(
             "test_scheduler: queued {} tasks.",
-            scheduler_service.task_queue.size()
+            scheduler_service.task_queue.size().await
         );
     }
 }
