@@ -1,18 +1,15 @@
 pub mod api;
-mod dispatcher;
-// pub mod integration_test;
 pub mod intermediate_results;
-pub mod mock_executor;
 pub mod parser;
 pub mod project_config;
 mod query_graph;
 mod query_table;
 mod task_queue;
+mod executor;
 
 pub mod integration_test;
 
 mod mock_frontend;
-mod reference_executor;
 mod task;
 
 use crate::integration_test::IntegrationTest;
@@ -25,7 +22,6 @@ use tonic::transport::Server;
 
 use crate::api::{composable_database::scheduler_api_server::SchedulerApiServer, SchedulerService};
 // use crate::integration_test::{read_config, start_scheduler_server};
-use crate::mock_executor::DatafusionExecutor;
 use crate::parser::DFColumnType;
 use datafusion::execution::context::DataFilePaths;
 use datafusion::prelude::CsvReadOptions;

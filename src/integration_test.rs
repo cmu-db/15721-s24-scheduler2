@@ -2,10 +2,10 @@ use crate::api::composable_database::scheduler_api_server::SchedulerApiServer;
 use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::composable_database::{NotifyTaskStateRet, TaskId};
 use crate::api::SchedulerService;
-use crate::mock_executor::DatafusionExecutor;
+use crate::executor::Executor;
 use crate::mock_frontend::MockFrontend;
 use crate::project_config::{load_catalog, read_config};
-use crate::project_config::{Config, Executor};
+use crate::project_config::Config;
 use datafusion::prelude::{CsvReadOptions, SessionContext};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -104,11 +104,11 @@ impl IntegrationTest {
         // Start executor clients
         for executor in &self.config.executors {
             // Clone the scheduler_addr for each executor client
-            let mut mock_executor = DatafusionExecutor::new("./test_files/", executor.id).await;
+            let mut mock_executor = Executor::new("./test_files/", executor.id).await;
             let scheduler_addr_copy = scheduler_addr.clone();
             tokio::spawn(async move {
                 mock_executor
-                    .run_mock_executor_service(&scheduler_addr_copy)
+                    .connect(&scheduler_addr_copy)
                     .await;
             });
         }
