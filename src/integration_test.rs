@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::sync::Arc;
+use tokio::time::Instant;
 use tonic::transport::{Channel, Server};
 use walkdir::WalkDir;
 
@@ -99,6 +100,8 @@ impl IntegrationTest {
         });
     }
     pub async fn run_client(&self) {
+
+        let start = Instant::now(); // Start timing
         let scheduler_addr = format!(
             "{}:{}",
             self.config.scheduler.id_addr, self.config.scheduler.port
@@ -114,6 +117,9 @@ impl IntegrationTest {
                     .await;
             });
         }
+        let end = Instant::now();
+        let duration = end.duration_since(start);
+        println!("Time elapsed: {:?}", duration);
     }
 
     pub async fn run_frontend(&self) -> MockFrontend {
