@@ -1,5 +1,4 @@
 pub mod api;
-mod composable_database;
 mod dispatcher;
 // pub mod integration_test;
 pub mod intermediate_results;
@@ -95,7 +94,7 @@ async fn interactive_mode() {
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
     let frontend = tester.run_frontend().await;
-    tokio::time::sleep(Duration::from_millis(2000));
+    tokio::time::sleep(Duration::from_millis(2000)).await;
 
     tester.run_client().await;
     tokio::time::sleep(Duration::from_millis(2000)).await;
