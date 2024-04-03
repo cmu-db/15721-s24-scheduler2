@@ -67,52 +67,52 @@ impl ReferenceExecutor {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Test running a SQL query
-    #[tokio::test]
-    async fn test_execute_sql_query() {
-        let executor = ReferenceExecutor::new("./test_files/").await;
-
-        let query = "SELECT * FROM mock_executor_test_table";
-        let result = executor.execute_query(query).await;
-
-        assert!(result.is_ok());
-        let batches = result.unwrap();
-        assert!(!batches.is_empty());
-        assert_eq!(batches[0].num_columns(), 2);
-        assert_eq!(batches[0].num_rows(), 2);
-    }
-
-    // Test executing a plan
-    #[tokio::test]
-    async fn test_execute_plan() {
-        let executor = ReferenceExecutor::new("./test_files/").await;
-
-        let query = "SELECT * FROM mock_executor_test_table";
-
-        let plan_result = executor.get_session_context().sql(&query).await;
-        let plan = match plan_result {
-            Ok(plan) => plan,
-            Err(e) => {
-                panic!("Failed to create plan: {:?}", e);
-            }
-        };
-
-        let plan: Arc<dyn ExecutionPlan> = match plan.create_physical_plan().await {
-            Ok(plan) => plan,
-            Err(e) => {
-                panic!("Failed to create physical plan: {:?}", e);
-            }
-        };
-
-        let result = executor.execute_plan(plan).await;
-        assert!(result.is_ok());
-        let batches = result.unwrap();
-        assert!(!batches.is_empty()); // Ensure that we get some results
-        assert_eq!(batches[0].num_columns(), 2);
-        assert_eq!(batches[0].num_rows(), 2);
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+//     // Test running a SQL query
+//     #[tokio::test]
+//     async fn test_execute_sql_query() {
+//         let executor = ReferenceExecutor::new("./test_files/").await;
+//
+//         let query = "SELECT * FROM mock_executor_test_table";
+//         let result = executor.execute_query(query).await;
+//
+//         assert!(result.is_ok());
+//         let batches = result.unwrap();
+//         assert!(!batches.is_empty());
+//         assert_eq!(batches[0].num_columns(), 2);
+//         assert_eq!(batches[0].num_rows(), 2);
+//     }
+//
+//     // Test executing a plan
+//     #[tokio::test]
+//     async fn test_execute_plan() {
+//         let executor = ReferenceExecutor::new("./test_files/").await;
+//
+//         let query = "SELECT * FROM mock_executor_test_table";
+//
+//         let plan_result = executor.get_session_context().sql(&query).await;
+//         let plan = match plan_result {
+//             Ok(plan) => plan,
+//             Err(e) => {
+//                 panic!("Failed to create plan: {:?}", e);
+//             }
+//         };
+//
+//         let plan: Arc<dyn ExecutionPlan> = match plan.create_physical_plan().await {
+//             Ok(plan) => plan,
+//             Err(e) => {
+//                 panic!("Failed to create physical plan: {:?}", e);
+//             }
+//         };
+//
+//         let result = executor.execute_plan(plan).await;
+//         assert!(result.is_ok());
+//         let batches = result.unwrap();
+//         assert!(!batches.is_empty()); // Ensure that we get some results
+//         assert_eq!(batches[0].num_columns(), 2);
+//         assert_eq!(batches[0].num_rows(), 2);
+//     }
+// }

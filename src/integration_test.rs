@@ -1,4 +1,3 @@
-use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
 use crate::api::composable_database::scheduler_api_server::SchedulerApiServer;
 use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
 use crate::api::composable_database::{NotifyTaskStateRet, TaskId};
@@ -7,16 +6,12 @@ use crate::mock_executor::DatafusionExecutor;
 use crate::mock_frontend::MockFrontend;
 use crate::project_config::{load_catalog, read_config};
 use crate::project_config::{Config, Executor};
-use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::prelude::{CsvReadOptions, SessionContext};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::env;
-use std::fs;
 use std::sync::Arc;
 use tokio::time::Instant;
 use tonic::transport::{Channel, Server};
-use walkdir::WalkDir;
 
 /**
 This gRPC facilitates communication between executors and the scheduler:

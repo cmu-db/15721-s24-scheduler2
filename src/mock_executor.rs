@@ -48,7 +48,9 @@ impl DatafusionExecutor {
         let full_address = format!("http://{}", scheduler_addr);
         println!("full address is {}", full_address);
 
-        let client = SchedulerApiClient::connect("http://0.0.0.0:15721").await.expect("Oh NO fail");
+        let client = SchedulerApiClient::connect("http://0.0.0.0:15721")
+            .await
+            .expect("Oh NO fail");
 
         // Create a client using the channel
         self.client = Some(client);
@@ -56,7 +58,6 @@ impl DatafusionExecutor {
         // get the first task by sending handshake message to scheduler
         let mut cur_task = self.client_handshake().await;
         loop {
-
             println!("Got new task {:?}", cur_task);
             assert_eq!(true, cur_task.has_new_task);
 
@@ -163,7 +164,6 @@ impl DatafusionExecutor {
 
     // Send the results of the current task to scheduler and get the next task to execute
     async fn get_next_task(&mut self, args: NotifyTaskStateArgs) -> NotifyTaskStateRet {
-
         println!("Sending message back to scheduler {:?}", args);
         assert!(self.client.is_some());
         let client = self
@@ -184,5 +184,65 @@ impl DatafusionExecutor {
                 response_inner
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test running a SQL query
+    #[tokio::test]
+    async fn test_execute_sql_query() {
+        let executor = DatafusionExecutor::new("./test_files/", 0).await;
+
+        let query = "SELECT * FROM mock_executor_test_table";
+        let physical_plan = executor
+            .parser
+            .sql_to_physical_plan(query)
+            .await
+            .expect("Failed to parse SQL into physical plan");
+        let result = executor.execute_plan(physical_plan).await;
+
+        assert!(result.is_ok());
+        let batches = result.unwrap();
+        assert!(!batches.is_empty());
+        assert_eq!(batches[0].num_columns(), 2);
+        assert_eq!(batches[0].num_rows(), 2);
+    }
+
+    // Test executing a plan
+    #[tokio::test]
+    async fn test_execute_plan() {
+        let executor = DatafusionExecutor::new("./test_files/", 0).await;
+
+        let query = "SELECT * FROM mock_executor_test_table";
+
+        let physical_plan = executor
+            .parser
+            .sql_to_physical_plan(query)
+            .await
+            .expect("Failed to parse SQL into physical plan");
+
+        let plan_bytes = executor
+            .parser
+            .serialize_physical_plan(physical_plan)
+            .await
+            .expect("MockFrontend: fail to parse physical plan");
+
+        let plan_result = executor.parser.deserialize_physical_plan(plan_bytes).await;
+        let plan = match plan_result {
+            Ok(plan) => plan,
+            Err(e) => {
+                panic!("Failed to create plan: {:?}", e);
+            }
+        };
+
+        let result = executor.execute_plan(plan).await;
+        assert!(result.is_ok());
+        let batches = result.unwrap();
+        assert!(!batches.is_empty()); // Ensure that we get some results
+        assert_eq!(batches[0].num_columns(), 2);
+        assert_eq!(batches[0].num_rows(), 2);
     }
 }
