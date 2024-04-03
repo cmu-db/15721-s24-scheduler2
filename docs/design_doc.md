@@ -38,12 +38,13 @@
 - **Work Threads (tokio):** Tokio threads are created for each executor node to handle communications.
 - **QueryID Table:** An in-memory data structure mapping QueryIDs to a DAG of remaining query fragments and cost estimates retrieved from the optimizer.
 - **Executors:** Each executor is connected to the scheduler and the other executors via gRPC (tonic).
+- **Intermediate Results**: Intermediate results are stored as a thread-safe HashMap<TaskKey, Vec<RecordBatch> in shared memory. All executors will be able to access intermediate results without having to serialize/deserialize data.
 
 **Workflow:**
 1. Receives Datafusion ExecutionPlans from Query Optimizer and parses them into DAG, then stores in QueryID Table.
 2. Leaves of DAG are added to work queue that work threads can pull from.
-3. Work threads pull work from the queue and push to execution nodes, then update QueryID Table with results, and enqueue any new leaves.
-4. Upon completion of the last leaf, the job is marked as done in the QueryID Table, and results are stored (either to an S3 location or in memory) until the client calls `query_job_status`.
+3. When execution nodes pull next tasks from the scheduler with an gRPC endpoint, the scheduler provides the task and updates the work queue/Query ID Table.
+5. Upon completion of the last leaf, the job is marked as done in the QueryID Table, and results are stored (either to an S3 location or in memory) until the client calls `query_job_status`.
 
 # Design Rationale
 
@@ -57,8 +58,26 @@
 ### Unit Testing
 Individual components within the scheduler will be unit tested using Rust’s test module.
 
-### End-to-End / Integration Testing
-To test our scheduler's correctness, we will use test cases from the sqllogictest module within the DataFusion repository. Our approach involves building a component to parse .slt files, transform each query into a DataFusion ExecutionPlan, and forward it to the scheduler. We will verify the scheduler's correctness by comparing the Arrow results produced by our scheduler-driven DataFusion execution against those obtained from executing on a single DF executor. Additionally, this pipeline will serve to benchmark our scheduler's performance by timing the computation of the final Arrow results, utilizing DataFusion as the executor. For more precise performance metrics, we will simulate multiple executors using EC2.
+## End-to-End Testing Framework Components
+
+The end-to-end testing framework is composed of three primary components: the mock frontend, the mock catalog, and the mock executors.
+
+### 1. Mock Frontend
+This component accepts input in two forms:
+- **Interactive Mode**: Processes SQL commands from the user console and displays the results interactively.
+- **File Mode**: Reads commands from a .slt (sqllogictest) file, executes them, and verifies their correctness.
+The mock frontend also features a gRPC client that sends queries to the scheduler.
+
+### 2. Mock Executors
+These consist of DataFusion executors and gRPC clients that execute tasks, receiving instructions from and reporting results back to the scheduler.
+
+### 3. Mock Catalog
+It holds information about CSV files and is configured via a TOML file, which specifies executor details like IP addresses, ports, and NUMA regions.
+
+### Performance Benchmarking
+The framework also aims to benchmark the scheduler's performance by measuring the time taken to compute the final Arrow results, using DataFusion as the executor. To achieve more detailed performance metrics, multiple executors will be simulated using EC2 instances.
+
+![E2E Testing Architecture](e2e_testing_arch.png)
 
 ### CI/CD
 We aim to build a pipeline with GitHub Actions that will allow us to continuously run our end-to-end correctness tests before merging PRs to establish a correct implementation early, and maintain that as we add more advanced functionality to our scheduler.
