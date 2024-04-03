@@ -1,7 +1,8 @@
-use crate::parser::Parser;
+use crate::server::composable_database::QueryStatus;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::task::Task;
 use crate::SchedulerError;
+use datafusion_proto::bytes::physical_plan_to_bytes;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -10,14 +11,12 @@ use tokio::sync::RwLock;
 pub struct QueryTable {
     // Maps query IDs to query graphs
     pub table: RwLock<HashMap<u64, RwLock<QueryGraph>>>,
-    parser: Parser,
 }
 
 impl QueryTable {
-    pub async fn new(catalog_path: &str) -> Self {
+    pub async fn new() -> Self {
         Self {
             table: RwLock::new(HashMap::new()),
-            parser: Parser::new(catalog_path).await,
         }
     }
 
@@ -35,7 +34,6 @@ impl QueryTable {
         frontier
     }
 
-    #[must_use]
     pub async fn add_query(&self, graph: QueryGraph) -> Vec<Task> {
         println!("scheduler: adding query graph: {:#?}", graph);
         let frontier = graph.get_frontier().await;
@@ -44,7 +42,11 @@ impl QueryTable {
         frontier
     }
 
-    #[must_use]
+    pub async fn get_query_status(&self, query_id: u64) -> QueryStatus {
+        let t = self.table.read().await;
+        todo!()
+    }
+
     pub async fn update_stage_status(
         &self,
         query_id: u64,
@@ -72,16 +74,15 @@ impl QueryTable {
         let t = self.table.read().await;
         if let Some(graph) = t.get(&query_id) {
             let plan = Arc::clone(&graph.read().await.stages[stage_id as usize].plan);
-            match self.parser.serialize_physical_plan(plan).await {
-                Ok(p) => Ok(p),
-                Err(e) => Err(SchedulerError::DfError(e)),
-            }
+            Ok(physical_plan_to_bytes(plan)
+                .expect("Failed to serialize physical plan")
+                .to_vec())
         } else {
             Err(SchedulerError::Error("Graph not found.".to_string()))
         }
     }
 
-    pub async fn cancel_query(&mut self, query_id: u64) -> bool {
-        true
+    pub async fn remove_query(&self, query_id: u64) {
+        todo!()
     }
 }

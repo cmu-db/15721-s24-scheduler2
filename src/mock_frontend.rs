@@ -1,5 +1,4 @@
-use crate::api::composable_database::scheduler_api_server::SchedulerApi;
-use crate::api::composable_database::{QueryInfo, ScheduleQueryArgs};
+use crate::server::composable_database::{QueryInfo, ScheduleQueryArgs};
 use datafusion::arrow::array::RecordBatch;
 use datafusion::common::DataFusionError;
 use datafusion::physical_plan::ExecutionPlan;
@@ -9,12 +8,12 @@ use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
 use tokio::time::{self, Duration};
 
-use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
+use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
 
 use crate::parser::Parser;
 use datafusion::error::Result;
-use crate::api::composable_database::QueryJobStatusArgs;
-use crate::api::composable_database::QueryStatus::Done;
+use crate::server::composable_database::QueryJobStatusArgs;
+use crate::server::composable_database::QueryStatus;
 
 pub struct MockFrontend {
     parser: Parser,
@@ -79,7 +78,7 @@ impl MockFrontend {
 
                             println!("Status of current query is {:?}", status);
 
-                            if status == Done as i32 {
+                            if status == QueryStatus::Done as i32 {
                                 break;
                             }
 

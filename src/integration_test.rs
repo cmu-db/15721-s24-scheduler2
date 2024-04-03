@@ -1,7 +1,6 @@
-use crate::api::composable_database::scheduler_api_server::SchedulerApiServer;
-use crate::api::composable_database::{NotifyTaskStateArgs, ScheduleQueryArgs};
-use crate::api::composable_database::{NotifyTaskStateRet, TaskId};
-use crate::api::SchedulerService;
+use crate::server::composable_database::scheduler_api_server::SchedulerApiServer;
+use crate::server::composable_database::TaskId;
+use crate::server::SchedulerService;
 use crate::executor::Executor;
 use crate::mock_frontend::MockFrontend;
 use crate::project_config::{load_catalog, read_config};

@@ -1,4 +1,3 @@
-pub mod api;
 mod executor;
 pub mod integration_test;
 pub mod intermediate_results;
@@ -9,6 +8,7 @@ mod query_graph;
 mod query_table;
 mod task;
 mod task_queue;
+mod server;
 
 use crate::integration_test::IntegrationTest;
 use clap::{App, Arg, SubCommand};
