@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::Mutex;
 
 // Definition of the key used in the map
 #[derive(Debug, Clone, Copy)]
@@ -27,8 +27,8 @@ impl Hash for TaskKey {
     }
 }
 
-pub static INTERMEDIATE_RESULTS: Lazy<Arc<TokioMutex<HashMap<TaskKey, Vec<RecordBatch>>>>> =
-    Lazy::new(|| Arc::new(TokioMutex::new(HashMap::new())));
+pub static INTERMEDIATE_RESULTS: Lazy<Arc<Mutex<HashMap<TaskKey, Vec<RecordBatch>>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 pub async fn get_results(task_id: &TaskKey) -> Option<Vec<RecordBatch>> {
     let lock = INTERMEDIATE_RESULTS.lock().await;
