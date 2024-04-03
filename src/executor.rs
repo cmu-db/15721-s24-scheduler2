@@ -154,6 +154,7 @@ impl Executor {
         Ok(results)
     }
 
+    #[allow(dead_code)]
     pub async fn execute_sql(&self, query: &str) -> Result<Vec<RecordBatch>, DataFusionError> {
         // NOTE: More direct way to execute SQL, using below to ensure same code paths are taken.
         // self.ctx

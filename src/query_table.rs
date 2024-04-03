@@ -37,7 +37,7 @@ impl QueryTable {
 
     #[must_use]
     pub async fn add_query(&self, graph: QueryGraph) -> Vec<Task> {
-        println!("scheduler: adding query graph: {:?}", graph);
+        println!("scheduler: adding query graph: {:#?}", graph);
         let frontier = graph.get_frontier().await;
         let mut t = self.table.write().await;
         (*t).insert(graph.query_id, RwLock::new(graph));
