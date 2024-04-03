@@ -22,6 +22,7 @@ pub struct Executor {
     scheduler: Option<SchedulerApiClient<Channel>>, // api client for the scheduler
 }
 
+// TODO: Clean up gRPC calling code.
 impl Executor {
     pub async fn new(catalog_path: &str, id: i32) -> Self {
         let ctx = load_catalog(catalog_path).await;
@@ -83,39 +84,6 @@ impl Executor {
         }
     }
 
-    pub async fn execute(
-        &self,
-        plan: Arc<dyn ExecutionPlan>,
-    ) -> Result<Vec<RecordBatch>, DataFusionError> {
-        let task_ctx = self.ctx.task_ctx();
-        let mut results = Vec::new();
-        let mut stream = plan.execute(0, task_ctx)?;
-        while let Some(batch) = stream.next().await {
-            results.push(batch?);
-        }
-        Ok(results)
-    }
-
-    pub async fn execute_sql(&self, query: &str) -> Result<Vec<RecordBatch>, DataFusionError> {
-        // NOTE: More direct way to execute SQL, using below to ensure same code paths are taken.
-        // self.ctx
-        //     .sql(query)
-        //     .await
-        //     .expect("Failed to parse SQL statement")
-        //     .collect()
-        //     .await
-
-        let physical_plan = self
-            .ctx
-            .sql(query)
-            .await
-            .expect("Failed to parse SQL statement")
-            .create_physical_plan()
-            .await
-            .expect("Failed to create physical plan");
-        self.execute(physical_plan).await
-    }
-
     // Given an initialized executor and channel, do the initial handshake with the server and return the first task
     pub async fn client_handshake(&mut self) -> NotifyTaskStateRet {
         assert!(self.scheduler.is_some());
@@ -172,15 +140,50 @@ impl Executor {
             }
         }
     }
+
+    pub async fn execute(
+        &self,
+        plan: Arc<dyn ExecutionPlan>,
+    ) -> Result<Vec<RecordBatch>, DataFusionError> {
+        let task_ctx = self.ctx.task_ctx();
+        let mut results = Vec::new();
+        let mut stream = plan.execute(0, task_ctx)?;
+        while let Some(batch) = stream.next().await {
+            results.push(batch?);
+        }
+        Ok(results)
+    }
+
+    pub async fn execute_sql(&self, query: &str) -> Result<Vec<RecordBatch>, DataFusionError> {
+        // NOTE: More direct way to execute SQL, using below to ensure same code paths are taken.
+        // self.ctx
+        //     .sql(query)
+        //     .await
+        //     .expect("Failed to parse SQL statement")
+        //     .collect()
+        //     .await
+
+        let physical_plan = self
+            .ctx
+            .sql(query)
+            .await
+            .expect("Failed to parse SQL statement")
+            .create_physical_plan()
+            .await
+            .expect("Failed to create physical plan");
+        self.execute(physical_plan).await
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    static TEST_DATA_PATH: &str = "./test_files/";
+
     #[tokio::test]
     async fn test_execute_sql() {
-        let executor = Executor::new("./test_files/", 0).await;
+        let executor = Executor::new(TEST_DATA_PATH, 0).await;
 
         let query = "SELECT * FROM mock_executor_test_table";
         let result = executor.execute_sql(query).await;
