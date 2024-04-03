@@ -152,9 +152,8 @@ impl SchedulerApi for SchedulerService {
         }
 
         let graph = graph_opt.unwrap().read().await;
-        let is_done = graph.done;
-        if is_done {
-            let stage_id = graph.num_stages() - 1;
+        if graph.done {
+            let stage_id = 0;
             let final_result_opt = get_results(&TaskKey { stage_id, query_id }).await;
             let final_result =
                 final_result_opt.expect("api.rs: query is done but no results in table");

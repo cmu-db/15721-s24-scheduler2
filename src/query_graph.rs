@@ -17,6 +17,7 @@ use crate::server::composable_database::TaskId;
 use crate::query_graph::StageStatus::NotStarted;
 use crate::task::TaskStatus::Ready;
 
+// TODO Change to Waiting, Ready, Running(vec[taskid]), Finished(vec[locations?])
 #[derive(Clone, Debug, Default)]
 pub enum StageStatus {
     #[default]
