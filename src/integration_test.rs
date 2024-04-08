@@ -5,16 +5,13 @@ use crate::executor::Executor;
 use crate::mock_frontend::MockFrontend;
 use crate::project_config::{load_catalog, read_config};
 use crate::project_config::Config;
-use datafusion::prelude::{CsvReadOptions, SessionContext};
+use datafusion::prelude::{SessionContext};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use datafusion::arrow::array::RecordBatch;
-use datafusion::arrow::compute::{sort, sort_to_indices, take};
-use datafusion::arrow::row::RowConverter;
-use log::Record;
 use tokio::time::Instant;
-use tonic::transport::{Channel, Server};
+use tonic::transport::{Server};
 use datafusion::error::DataFusionError;
 use datafusion::logical_expr::{col, Expr};
 
@@ -194,20 +191,6 @@ impl IntegrationTest {
     }
 }
 
-
-// Compares the results of cur with ref_sol, return true if all record batches are equal
-// fn is_result_correct(ref_sol: Vec<RecordBatch>, cur: Vec<RecordBatch>) -> bool {
-//     if ref_sol.len() != cur.len() {
-//         return false;
-//     }
-//
-//     for (ref_batch, cur_batch) in ref_sol.iter().zip(cur.iter()) {
-//         if ref_batch != cur_batch {
-//             return false;
-//         }
-//     }
-//     true
-// }
 
 // async fn generate_refsol(file_path: &str) -> Vec<Vec<RecordBatch>> {
 //     // start a reference executor instance to verify correctness
