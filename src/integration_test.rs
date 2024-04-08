@@ -9,8 +9,14 @@ use datafusion::prelude::{CsvReadOptions, SessionContext};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use datafusion::arrow::array::RecordBatch;
+use datafusion::arrow::compute::{sort, sort_to_indices, take};
+use datafusion::arrow::row::RowConverter;
+use log::Record;
 use tokio::time::Instant;
 use tonic::transport::{Channel, Server};
+use datafusion::error::DataFusionError;
+use datafusion::logical_expr::{col, Expr};
 
 /**
 This gRPC facilitates communication between executors and the scheduler:
@@ -130,9 +136,64 @@ impl IntegrationTest {
 
         frontend
     }
+
+    // sort a record batch by
+
+    async fn sort_batch_by_all_columns(&self, batch: RecordBatch) -> Result<RecordBatch, DataFusionError> {
+
+        let df = self.ctx.read_batch(batch)?;
+
+        // Get the list of column names from the schema
+        let column_names: Vec<String> = df.schema().fields().iter()
+            .map(|field| field.name().clone())
+            .collect();
+
+        // Create a vector of sort expressions based on the column names
+        let sort_exprs: Vec<Expr> = column_names.iter()
+            .map(|name| col(name).sort(true, true))
+            .collect();
+
+        // Sort the DataFrame by the generated expressions
+        let sorted_df = df.sort(sort_exprs)?.collect().await?;
+        assert_eq!(1, sorted_df.len());
+
+        Ok(sorted_df[0].clone())
+    }
+
+    // Compares if two result sets are equal
+    // Two record batches are equal if they have the same set of elements, and the ordering does
+    // not matter
+    async fn is_batch_equal(&self, res1: RecordBatch, res2: RecordBatch) -> Result<bool, DataFusionError> {
+        if res1.schema() != res2.schema() {
+            return Ok(false);
+        }
+
+        if res1.num_rows() != res2.num_rows() || res1.num_columns() != res2.num_columns() {
+            return Ok(false);
+        }
+
+        // sort each row by a random column to see if they are equal
+        let sorted_batch1 = self.sort_batch_by_all_columns(res1).await?;
+        let sorted_batch2 = self.sort_batch_by_all_columns(res2).await?;
+
+        Ok(sorted_batch1 == sorted_batch2)
+    }
+    pub async fn results_eq(&self, res1: &Vec<RecordBatch>, res2: &Vec<RecordBatch>) -> Result<bool, DataFusionError> {
+        if res1.len() != res2.len() {
+            return Ok(false);
+        }
+
+        for (batch1, batch2) in res1.iter().zip(res2.iter()) {
+            let are_equal = self.is_batch_equal(batch1.clone(), batch2.clone()).await?;
+            if !are_equal {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
 }
 
-// TODO for next update: logic for verifying correctness
 
 // Compares the results of cur with ref_sol, return true if all record batches are equal
 // fn is_result_correct(ref_sol: Vec<RecordBatch>, cur: Vec<RecordBatch>) -> bool {
