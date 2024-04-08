@@ -14,12 +14,12 @@ queries = con.execute("FROM tpch_queries()").fetchall()
 tables = con.execute("show tables").fetchall()
 
 # Ensure output directories exist
-os.makedirs('test_files', exist_ok=True)
-os.makedirs('sql_files', exist_ok=True)
+os.makedirs('test_data/', exist_ok=True)
+os.makedirs('sql_files/', exist_ok=True)
 
 for (i, q) in queries:
     with open(f"sql_files/{i}.sql", "w") as file:
         file.writelines(q)
 for (t,) in tables:
     res = con.query("SELECT * FROM " + t)
-    pq.write_table(res.to_arrow_table(), f"test_files/{t}.parquet")
+    pq.write_table(res.to_arrow_table(), f"test_data/{t}.parquet")

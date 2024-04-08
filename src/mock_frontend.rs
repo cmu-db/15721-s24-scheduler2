@@ -10,13 +10,13 @@ use tokio::time::{self, Duration};
 
 use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
 
-use crate::parser::Parser;
+use crate::parser::ExecutionPlanParser;
 use datafusion::error::Result;
 use crate::server::composable_database::QueryJobStatusArgs;
 use crate::server::composable_database::QueryStatus;
 
 pub struct MockFrontend {
-    parser: Parser,
+    parser: ExecutionPlanParser,
     // Sender for sending SQL execution requests to the background task
     sender: mpsc::Sender<SqlExecutionRequest>,
 }
@@ -31,11 +31,6 @@ impl MockFrontend {
     pub async fn new(catalog_path: &str, scheduler_addr: &str) -> Self {
         let full_address = format!("http://{}", scheduler_addr);
         println!("The full address is {}", full_address);
-        // let channel = Channel::from_shared(full_address)
-        //     .expect("Invalid scheduler address")
-        //     .connect()
-        //     .await
-        //     .expect("Failed to connect to scheduler");
 
         let mut client = SchedulerApiClient::connect("http://0.0.0.0:15721").await.expect("Fail to connect to scheduler");
 
@@ -46,7 +41,7 @@ impl MockFrontend {
 
         // Move the owned String into the async block
         tokio::spawn(async move {
-            let parser = Parser::new(&catalog_path_owned).await;
+            let parser = ExecutionPlanParser::new(&catalog_path_owned).await;
 
             while let Some(request) = receiver.recv().await {
                 println!("Got request from frontend {:?}", request.plan);
@@ -100,7 +95,7 @@ impl MockFrontend {
         });
 
         Self {
-            parser: Parser::new(catalog_path).await,
+            parser: ExecutionPlanParser::new(catalog_path).await,
             sender,
         }
     }

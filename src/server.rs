@@ -251,7 +251,7 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
-    use crate::parser::Parser;
+    use crate::parser::ExecutionPlanParser;
     use crate::server::composable_database::scheduler_api_server::SchedulerApi;
     use crate::server::composable_database::{
         AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
@@ -266,7 +266,7 @@ mod tests {
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
         let scheduler_service = Box::new(SchedulerService::new(catalog_path).await);
-        let parser = Parser::new(catalog_path).await;
+        let parser = ExecutionPlanParser::new(catalog_path).await;
         println!("test_scheduler: Testing file {}", test_file);
         if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
             for plan in &physical_plans {

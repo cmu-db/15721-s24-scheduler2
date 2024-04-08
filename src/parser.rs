@@ -1,27 +1,29 @@
 use crate::project_config::load_catalog;
-use datafusion::error::Result;
+use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::physical_planner::PhysicalPlanner;
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
-use sqllogictest::ColumnType;
-use sqllogictest::Record;
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::{fmt, fs};
+use std::{fmt};
+use futures::TryFutureExt;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::Parser;
 
 #[derive(Default)]
-pub struct Parser {
+pub struct ExecutionPlanParser {
     ctx: Arc<SessionContext>,
 }
 
-impl fmt::Debug for Parser {
+impl fmt::Debug for ExecutionPlanParser {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Parser {{ ctx: Arc<SessionContext> }}")
     }
 }
 
-impl Parser {
+impl ExecutionPlanParser {
     pub async fn new(catalog_path: &str) -> Self {
         Self {
             ctx: load_catalog(catalog_path).await,
@@ -32,7 +34,7 @@ impl Parser {
         &self,
         bytes: Vec<u8>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        physical_plan_from_bytes(&*bytes, &self.ctx)
+        physical_plan_from_bytes(bytes.as_slice(), &self.ctx)
     }
 
     pub async fn serialize_physical_plan(&self, plan: Arc<dyn ExecutionPlan>) -> Result<Vec<u8>> {
@@ -42,47 +44,30 @@ impl Parser {
         }
     }
 
-    pub async fn get_execution_plan_from_file(
-        &self,
-        file_path: &str,
-    ) -> std::result::Result<Vec<Arc<dyn ExecutionPlan>>, Box<dyn std::error::Error>> {
-        let sql_statements: Vec<Record<DFColumnType>> =
-            sqllogictest::parse_file(file_path).expect("failed to parse file");
+    pub async fn read_sql_from_file(&self, path: &str) -> Result<Vec<String>> {
+        let mut file = File::open(path).await?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).await?;
 
-        let mut plans = Vec::new();
-        for sql_record in sql_statements {
-            let sql_opt = match sql_record {
-                Record::Statement { ref sql, .. } | Record::Query { ref sql, .. } => Some(sql),
-                _ => None,
-            };
+        let dialect = GenericDialect {};
+        let ast = Parser::parse_sql(&dialect, &contents)?;
 
-            if let Some(sql) = sql_opt {
-                let plan: Arc<dyn ExecutionPlan> = match self.sql_to_physical_plan(sql).await {
-                    Ok(plan) => plan,
-                    Err(_) => {
-                        continue;
-                    }
-                };
-                plans.push(plan);
-            }
+        let mut statements = Vec::new();
+        for stmt in ast {
+            statements.push(stmt.to_string());
         }
-        Ok(plans)
+
+        Ok(statements)
     }
 
-    // list all the .slt files under a directory
-    pub fn list_all_slt_files(&self, dir_path: &str) -> Vec<PathBuf> {
-        let entries = fs::read_dir(dir_path)
-            .unwrap_or_else(|_| panic!("Failed to read directory: {}", dir_path))
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().and_then(std::ffi::OsStr::to_str) == Some("slt"))
-            .collect::<Vec<_>>();
-
-        if entries.is_empty() {
-            eprintln!("No .slt files found in directory: {}", dir_path);
+    pub async fn get_execution_plan_from_file(&self, path: &str) ->  Result<Vec<Arc<dyn ExecutionPlan>>> {
+        let sql_statements = self.read_sql_from_file(path).await?;
+        let mut plans = Vec::new();
+        for stmt in sql_statements {
+            let plan = self.sql_to_physical_plan(&stmt).await?;
+            plans.push(plan);
         }
-
-        entries
+        Ok(plans)
     }
 
     // Convert a sql string to a physical plan
@@ -100,57 +85,21 @@ impl Parser {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum DFColumnType {
-    Boolean,
-    DateTime,
-    Integer,
-    Float,
-    Text,
-    Timestamp,
-    Another,
-}
-
-impl ColumnType for DFColumnType {
-    fn from_char(value: char) -> Option<Self> {
-        match value {
-            'B' => Some(Self::Boolean),
-            'D' => Some(Self::DateTime),
-            'I' => Some(Self::Integer),
-            'P' => Some(Self::Timestamp),
-            'R' => Some(Self::Float),
-            'T' => Some(Self::Text),
-            _ => Some(Self::Another),
-        }
-    }
-
-    fn to_char(&self) -> char {
-        match self {
-            Self::Boolean => 'B',
-            Self::DateTime => 'D',
-            Self::Integer => 'I',
-            Self::Timestamp => 'P',
-            Self::Float => 'R',
-            Self::Text => 'T',
-            Self::Another => '?',
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::Parser;
+    use crate::parser::ExecutionPlanParser;
 
     #[tokio::test]
     async fn test_get_execution_plans_from_files() {
         let dir_path = "./test_files";
         eprintln!("Parsing test files in directory: {}", dir_path);
-        let parser = Parser::new(dir_path).await;
+        let parser = ExecutionPlanParser::new(dir_path).await;
 
         let entries = parser.list_all_slt_files(dir_path);
         // Check if there are any .slt files to process.
         if entries.is_empty() {
-            eprintln!("No .slt files found in directory: {}", dir_path);
+            eprintln!("No .sql files found in directory: {}", dir_path);
             return;
         }
 
@@ -190,7 +139,7 @@ mod tests {
     #[tokio::test]
     async fn test_serialize_deserialize_physical_plan() {
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files");
-        let parser = Parser::new(catalog_path).await;
+        let parser = ExecutionPlanParser::new(catalog_path).await;
 
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files", "/expr.slt");
         let res = parser.get_execution_plan_from_file(&test_file).await;

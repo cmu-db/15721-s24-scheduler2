@@ -14,9 +14,6 @@ use crate::integration_test::IntegrationTest;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
 use std::path::PathBuf;
-
-use crate::parser::DFColumnType;
-use sqllogictest::Record;
 use std::io::{self, Write};
 use std::time::Duration;
 
@@ -122,6 +119,6 @@ async fn file_mode(file_path: PathBuf) {
     tester.run_client().await;
     let frontend = tester.run_frontend().await;
 
-    let sql_statements: Vec<Record<DFColumnType>> =
-        sqllogictest::parse_file(file_path).expect("failed to parse file");
+    // let sql_statements: Vec<Record<DFColumnType>> =
+    //     sqllogictest::parse_file(file_path).expect("failed to parse file");
 }

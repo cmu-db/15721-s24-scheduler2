@@ -1,6 +1,8 @@
-use datafusion::prelude::{CsvReadOptions, SessionContext};
+use std::ffi::OsStr;
+use datafusion::prelude::{CsvReadOptions, ParquetReadOptions, SessionContext};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use walkdir::WalkDir;
 
@@ -32,22 +34,28 @@ pub fn read_config(config_path: &str) -> Config {
 
 pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
     let ctx = SessionContext::new();
-    // Bulk load csv files in the context (simulating API calls to the catalog)
+    // Bulk load files in the context (simulating API calls to the catalog)
     for entry in WalkDir::new(catalog_path) {
         let entry = entry.unwrap();
-        if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "csv") {
-            let file_path = entry.path().to_str().unwrap();
-            // Extract the table name from the file name without the extension
-            let table_name = entry.path().file_stem().unwrap().to_str().unwrap();
+        if entry.file_type().is_file() {
+            let file_path = entry.path();
+            let table_name = file_path.file_stem().unwrap().to_str().unwrap();
 
-            let options = CsvReadOptions::new();
-            // Register the CSV file as a table
-            let result = ctx.register_csv(table_name, file_path, options).await;
-            assert!(
-                result.is_ok(),
-                "Failed to register CSV file: {:?}",
-                file_path
-            );
+            let extension = file_path.extension().and_then(OsStr::to_str);
+
+            match extension {
+                Some("csv") => {
+                    let options = CsvReadOptions::new();
+                    let result = ctx.register_csv(table_name, file_path.to_str().unwrap(), options).await;
+                    assert!(result.is_ok(), "Failed to register CSV file: {:?}", file_path);
+                },
+                Some("parquet") => {
+                    let options = ParquetReadOptions::default();
+                    let result = ctx.register_parquet(table_name, file_path.to_str().unwrap(), options).await;
+                    assert!(result.is_ok(), "Failed to register Parquet file: {:?}", file_path);
+                },
+                _ => {}
+            }
         }
     }
 
