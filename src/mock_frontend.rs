@@ -1,5 +1,4 @@
-use crate::api::composable_database::scheduler_api_server::SchedulerApi;
-use crate::api::composable_database::{QueryInfo, ScheduleQueryArgs};
+use crate::server::composable_database::{QueryInfo, ScheduleQueryArgs};
 use datafusion::arrow::array::RecordBatch;
 use datafusion::common::DataFusionError;
 use datafusion::physical_plan::ExecutionPlan;
@@ -9,12 +8,12 @@ use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
 use tokio::time::{self, Duration};
 
-use crate::api::composable_database::scheduler_api_client::SchedulerApiClient;
+use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
 
 use crate::parser::Parser;
 use datafusion::error::Result;
-use crate::api::composable_database::QueryJobStatusArgs;
-use crate::api::composable_database::QueryStatus::Done;
+use crate::server::composable_database::QueryJobStatusArgs;
+use crate::server::composable_database::QueryStatus;
 
 pub struct MockFrontend {
     parser: Parser,
@@ -30,13 +29,15 @@ struct SqlExecutionRequest {
 
 impl MockFrontend {
     pub async fn new(catalog_path: &str, scheduler_addr: &str) -> Self {
-        let channel = Channel::from_shared(scheduler_addr.to_string())
-            .expect("Invalid scheduler address")
-            .connect()
-            .await
-            .expect("Failed to connect to scheduler");
+        let full_address = format!("http://{}", scheduler_addr);
+        println!("The full address is {}", full_address);
+        // let channel = Channel::from_shared(full_address)
+        //     .expect("Invalid scheduler address")
+        //     .connect()
+        //     .await
+        //     .expect("Failed to connect to scheduler");
 
-        let mut client = SchedulerApiClient::new(channel);
+        let mut client = SchedulerApiClient::connect("http://0.0.0.0:15721").await.expect("Fail to connect to scheduler");
 
         let (sender, mut receiver) = mpsc::channel::<SqlExecutionRequest>(32);
 
@@ -48,6 +49,7 @@ impl MockFrontend {
             let parser = Parser::new(&catalog_path_owned).await;
 
             while let Some(request) = receiver.recv().await {
+                println!("Got request from frontend {:?}", request.plan);
                 let plan_bytes = parser
                     .serialize_physical_plan(request.plan)
                     .await
@@ -64,13 +66,25 @@ impl MockFrontend {
                     Ok(response) => {
 
                         let query_id = response.into_inner().query_id;
+                        println!("FrontEnd: Got response from scheduler, query id is {}", query_id);
 
-                        while client.query_job_status(tonic::Request::new(QueryJobStatusArgs{ query_id }))
-                            .await
-                            .expect("invalid query job status response")
-                            .into_inner().query_status != Done as i32 {
-                            time::sleep(Duration::from_millis(10)).await;
+
+                        loop {
+
+                            let status = client.query_job_status(tonic::Request::new(QueryJobStatusArgs{ query_id }))
+                                .await
+                                .expect("invalid query job status response")
+                                .into_inner().query_status;
+
+                            println!("Status of current query is {:?}", status);
+
+                            if status == QueryStatus::Done as i32 {
+                                break;
+                            }
+
+                            tokio::time::sleep(Duration::from_millis(1000)).await;
                         }
+
                         let _ = request.response.send(Ok(vec![])); // Replace vec![] with actual processing of response
                     }
                     Err(e) => {
@@ -99,6 +113,8 @@ impl MockFrontend {
             plan: physical_plan,
             response: response_tx,
         };
+
+        println!("Request sent to the background thread");
 
         self.sender
             .send(request)

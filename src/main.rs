@@ -1,39 +1,24 @@
-pub mod api;
-mod composable_database;
-mod dispatcher;
-// pub mod integration_test;
+mod executor;
+pub mod integration_test;
 pub mod intermediate_results;
-pub mod mock_executor;
+mod mock_frontend;
 pub mod parser;
 pub mod project_config;
 mod query_graph;
 mod query_table;
-mod task_queue;
-
-pub mod integration_test;
-
-mod mock_frontend;
-mod reference_executor;
 mod task;
+mod task_queue;
+mod server;
 
 use crate::integration_test::IntegrationTest;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
-use project_config::Config;
-use serde::Deserialize;
 use std::path::PathBuf;
-use tonic::transport::Server;
 
-use crate::api::{composable_database::scheduler_api_server::SchedulerApiServer, SchedulerService};
-// use crate::integration_test::{read_config, start_scheduler_server};
-use crate::mock_executor::DatafusionExecutor;
 use crate::parser::DFColumnType;
-use datafusion::execution::context::DataFilePaths;
-use datafusion::prelude::CsvReadOptions;
 use sqllogictest::Record;
 use std::io::{self, Write};
 use std::time::Duration;
-use walkdir::WalkDir;
 
 pub enum SchedulerError {
     Error(String),
@@ -58,10 +43,9 @@ async fn main() {
         )
         .get_matches();
 
-
     interactive_mode().await;
 
-    loop{}
+    loop {}
 
     // match matches.subcommand() {
     //     Some(("interactive", _)) => {
@@ -92,11 +76,15 @@ async fn interactive_mode() {
 
     let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
     tester.run_server().await;
-    tokio::time::sleep(Duration::from_millis(2000));
-    tester.run_client().await;
-    tokio::time::sleep(Duration::from_millis(2000));
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
     let frontend = tester.run_frontend().await;
-    tokio::time::sleep(Duration::from_millis(2000));
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
+    tester.run_client().await;
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
+    println!("I am about to enter the loop");
 
     let mut input = String::new();
     loop {

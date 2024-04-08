@@ -7,18 +7,18 @@ use walkdir::WalkDir;
 // Format definitions for the config file
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub(crate) scheduler: Scheduler,
-    pub(crate) executors: Vec<Executor>,
+    pub(crate) scheduler: SchedulerConfig,
+    pub(crate) executors: Vec<ExecutorConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Scheduler {
+pub struct SchedulerConfig {
     pub(crate) id_addr: String,
     pub(crate) port: u16,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Executor {
+pub struct ExecutorConfig {
     pub(crate) id: i32,
     ip_addr: String,
     port: u16,

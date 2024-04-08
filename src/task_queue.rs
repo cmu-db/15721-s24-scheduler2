@@ -1,45 +1,49 @@
-use crate::task::Task;
+use tokio::sync::{Mutex, Notify};
 use std::collections::VecDeque;
-use std::sync::{Condvar, Mutex};
+use crate::task::Task;
 
 #[derive(Debug)]
 pub struct TaskQueue {
     queue: Mutex<VecDeque<Task>>,
-    pub avail: Condvar,
+    pub avail: Notify,
 }
 
 impl TaskQueue {
     pub fn new() -> Self {
         Self {
             queue: Mutex::new(VecDeque::new()),
-            avail: Condvar::new(),
+            avail: Notify::new(),
         }
     }
 
-    #[allow(dead_code)]
-    pub fn size(&self) -> usize {
-        self.queue.lock().unwrap().len()
+    pub async fn size(&self) -> usize {
+        self.queue.lock().await.len()
     }
 
-    pub fn add_tasks(&self, tasks: Vec<Task>) -> bool {
+    pub async fn add_tasks(&self, tasks: Vec<Task>) -> bool {
         let task_count = tasks.len();
         if task_count == 0 {
             return false;
         }
-        self.queue.lock().unwrap().extend(tasks);
+
+        let mut queue = self.queue.lock().await;
+        queue.extend(tasks);
+
         if task_count == 1 {
             self.avail.notify_one();
         } else {
-            self.avail.notify_all();
+            self.avail.notify_waiters();
         }
-        return true;
+
+        true
     }
 
-    pub fn next_task(&self) -> Task {
-        let mut queue = self.queue.lock().unwrap();
-        // Correct rust syntax?
+    pub async fn next_task(&self) -> Task {
+        let mut queue = self.queue.lock().await;
         while queue.is_empty() {
-            queue = self.avail.wait(queue).unwrap();
+            drop(queue); // Drop the lock before waiting
+            self.avail.notified().await;
+            queue = self.queue.lock().await; // Re-acquire the lock after being notified
         }
         queue.pop_front().unwrap()
     }

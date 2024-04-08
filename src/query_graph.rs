@@ -13,10 +13,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{mem, sync::Arc};
 use tokio::sync::RwLock;
-use crate::api::composable_database::TaskId;
+use crate::server::composable_database::TaskId;
 use crate::query_graph::StageStatus::NotStarted;
 use crate::task::TaskStatus::Ready;
 
+// TODO Change to Waiting, Ready, Running(vec[taskid]), Finished(vec[locations?])
 #[derive(Clone, Debug, Default)]
 pub enum StageStatus {
     #[default]
@@ -63,6 +64,7 @@ impl QueryGraph {
             plan: plan.clone(),
             tid_counter,
             stages: vec![QueryStage{plan: plan.clone(), status: NotStarted, outputs: Vec::new(), inputs: Vec::new()}],
+            // stages,
             frontier: RwLock::new(vec![task]),
         }
     }

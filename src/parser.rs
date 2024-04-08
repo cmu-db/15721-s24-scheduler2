@@ -86,8 +86,9 @@ impl Parser {
     }
 
     // Convert a sql string to a physical plan
-    pub async fn sql_to_physical_plan(&self, sql: &str) -> Result<Arc<dyn ExecutionPlan>> {
-        let plan_result = self.ctx.sql(&sql).await;
+    pub async fn sql_to_physical_plan(&self, query: &str) -> Result<Arc<dyn ExecutionPlan>> {
+        // self.ctx.sql(query).await?.create_physical_plan().await
+        let plan_result = self.ctx.sql(&query).await;
         let plan = match plan_result {
             Ok(plan) => plan,
             Err(e) => {
