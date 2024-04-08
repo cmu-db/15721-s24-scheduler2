@@ -12,9 +12,9 @@ con.execute(f"CALL dbgen(sf={scale_factor})")
 queries = con.execute("FROM tpch_queries()").fetchall()
 tables = con.execute("show tables").fetchall()
 
-# for (i, q) in queries:
-#     with open(f"{i}.sql", "w") as file:
-#         file.writelines(q)
-# for (t,) in tables:
-#     res = con.query("SELECT * FROM " + t)
-#     pq.write_table(res.to_arrow_table(), t + ".parquet")
+for (i, q) in queries:
+    with open(f"{i}.sql", "w") as file:
+        file.writelines(q)
+for (t,) in tables:
+    res = con.query("SELECT * FROM " + t)
+    pq.write_table(res.to_arrow_table(), t + ".parquet")

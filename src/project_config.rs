@@ -60,7 +60,7 @@ mod tests {
     use crate::project_config::read_config;
     #[test]
     pub fn test_read_config() {
-        let config = read_config("./test_files/");
-        assert_eq!("127.0.0.1", config.scheduler.id_addr);
+        let config = read_config("./executors.toml");
+        assert_eq!("0.0.0.0", config.scheduler.id_addr);
     }
 }

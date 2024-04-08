@@ -192,7 +192,7 @@ mod tests {
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files");
         let parser = Parser::new(catalog_path).await;
 
-        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/select.slt");
+        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files", "/expr.slt");
         let res = parser.get_execution_plan_from_file(&test_file).await;
         assert!(res.is_ok());
         let plans = res.unwrap();
