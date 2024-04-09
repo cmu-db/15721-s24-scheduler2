@@ -15,10 +15,10 @@ tables = con.execute("show tables").fetchall()
 
 # Ensure output directories exist
 os.makedirs('test_data/', exist_ok=True)
-os.makedirs('sql_files/', exist_ok=True)
+os.makedirs('test_sql/', exist_ok=True)
 
 for (i, q) in queries:
-    with open(f"sql_files/{i}.sql", "w") as file:
+    with open(f"test_sql/{i}.sql", "w") as file:
         file.writelines(q)
 for (t,) in tables:
     res = con.query("SELECT * FROM " + t)
