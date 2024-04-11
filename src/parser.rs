@@ -34,11 +34,11 @@ impl ExecutionPlanParser {
         &self,
         bytes: Vec<u8>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        physical_plan_from_bytes(bytes.as_slice(), &self.ctx)
+        physical_plan_from_bytes(bytes.as_slice(), &self.ctx.clone())
     }
 
     pub async fn serialize_physical_plan(&self, plan: Arc<dyn ExecutionPlan>) -> Result<Vec<u8>> {
-        match physical_plan_to_bytes(plan) {
+        match physical_plan_to_bytes(plan.clone()) {
             Ok(plan_bytes) => Ok(Vec::from(plan_bytes)),
             Err(e) => Err(e),
         }
@@ -88,67 +88,44 @@ impl ExecutionPlanParser {
 
 #[cfg(test)]
 mod tests {
+    use datafusion_proto::bytes::physical_plan_to_bytes;
     use crate::parser::ExecutionPlanParser;
 
-    #[tokio::test]
-    async fn test_get_execution_plans_from_files() {
-        let dir_path = "./test_files";
-        eprintln!("Parsing test files in directory: {}", dir_path);
-        let parser = ExecutionPlanParser::new(dir_path).await;
+    use tokio::runtime::Builder;
 
-        let entries = parser.list_all_slt_files(dir_path);
-        // Check if there are any .slt files to process.
-        if entries.is_empty() {
-            eprintln!("No .sql files found in directory: {}", dir_path);
-            return;
-        }
-
-        let mut total_execution_plans = 0; // Counter for the total number of execution plans.
-        let mut files_scanned = 0; // Counter for the number of files scanned.
-
-        for file_path in entries {
-            let file_path_str = file_path
-                .to_str()
-                .expect("Failed to convert path to string");
-            eprintln!("Processing test file: {}", file_path_str);
-
-            match parser.get_execution_plan_from_file(file_path_str).await {
-                Ok(plans) => {
-                    total_execution_plans += plans.len();
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Failed to get execution plans from file {}: {}",
-                        file_path_str, e
-                    );
-                    panic!("Test failed due to error with file: {}", file_path_str);
-                }
-            }
-
-            files_scanned += 1;
-        }
-
-        // Print out the total counts.
-        eprintln!(
-            "Total number of execution plans generated: {}",
-            total_execution_plans
-        );
-        eprintln!("Total number of files scanned: {}", files_scanned);
+    fn custom_runtime() -> tokio::runtime::Runtime {
+        Builder::new_current_thread()
+            .thread_stack_size(10000 * 1024 * 1024)
+            .enable_all()
+            .build()
+            .unwrap()
     }
 
-    #[tokio::test]
-    async fn test_serialize_deserialize_physical_plan() {
-        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files");
-        let parser = ExecutionPlanParser::new(catalog_path).await;
+    #[test]
+    fn test_serialize_deserialize_physical_plan() {
 
-        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files", "/expr.slt");
-        let res = parser.get_execution_plan_from_file(&test_file).await;
-        assert!(res.is_ok());
-        let plans = res.unwrap();
-        for plan in &plans {
-            eprintln!("Trying to serialize plan {:?}", plan.clone());
-            let serialization_result = parser.serialize_physical_plan(plan.clone()).await;
-            assert!(serialization_result.is_ok());
-        }
+        let runtime = custom_runtime();
+
+        runtime.block_on(async {
+            let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
+            let parser = ExecutionPlanParser::new(catalog_path).await;
+
+            let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/4.sql");
+            let res = parser.get_execution_plan_from_file(&test_file).await;
+            assert!(res.is_ok());
+            let plans = res.unwrap();
+            eprintln!("The length of the plan array is {}", plans.len());
+            for plan in plans {
+                eprintln!("Trying to serialize plan {:?}", plan.clone());
+                let serialization_result = parser.serialize_physical_plan(plan.clone()).await;
+                assert!(serialization_result.is_ok());
+
+                let original_plan = parser.deserialize_physical_plan(serialization_result.unwrap()).await;
+                assert!(original_plan.is_ok());
+            }
+        });
+
+
+
     }
 }
