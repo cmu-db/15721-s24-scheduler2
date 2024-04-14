@@ -83,19 +83,13 @@ impl ExecutionPlanParser {
         };
         plan.create_physical_plan().await
     }
-
-    // TODO: run the sql directly to see what happens
 }
 
 #[cfg(test)]
 mod tests {
     use crate::parser::ExecutionPlanParser;
-    use datafusion::physical_plan::displayable;
-    use datafusion_proto::bytes::physical_plan_to_bytes;
     use std::fmt::Debug;
-    use std::panic;
-
-    use tokio::runtime::{Builder, Runtime};
+    use tokio::runtime::{Builder};
 
     fn custom_runtime() -> tokio::runtime::Runtime {
         Builder::new_multi_thread()
