@@ -1,4 +1,0 @@
-SELECT c1 FROM AGGREGATE_AGG_MULTI_ORDER;
-
-query I
-----

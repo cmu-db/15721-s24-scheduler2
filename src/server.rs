@@ -270,7 +270,7 @@ mod tests {
         println!("test_scheduler: Testing file {}", test_file);
         if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
             for plan in &physical_plans {
-                let plan_f = parser.serialize_physical_plan(plan.clone()).await;
+                let plan_f = parser.serialize_physical_plan(plan.clone());
                 if plan_f.is_err() {
                     println!(
                         "test_scheduler: Unable to serialize plan in file {}.",

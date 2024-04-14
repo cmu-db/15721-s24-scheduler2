@@ -52,6 +52,7 @@ pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
                 Some("parquet") => {
                     let options = ParquetReadOptions::default();
                     let result = ctx.register_parquet(table_name, file_path.to_str().unwrap(), options).await;
+                    eprintln!("Have registerd {}, at path {:?}", table_name, file_path.to_str().as_slice());
                     assert!(result.is_ok(), "Failed to register Parquet file: {:?}", file_path);
                 },
                 _ => {}

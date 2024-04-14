@@ -47,7 +47,6 @@ impl MockFrontend {
                 println!("Got request from frontend {:?}", request.plan);
                 let plan_bytes = parser
                     .serialize_physical_plan(request.plan)
-                    .await
                     .expect("MockFrontend: fail to parse physical plan");
                 let schedule_query_request = tonic::Request::new(ScheduleQueryArgs {
                     physical_plan: plan_bytes,

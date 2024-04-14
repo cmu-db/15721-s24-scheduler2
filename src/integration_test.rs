@@ -134,8 +134,6 @@ impl IntegrationTest {
         frontend
     }
 
-    // sort a record batch by
-
     async fn sort_batch_by_all_columns(&self, batch: RecordBatch) -> Result<RecordBatch, DataFusionError> {
 
         let df = self.ctx.read_batch(batch)?;
@@ -191,54 +189,101 @@ impl IntegrationTest {
     }
 }
 
-
-// async fn generate_refsol(file_path: &str) -> Vec<Vec<RecordBatch>> {
-//     // start a reference executor instance to verify correctness
-//     let reference_executor = initialize_executor().await;
-//
-//     // get all the execution plans and pre-compute all the reference results
-//     let execution_plans = get_execution_plan_from_file(file_path)
-//         .await
-//         .expect("Failed to get execution plans");
-//     let mut results = Vec::new();
-//     for plan in execution_plans {
-//         match reference_executor.execute_plan(plan).await {
-//             Ok(dataframe) => {
-//                 results.push(dataframe);
-//             }
-//             Err(e) => eprintln!("Failed to execute plan: {}", e),
-//         }
-//     }
-//     results
-//
-// }
-
 #[cfg(test)]
 mod tests {
-    // use crate::mock_executor::DatafusionExecutor;
-    // use datafusion::arrow::array::Int32Array;
-    // use datafusion::arrow::datatypes::{DataType, Field, Schema};
-    // use datafusion::arrow::record_batch::RecordBatch;
-    // use datafusion::physical_plan::ExecutionPlan;
-    // use std::sync::Arc;
-    // use datafusion::physical_plan::test::exec::MockExec;
+    use std::sync::Arc;
+    use datafusion::arrow::array::{Int32Array, RecordBatch};
+    use datafusion::arrow::datatypes::{DataType, Field, Schema};
+    use crate::executor::Executor;
+    use crate::integration_test::IntegrationTest;
+    use crate::parser::ExecutionPlanParser;
 
-    // #[test]
-    // fn test_is_result_correct_basic() {
-    //     // Handcraft a record batch
-    //     let id_array = Int32Array::from(vec![1, 2, 3, 4, 5]);
-    //     let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
-    //
-    //     let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(id_array)]).unwrap();
-    //
-    //     // Construct another equivalent record batch
-    //     let id_array_2 = Int32Array::from(vec![1, 2, 3, 4, 5]);
-    //     let schema_2 = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
-    //
-    //     let batch_2 = RecordBatch::try_new(Arc::new(schema_2), vec![Arc::new(id_array_2)]).unwrap();
-    //
-    //     assert_eq!(true, is_result_correct(vec![batch], vec![batch_2]));
-    // }
+    async fn initialize_integration_test() -> IntegrationTest {
+        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
+        let config_path = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
+        IntegrationTest::new(catalog_path.to_string(), config_path.to_string()).await
+    }
+
+    #[tokio::test]
+    async fn test_results_eq_basic() {
+
+        let t = initialize_integration_test().await;
+
+        // Handcraft a record batch
+        let id_array = Int32Array::from(vec![1, 2, 3, 4, 5]);
+        let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
+        let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(id_array)]).unwrap();
+
+        // Construct another equivalent record batch
+        let id_array_2 = Int32Array::from(vec![1, 5, 3, 2, 4]);
+        let schema_2 = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
+        let batch_2 = RecordBatch::try_new(Arc::new(schema_2), vec![Arc::new(id_array_2)]).unwrap();
+
+
+        // Construct a third record batch that does not equal
+        let id_array_3 = Int32Array::from(vec![1, 6, 3, 2, 4]);
+        let schema_3 = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
+        let batch_3 = RecordBatch::try_new(Arc::new(schema_3), vec![Arc::new(id_array_3)]).unwrap();
+
+        assert_eq!(true, t.results_eq(&vec![batch.clone()], &vec![batch_2.clone()]).await.unwrap());
+        assert_eq!(false, t.results_eq(&vec![batch_2.clone()], &vec![batch_3.clone()]).await.unwrap());
+    }
+
+
+    #[tokio::test]
+    async fn test_results_eq() {
+
+        let t = initialize_integration_test().await;
+
+        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
+
+
+        let parser = ExecutionPlanParser::new(catalog_path).await;
+
+        // paths to two sql queries
+        let sql_1_vec = parser
+                                    .read_sql_from_file(concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql" , "/1.sql"))
+                                    .await
+                                    .expect("fail to read query 1");
+        assert_eq!(1, sql_1_vec.len());
+
+        let sql_2_vec = parser
+                                    .read_sql_from_file(concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql" , "/2.sql"))
+                                    .await.expect("fail to read query 2");
+        assert_eq!(1, sql_2_vec.len());
+
+        let executor1 = Executor::new(catalog_path, 0).await;
+        let executor2 = Executor::new(catalog_path, 1).await;
+
+        // Executors 1 and 2 execute TPC Q1
+        let res1 = executor1
+                                    .execute_sql(sql_1_vec.get(0).unwrap().as_str())
+                                    .await
+                                    .expect("failed to execute query 1");
+        let res2 = executor2
+                                    .execute_sql(sql_1_vec.get(0).unwrap().as_str())
+                                    .await
+                                    .expect("failed to execute query 1");
+
+        // Executors 1 and 2 execute TPC Q2
+        let res3 = executor1
+                                    .execute_sql(sql_2_vec.get(0).unwrap().as_str())
+                                    .await
+                                    .expect("failed to execute query 2");
+        let res4 = executor2
+                                    .execute_sql(sql_2_vec.get(0).unwrap().as_str())
+                                    .await
+                                    .expect("failed to execute query 2");
+
+
+        // different executors, same query: results should be equal
+        assert!(t.results_eq(&res1, &res2).await.unwrap());
+        assert!(t.results_eq(&res3, &res4).await.unwrap());
+
+        // different query: results should not be equal
+        assert!(!t.results_eq(&res1, &res3).await.unwrap());
+        assert!(!t.results_eq(&res2, &res4).await.unwrap());
+    }
 
     // #[tokio::test]
     // async fn test_is_result_correct_sql() {
@@ -296,7 +341,7 @@ mod tests {
 
     // #[tokio::test]
     // async fn test_generate_refsol() {
-    //     let res = generate_refsol("./test_files/select.slt").await;
+    //     let res = generate_refsol("./test_files/test_select.sql").await;
     //     assert_eq!(false, res.is_empty());
     //     eprintln!("Number of arguments is {}", res.len());
     // }

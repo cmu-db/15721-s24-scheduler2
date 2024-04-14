@@ -14,7 +14,7 @@ use sqlparser::parser::Parser;
 
 #[derive(Default)]
 pub struct ExecutionPlanParser {
-    ctx: Arc<SessionContext>,
+    pub ctx: Arc<SessionContext>,
 }
 
 impl fmt::Debug for ExecutionPlanParser {
@@ -30,15 +30,15 @@ impl ExecutionPlanParser {
         }
     }
 
-    pub async fn deserialize_physical_plan(
+    pub fn deserialize_physical_plan(
         &self,
         bytes: Vec<u8>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        physical_plan_from_bytes(bytes.as_slice(), &self.ctx.clone())
+        physical_plan_from_bytes(bytes.as_slice(), &self.ctx)
     }
 
-    pub async fn serialize_physical_plan(&self, plan: Arc<dyn ExecutionPlan>) -> Result<Vec<u8>> {
-        match physical_plan_to_bytes(plan.clone()) {
+    pub fn serialize_physical_plan(&self, plan: Arc<dyn ExecutionPlan>) -> Result<Vec<u8>> {
+        match physical_plan_to_bytes(plan) {
             Ok(plan_bytes) => Ok(Vec::from(plan_bytes)),
             Err(e) => Err(e),
         }
@@ -50,7 +50,7 @@ impl ExecutionPlanParser {
         file.read_to_string(&mut contents).await?;
 
         let dialect = GenericDialect {};
-        let ast = Parser::parse_sql(&dialect, &contents)?;
+        let ast = Parser::parse_sql(&dialect, &contents).expect("fail to parse sql");
 
         let mut statements = Vec::new();
         for stmt in ast {
@@ -83,19 +83,26 @@ impl ExecutionPlanParser {
         };
         plan.create_physical_plan().await
     }
+
+    // TODO: run the sql directly to see what happens
 }
 
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Debug;
+    use std::panic;
+    use datafusion::physical_plan::displayable;
     use datafusion_proto::bytes::physical_plan_to_bytes;
     use crate::parser::ExecutionPlanParser;
 
-    use tokio::runtime::Builder;
+    use tokio::runtime::{Builder, Runtime};
 
     fn custom_runtime() -> tokio::runtime::Runtime {
-        Builder::new_current_thread()
-            .thread_stack_size(10000 * 1024 * 1024)
+        Builder::new_multi_thread()
+            .worker_threads(4)
+            .thread_name("my-custom-name")
+            .thread_stack_size(5 * 1024 * 1024)
             .enable_all()
             .build()
             .unwrap()
@@ -112,20 +119,18 @@ mod tests {
 
             let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/4.sql");
             let res = parser.get_execution_plan_from_file(&test_file).await;
+
             assert!(res.is_ok());
             let plans = res.unwrap();
-            eprintln!("The length of the plan array is {}", plans.len());
             for plan in plans {
-                eprintln!("Trying to serialize plan {:?}", plan.clone());
-                let serialization_result = parser.serialize_physical_plan(plan.clone()).await;
+                let serialization_result = parser.serialize_physical_plan(plan.clone());
                 assert!(serialization_result.is_ok());
 
-                let original_plan = parser.deserialize_physical_plan(serialization_result.unwrap()).await;
+                let original_plan = parser.deserialize_physical_plan(serialization_result.unwrap());
                 assert!(original_plan.is_ok());
+
             }
         });
-
-
-
     }
+
 }
