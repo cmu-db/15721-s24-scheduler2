@@ -65,8 +65,8 @@ async fn main() {
     // }
 }
 
-const CONFIG_PATH: &str = "executors.toml";
-const CATALOG_PATH: &str = "./test_files/";
+const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
+const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
 
 async fn interactive_mode() {
     println!("Entering interactive mode. Type your SQL queries or 'exit' to quit:");
@@ -81,8 +81,6 @@ async fn interactive_mode() {
     tester.run_client().await;
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    println!("I am about to enter the loop");
-
     let mut input = String::new();
     loop {
         print!("sql> ");
@@ -96,8 +94,6 @@ async fn interactive_mode() {
         if trimmed_input.eq_ignore_ascii_case("exit") {
             break;
         }
-
-        println!("You entered: {}", trimmed_input);
 
         match frontend.run_sql(trimmed_input).await {
             Ok(res) => {

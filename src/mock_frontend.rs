@@ -82,7 +82,7 @@ impl MockFrontend {
                                 break;
                             }
 
-                            tokio::time::sleep(Duration::from_millis(1000)).await;
+                            tokio::time::sleep(Duration::from_millis(500)).await;
                         }
 
                         let _ = request.response.send(Ok(vec![])); // Replace vec![] with actual processing of response
