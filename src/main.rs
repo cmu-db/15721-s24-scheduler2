@@ -6,15 +6,15 @@ pub mod parser;
 pub mod project_config;
 mod query_graph;
 mod query_table;
+mod server;
 mod task;
 mod task_queue;
-mod server;
 
 use crate::integration_test::IntegrationTest;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
-use std::path::PathBuf;
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::time::Duration;
 
 pub enum SchedulerError {

@@ -1,6 +1,6 @@
-use tokio::sync::{Mutex, Notify};
-use std::collections::VecDeque;
 use crate::task::Task;
+use std::collections::VecDeque;
+use tokio::sync::{Mutex, Notify};
 
 #[derive(Debug)]
 pub struct TaskQueue {
@@ -52,14 +52,18 @@ impl TaskQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::runtime::Runtime;
-    use std::sync::Arc;
     use crate::server::composable_database::TaskId;
     use crate::task::TaskStatus;
+    use std::sync::Arc;
+    use tokio::runtime::Runtime;
 
     fn create_task(task_id: u64) -> Task {
         Task {
-            task_id: TaskId { query_id: task_id, task_id, stage_id: 0 },
+            task_id: TaskId {
+                query_id: task_id,
+                task_id,
+                stage_id: 0,
+            },
             status: TaskStatus::Ready,
         }
     }
@@ -92,12 +96,25 @@ mod tests {
 
             let queue_clone = queue.clone();
             let handle = tokio::spawn(async move {
-                assert_eq!(queue_clone.next_task().await.task_id, TaskId{ query_id: 1, task_id: 1, stage_id: 0 });
-                assert_eq!(queue_clone.next_task().await.task_id, TaskId{ query_id: 2, task_id: 2, stage_id: 0 });
+                assert_eq!(
+                    queue_clone.next_task().await.task_id,
+                    TaskId {
+                        query_id: 1,
+                        task_id: 1,
+                        stage_id: 0
+                    }
+                );
+                assert_eq!(
+                    queue_clone.next_task().await.task_id,
+                    TaskId {
+                        query_id: 2,
+                        task_id: 2,
+                        stage_id: 0
+                    }
+                );
             });
 
             handle.await.unwrap();
         });
     }
 }
-

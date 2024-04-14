@@ -1,6 +1,6 @@
-use std::ffi::OsStr;
 use datafusion::prelude::{CsvReadOptions, ParquetReadOptions, SessionContext};
 use serde::{Deserialize, Serialize};
+use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -46,15 +46,31 @@ pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
             match extension {
                 Some("csv") => {
                     let options = CsvReadOptions::new();
-                    let result = ctx.register_csv(table_name, file_path.to_str().unwrap(), options).await;
-                    assert!(result.is_ok(), "Failed to register CSV file: {:?}", file_path);
-                },
+                    let result = ctx
+                        .register_csv(table_name, file_path.to_str().unwrap(), options)
+                        .await;
+                    assert!(
+                        result.is_ok(),
+                        "Failed to register CSV file: {:?}",
+                        file_path
+                    );
+                }
                 Some("parquet") => {
                     let options = ParquetReadOptions::default();
-                    let result = ctx.register_parquet(table_name, file_path.to_str().unwrap(), options).await;
-                    eprintln!("Have registerd {}, at path {:?}", table_name, file_path.to_str().as_slice());
-                    assert!(result.is_ok(), "Failed to register Parquet file: {:?}", file_path);
-                },
+                    let result = ctx
+                        .register_parquet(table_name, file_path.to_str().unwrap(), options)
+                        .await;
+                    eprintln!(
+                        "Have registerd {}, at path {:?}",
+                        table_name,
+                        file_path.to_str().as_slice()
+                    );
+                    assert!(
+                        result.is_ok(),
+                        "Failed to register Parquet file: {:?}",
+                        file_path
+                    );
+                }
                 _ => {}
             }
         }

@@ -4,13 +4,13 @@ use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::physical_planner::PhysicalPlanner;
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
-use std::sync::Arc;
-use std::{fmt};
 use futures::TryFutureExt;
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
+use std::fmt;
+use std::sync::Arc;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 
 #[derive(Default)]
 pub struct ExecutionPlanParser {
@@ -30,10 +30,7 @@ impl ExecutionPlanParser {
         }
     }
 
-    pub fn deserialize_physical_plan(
-        &self,
-        bytes: Vec<u8>,
-    ) -> Result<Arc<dyn ExecutionPlan>> {
+    pub fn deserialize_physical_plan(&self, bytes: Vec<u8>) -> Result<Arc<dyn ExecutionPlan>> {
         physical_plan_from_bytes(bytes.as_slice(), &self.ctx)
     }
 
@@ -60,7 +57,10 @@ impl ExecutionPlanParser {
         Ok(statements)
     }
 
-    pub async fn get_execution_plan_from_file(&self, path: &str) ->  Result<Vec<Arc<dyn ExecutionPlan>>> {
+    pub async fn get_execution_plan_from_file(
+        &self,
+        path: &str,
+    ) -> Result<Vec<Arc<dyn ExecutionPlan>>> {
         let sql_statements = self.read_sql_from_file(path).await?;
         let mut plans = Vec::new();
         for stmt in sql_statements {
@@ -87,14 +87,13 @@ impl ExecutionPlanParser {
     // TODO: run the sql directly to see what happens
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::fmt::Debug;
-    use std::panic;
+    use crate::parser::ExecutionPlanParser;
     use datafusion::physical_plan::displayable;
     use datafusion_proto::bytes::physical_plan_to_bytes;
-    use crate::parser::ExecutionPlanParser;
+    use std::fmt::Debug;
+    use std::panic;
 
     use tokio::runtime::{Builder, Runtime};
 
@@ -110,7 +109,6 @@ mod tests {
 
     #[test]
     fn test_serialize_deserialize_physical_plan() {
-
         let runtime = custom_runtime();
 
         runtime.block_on(async {
@@ -128,9 +126,7 @@ mod tests {
 
                 let original_plan = parser.deserialize_physical_plan(serialization_result.unwrap());
                 assert!(original_plan.is_ok());
-
             }
         });
     }
-
 }

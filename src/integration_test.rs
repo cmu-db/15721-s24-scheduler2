@@ -1,19 +1,19 @@
+use crate::executor::Executor;
+use crate::mock_frontend::MockFrontend;
+use crate::project_config::Config;
+use crate::project_config::{load_catalog, read_config};
 use crate::server::composable_database::scheduler_api_server::SchedulerApiServer;
 use crate::server::composable_database::TaskId;
 use crate::server::SchedulerService;
-use crate::executor::Executor;
-use crate::mock_frontend::MockFrontend;
-use crate::project_config::{load_catalog, read_config};
-use crate::project_config::Config;
-use datafusion::prelude::{SessionContext};
+use datafusion::arrow::array::RecordBatch;
+use datafusion::error::DataFusionError;
+use datafusion::logical_expr::{col, Expr};
+use datafusion::prelude::SessionContext;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use datafusion::arrow::array::RecordBatch;
 use tokio::time::Instant;
-use tonic::transport::{Server};
-use datafusion::error::DataFusionError;
-use datafusion::logical_expr::{col, Expr};
+use tonic::transport::Server;
 
 /**
 This gRPC facilitates communication between executors and the scheduler:
@@ -97,7 +97,6 @@ impl IntegrationTest {
         });
     }
     pub async fn run_client(&self) {
-
         let start = Instant::now(); // Start timing
         let scheduler_addr = format!(
             "{}:{}",
@@ -109,9 +108,7 @@ impl IntegrationTest {
             let mut mock_executor = Executor::new("./test_files/", executor.id).await;
             let scheduler_addr_copy = scheduler_addr.clone();
             tokio::spawn(async move {
-                mock_executor
-                    .connect(&scheduler_addr_copy)
-                    .await;
+                mock_executor.connect(&scheduler_addr_copy).await;
             });
         }
         let end = Instant::now();
@@ -134,17 +131,23 @@ impl IntegrationTest {
         frontend
     }
 
-    async fn sort_batch_by_all_columns(&self, batch: RecordBatch) -> Result<RecordBatch, DataFusionError> {
-
+    async fn sort_batch_by_all_columns(
+        &self,
+        batch: RecordBatch,
+    ) -> Result<RecordBatch, DataFusionError> {
         let df = self.ctx.read_batch(batch)?;
 
         // Get the list of column names from the schema
-        let column_names: Vec<String> = df.schema().fields().iter()
+        let column_names: Vec<String> = df
+            .schema()
+            .fields()
+            .iter()
             .map(|field| field.name().clone())
             .collect();
 
         // Create a vector of sort expressions based on the column names
-        let sort_exprs: Vec<Expr> = column_names.iter()
+        let sort_exprs: Vec<Expr> = column_names
+            .iter()
             .map(|name| col(name).sort(true, true))
             .collect();
 
@@ -158,7 +161,11 @@ impl IntegrationTest {
     // Compares if two result sets are equal
     // Two record batches are equal if they have the same set of elements, and the ordering does
     // not matter
-    async fn is_batch_equal(&self, res1: RecordBatch, res2: RecordBatch) -> Result<bool, DataFusionError> {
+    async fn is_batch_equal(
+        &self,
+        res1: RecordBatch,
+        res2: RecordBatch,
+    ) -> Result<bool, DataFusionError> {
         if res1.schema() != res2.schema() {
             return Ok(false);
         }
@@ -173,7 +180,11 @@ impl IntegrationTest {
 
         Ok(sorted_batch1 == sorted_batch2)
     }
-    pub async fn results_eq(&self, res1: &Vec<RecordBatch>, res2: &Vec<RecordBatch>) -> Result<bool, DataFusionError> {
+    pub async fn results_eq(
+        &self,
+        res1: &Vec<RecordBatch>,
+        res2: &Vec<RecordBatch>,
+    ) -> Result<bool, DataFusionError> {
         if res1.len() != res2.len() {
             return Ok(false);
         }
@@ -191,12 +202,12 @@ impl IntegrationTest {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use datafusion::arrow::array::{Int32Array, RecordBatch};
-    use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use crate::executor::Executor;
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
+    use datafusion::arrow::array::{Int32Array, RecordBatch};
+    use datafusion::arrow::datatypes::{DataType, Field, Schema};
+    use std::sync::Arc;
 
     async fn initialize_integration_test() -> IntegrationTest {
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
@@ -206,7 +217,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_results_eq_basic() {
-
         let t = initialize_integration_test().await;
 
         // Handcraft a record batch
@@ -219,37 +229,44 @@ mod tests {
         let schema_2 = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
         let batch_2 = RecordBatch::try_new(Arc::new(schema_2), vec![Arc::new(id_array_2)]).unwrap();
 
-
         // Construct a third record batch that does not equal
         let id_array_3 = Int32Array::from(vec![1, 6, 3, 2, 4]);
         let schema_3 = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
         let batch_3 = RecordBatch::try_new(Arc::new(schema_3), vec![Arc::new(id_array_3)]).unwrap();
 
-        assert_eq!(true, t.results_eq(&vec![batch.clone()], &vec![batch_2.clone()]).await.unwrap());
-        assert_eq!(false, t.results_eq(&vec![batch_2.clone()], &vec![batch_3.clone()]).await.unwrap());
+        assert_eq!(
+            true,
+            t.results_eq(&vec![batch.clone()], &vec![batch_2.clone()])
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            false,
+            t.results_eq(&vec![batch_2.clone()], &vec![batch_3.clone()])
+                .await
+                .unwrap()
+        );
     }
-
 
     #[tokio::test]
     async fn test_results_eq() {
-
         let t = initialize_integration_test().await;
 
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
-
 
         let parser = ExecutionPlanParser::new(catalog_path).await;
 
         // paths to two sql queries
         let sql_1_vec = parser
-                                    .read_sql_from_file(concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql" , "/1.sql"))
-                                    .await
-                                    .expect("fail to read query 1");
+            .read_sql_from_file(concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/1.sql"))
+            .await
+            .expect("fail to read query 1");
         assert_eq!(1, sql_1_vec.len());
 
         let sql_2_vec = parser
-                                    .read_sql_from_file(concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql" , "/2.sql"))
-                                    .await.expect("fail to read query 2");
+            .read_sql_from_file(concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/2.sql"))
+            .await
+            .expect("fail to read query 2");
         assert_eq!(1, sql_2_vec.len());
 
         let executor1 = Executor::new(catalog_path, 0).await;
@@ -257,24 +274,23 @@ mod tests {
 
         // Executors 1 and 2 execute TPC Q1
         let res1 = executor1
-                                    .execute_sql(sql_1_vec.get(0).unwrap().as_str())
-                                    .await
-                                    .expect("failed to execute query 1");
+            .execute_sql(sql_1_vec.get(0).unwrap().as_str())
+            .await
+            .expect("failed to execute query 1");
         let res2 = executor2
-                                    .execute_sql(sql_1_vec.get(0).unwrap().as_str())
-                                    .await
-                                    .expect("failed to execute query 1");
+            .execute_sql(sql_1_vec.get(0).unwrap().as_str())
+            .await
+            .expect("failed to execute query 1");
 
         // Executors 1 and 2 execute TPC Q2
         let res3 = executor1
-                                    .execute_sql(sql_2_vec.get(0).unwrap().as_str())
-                                    .await
-                                    .expect("failed to execute query 2");
+            .execute_sql(sql_2_vec.get(0).unwrap().as_str())
+            .await
+            .expect("failed to execute query 2");
         let res4 = executor2
-                                    .execute_sql(sql_2_vec.get(0).unwrap().as_str())
-                                    .await
-                                    .expect("failed to execute query 2");
-
+            .execute_sql(sql_2_vec.get(0).unwrap().as_str())
+            .await
+            .expect("failed to execute query 2");
 
         // different executors, same query: results should be equal
         assert!(t.results_eq(&res1, &res2).await.unwrap());
