@@ -10,15 +10,15 @@ mod server;
 mod task;
 mod task_queue;
 
+use crate::executor::Executor;
 use crate::integration_test::IntegrationTest;
 use crate::parser::ExecutionPlanParser;
 use clap::{App, Arg, SubCommand};
+use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
-use datafusion::arrow::array::RecordBatch;
-use crate::executor::Executor;
 
 pub enum SchedulerError {
     Error(String),
@@ -113,11 +113,12 @@ async fn interactive_mode() {
 async fn generate_reference_results(file_path: &str) -> Vec<RecordBatch> {
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
     let reference_executor = Executor::new(CATALOG_PATH, -1).await;
-    let sql_statements = parser.read_sql_from_file(&file_path).await.unwrap_or_else(
-        |err| {
+    let sql_statements = parser
+        .read_sql_from_file(&file_path)
+        .await
+        .unwrap_or_else(|err| {
             panic!("Unable to parse file {}: {:?}", file_path, err);
-        }
-    );
+        });
 
     // Caches the correct results for each sql query
     let mut results: Vec<RecordBatch> = Vec::new();
@@ -135,13 +136,16 @@ async fn generate_reference_results(file_path: &str) -> Vec<RecordBatch> {
         if record_batches.len() == 1 {
             results.push(record_batches[0].clone());
         } else {
-            panic!("The SQL statement '{}' should only contain one RecordBatch, found {}", sql, record_batches.len());
+            panic!(
+                "The SQL statement '{}' should only contain one RecordBatch, found {}",
+                sql,
+                record_batches.len()
+            );
         }
     }
 
     results
 }
-
 
 async fn file_mode(file_path: String) {
     println!("Executing tests from file: {:?}", file_path);
@@ -160,12 +164,12 @@ async fn file_mode(file_path: String) {
 
     let reference_executor = Executor::new(&CATALOG_PATH, -1).await;
 
-
-    let sql_statements = parser.read_sql_from_file(&file_path).await.unwrap_or_else(
-        |err| {
+    let sql_statements = parser
+        .read_sql_from_file(&file_path)
+        .await
+        .unwrap_or_else(|err| {
             panic!("Unable to parse file {}: {:?}", file_path, err);
-        }
-    );
+        });
 
     // Caches the correct results for each sql query
     let mut results: Vec<RecordBatch> = Vec::new();
@@ -183,10 +187,13 @@ async fn file_mode(file_path: String) {
         if record_batches.len() == 1 {
             results.push(record_batches[0].clone());
         } else {
-            panic!("The SQL statement '{}' should only contain one RecordBatch, found {}", sql, record_batches.len());
+            panic!(
+                "The SQL statement '{}' should only contain one RecordBatch, found {}",
+                sql,
+                record_batches.len()
+            );
         }
     }
-
 
     let mut input = String::new();
     loop {
@@ -216,7 +223,7 @@ async fn file_mode(file_path: String) {
 
 #[cfg(test)]
 mod tests {
-    use crate::{generate_reference_results};
+    use crate::generate_reference_results;
 
     #[tokio::test]
     async fn test_generate_reference_results() {
@@ -226,10 +233,4 @@ mod tests {
         // 1 since each TPC-H query only contains 1 result set
         assert_eq!(1, results.len());
     }
-
-
 }
-
-
-
-

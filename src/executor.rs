@@ -195,5 +195,4 @@ mod tests {
         assert_eq!(batches[0].num_columns(), 2);
         assert_eq!(batches[0].num_rows(), 2);
     }
-
 }
