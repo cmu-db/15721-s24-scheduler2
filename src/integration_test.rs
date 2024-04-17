@@ -63,7 +63,14 @@ specified in a config file located in the project root directory. In production
 systems, these addresses would typically be retrieved from a catalog. This section'
 is responsible for parsing the config file.*/
 
+const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
+const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
+
+
 impl IntegrationTest {
+
+
+
     // Given the paths to the catalog (containing all db files) and a path to the config file,
     // create a new instance of IntegrationTester
     pub async fn new(catalog_path: String, config_path: String) -> Self {
@@ -105,7 +112,7 @@ impl IntegrationTest {
         // Start executor clients
         for executor in &self.config.executors {
             // Clone the scheduler_addr for each executor client
-            let mut mock_executor = Executor::new("./test_files/", executor.id).await;
+            let mut mock_executor = Executor::new(CATALOG_PATH, executor.id).await;
             let scheduler_addr_copy = scheduler_addr.clone();
             tokio::spawn(async move {
                 mock_executor.connect(&scheduler_addr_copy).await;

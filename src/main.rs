@@ -16,6 +16,7 @@ use datafusion::error::DataFusionError;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
+use crate::parser::ExecutionPlanParser;
 
 pub enum SchedulerError {
     Error(String),
@@ -107,14 +108,48 @@ async fn interactive_mode() {
     }
 }
 
-async fn file_mode(file_path: PathBuf) {
+async fn file_mode(file_path: String) {
     println!("Executing tests from file: {:?}", file_path);
 
     let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
     tester.run_server().await;
-    tester.run_client().await;
-    let frontend = tester.run_frontend().await;
+    tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    // let sql_statements: Vec<Record<DFColumnType>> =
-    //     sqllogictest::parse_file(file_path).expect("failed to parse file");
+    let frontend = tester.run_frontend().await;
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
+    tester.run_client().await;
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
+    let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+    //parser.get_execution_plan_from_file()
+
+    
+
+    let mut input = String::new();
+    loop {
+        print!("sql> ");
+        io::stdout().flush().unwrap(); // flush the prompt
+        input.clear();
+        io::stdin().read_line(&mut input).unwrap();
+
+        let trimmed_input = input.trim();
+
+        // exit the loop if the user types 'exit'
+        if trimmed_input.eq_ignore_ascii_case("exit") {
+            break;
+        }
+
+
+
+        match frontend.run_sql(trimmed_input).await {
+            Ok(res) => {
+                println!("Result: {:?}", res);
+            }
+
+            Err(e) => {
+                println!("Error in running query: {}", e);
+            }
+        }
+    }
 }
