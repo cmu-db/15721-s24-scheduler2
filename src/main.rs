@@ -162,7 +162,10 @@ async fn file_mode(file_path: String) {
 
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
-    println!("Generating reference result sets from file: {:?}", file_path);
+    println!(
+        "Generating reference result sets from file: {:?}",
+        file_path
+    );
     let reference_result_sets = generate_reference_results(&file_path).await;
 
     let sql_statements = parser
@@ -175,14 +178,14 @@ async fn file_mode(file_path: String) {
     for sql in sql_statements {
         println!("Running query: {}", sql);
         match frontend.run_sql(&sql).await {
-        Ok(res) => {
-            println!("Result: {:?}", res);
-        }
+            Ok(res) => {
+                println!("Result: {:?}", res);
+            }
 
-        Err(e) => {
-            println!("Error in running query: {}", e);
+            Err(e) => {
+                println!("Error in running query: {}", e);
+            }
         }
-    }
     }
 }
 
@@ -198,5 +201,4 @@ mod tests {
         // 1 since each TPC-H query only contains 1 result set
         assert_eq!(1, results.len());
     }
-
 }

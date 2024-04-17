@@ -78,7 +78,7 @@ impl Executor {
                             },
                             result,
                         )
-                            .await;
+                        .await;
                     }
                 }
             }
@@ -109,7 +109,7 @@ impl Executor {
                 task_id: HANDSHAKE_TASK_ID,
             }),
             success: true,
-            result_url: "".to_string()
+            result_url: "".to_string(),
         });
 
         match client.notify_task_state(handshake_req).await {
