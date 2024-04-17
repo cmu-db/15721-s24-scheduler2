@@ -89,7 +89,7 @@ impl ExecutionPlanParser {
 mod tests {
     use crate::parser::ExecutionPlanParser;
     use std::fmt::Debug;
-    use tokio::runtime::{Builder};
+    use tokio::runtime::Builder;
 
     const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
 
@@ -129,7 +129,8 @@ mod tests {
                         let serialization_result = parser.serialize_physical_plan(plan.clone());
                         assert!(serialization_result.is_ok());
 
-                        let original_plan = parser.deserialize_physical_plan(serialization_result.unwrap());
+                        let original_plan =
+                            parser.deserialize_physical_plan(serialization_result.unwrap());
                         assert!(original_plan.is_ok());
                     }
                 }
@@ -137,27 +138,44 @@ mod tests {
         });
     }
 
-
     #[tokio::test]
     async fn read_sql_from_file() {
         let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/test_select.sql");
-        let sql_vec = parser.read_sql_from_file(test_file).await.expect("fail to read test select statement");
+        let sql_vec = parser
+            .read_sql_from_file(test_file)
+            .await
+            .expect("fail to read test select statement");
         assert_eq!(1, sql_vec.len());
         const CORRECT_SQL: &str = r"SELECT * FROM mock_executor_test_table";
-        assert_eq!(CORRECT_SQL, sql_vec.get(0).expect("fail to get test select statement"));
+        assert_eq!(
+            CORRECT_SQL,
+            sql_vec.get(0).expect("fail to get test select statement")
+        );
     }
 
     #[tokio::test]
     async fn read_sql_from_file_multiple_statement() {
         let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
-        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/test_select_multiple.sql");
-        let sql_vec = parser.read_sql_from_file(test_file).await.expect("fail to read test select statement");
+        let test_file = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/test_sql",
+            "/test_select_multiple.sql"
+        );
+        let sql_vec = parser
+            .read_sql_from_file(test_file)
+            .await
+            .expect("fail to read test select statement");
         assert_eq!(2, sql_vec.len());
         const CORRECT_SQL_1: &str = r"SELECT * FROM mock_executor_test_table";
-        assert_eq!(CORRECT_SQL_1, sql_vec.get(0).expect("fail to get test select statement"));
+        assert_eq!(
+            CORRECT_SQL_1,
+            sql_vec.get(0).expect("fail to get test select statement")
+        );
         const CORRECT_SQL_2: &str = r"SELECT * FROM customer LIMIT 2";
-        assert_eq!(CORRECT_SQL_2, sql_vec.get(1).expect("fail to get test select statement"));
+        assert_eq!(
+            CORRECT_SQL_2,
+            sql_vec.get(1).expect("fail to get test select statement")
+        );
     }
-
 }

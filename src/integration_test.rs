@@ -66,11 +66,7 @@ is responsible for parsing the config file.*/
 const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
 const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
 
-
 impl IntegrationTest {
-
-
-
     // Given the paths to the catalog (containing all db files) and a path to the config file,
     // create a new instance of IntegrationTester
     pub async fn new(catalog_path: String, config_path: String) -> Self {

@@ -11,12 +11,12 @@ mod task;
 mod task_queue;
 
 use crate::integration_test::IntegrationTest;
+use crate::parser::ExecutionPlanParser;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
-use crate::parser::ExecutionPlanParser;
 
 pub enum SchedulerError {
     Error(String),
@@ -123,9 +123,6 @@ async fn file_mode(file_path: String) {
 
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
-
-    
-
     let mut input = String::new();
     loop {
         print!("sql> ");
@@ -139,8 +136,6 @@ async fn file_mode(file_path: String) {
         if trimmed_input.eq_ignore_ascii_case("exit") {
             break;
         }
-
-
 
         match frontend.run_sql(trimmed_input).await {
             Ok(res) => {
