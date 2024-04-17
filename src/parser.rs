@@ -108,22 +108,35 @@ mod tests {
         let runtime = custom_runtime();
 
         runtime.block_on(async {
+            // Define the base path for the catalog and test SQL files
+            let tests_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql");
+
+            // Create an ExecutionPlanParser instance
             let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
-            let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/4.sql");
-            let res = parser.get_execution_plan_from_file(&test_file).await;
+            let paths = std::fs::read_dir(tests_path).unwrap();
 
-            assert!(res.is_ok());
-            let plans = res.unwrap();
-            for plan in plans {
-                let serialization_result = parser.serialize_physical_plan(plan.clone());
-                assert!(serialization_result.is_ok());
+            for path in paths {
+                let path = path.unwrap().path();
+                // Check if the file is a .sql file
+                if path.extension().and_then(std::ffi::OsStr::to_str) == Some("sql") {
+                    let test_file = path.to_str().unwrap();
+                    let res = parser.get_execution_plan_from_file(test_file).await;
+                    assert!(res.is_ok());
 
-                let original_plan = parser.deserialize_physical_plan(serialization_result.unwrap());
-                assert!(original_plan.is_ok());
+                    let plans = res.unwrap();
+                    for plan in plans {
+                        let serialization_result = parser.serialize_physical_plan(plan.clone());
+                        assert!(serialization_result.is_ok());
+
+                        let original_plan = parser.deserialize_physical_plan(serialization_result.unwrap());
+                        assert!(original_plan.is_ok());
+                    }
+                }
             }
         });
     }
+
 
     #[tokio::test]
     async fn read_sql_from_file() {
@@ -146,4 +159,5 @@ mod tests {
         const CORRECT_SQL_2: &str = r"SELECT * FROM customer LIMIT 2";
         assert_eq!(CORRECT_SQL_2, sql_vec.get(1).expect("fail to get test select statement"));
     }
+
 }
