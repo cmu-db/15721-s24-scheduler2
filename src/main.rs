@@ -122,7 +122,7 @@ async fn file_mode(file_path: String) {
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
-    //parser.get_execution_plan_from_file()
+
 
     
 
