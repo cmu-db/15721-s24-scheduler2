@@ -22,14 +22,14 @@ enum QueryStatus {
 message NotifyTaskStateArgs {
     TaskID task = 1;
     bool success = 2; // if the query succeeded
-    bytes result = 3; // bytes for the result
+    string result_url = 3; // URL for the result
 }
 
 message NotifyTaskStateRet {
     bool has_new_task = 1; // true if there is a new task (details given below)
     
     // true if this is the last task in the query and the executor should send back results upon completion
-    bool should_send_results = 4;
+    bool is_final_stage = 4;
     TaskID task = 2;
     bytes physical_plan = 3;
 }

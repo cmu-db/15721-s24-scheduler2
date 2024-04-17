@@ -57,28 +57,37 @@ impl Executor {
 
             let execution_result = self.execute(plan).await;
             let execution_success = execution_result.is_ok();
-
             println!("Finish executing, status {}", execution_success);
 
             if execution_success {
                 let result = execution_result.unwrap();
 
                 let cur_task_inner = cur_task.task.clone().unwrap();
-                insert_results(
-                    TaskKey {
-                        stage_id: cur_task_inner.stage_id,
-                        query_id: cur_task_inner.query_id,
-                    },
-                    result,
-                )
-                .await;
+
+                match cur_task.is_final_stage {
+                    true => {
+                        // TODO: write final results to disk, generate random UUID as filename
+                    }
+
+                    false => {
+                        // insert intermediate results into intermediate result hashmap
+                        insert_results(
+                            TaskKey {
+                                stage_id: cur_task_inner.stage_id,
+                                query_id: cur_task_inner.query_id,
+                            },
+                            result,
+                        )
+                            .await;
+                    }
+                }
             }
 
             cur_task = self
                 .get_next_task(NotifyTaskStateArgs {
                     task: cur_task.task.clone(),
                     success: execution_success,
-                    result: Vec::new(),
+                    result_url: "".to_string(),
                 })
                 .await;
         }
@@ -100,7 +109,7 @@ impl Executor {
                 task_id: HANDSHAKE_TASK_ID,
             }),
             success: true,
-            result: Vec::new(),
+            result_url: "".to_string()
         });
 
         match client.notify_task_state(handshake_req).await {

@@ -187,7 +187,7 @@ impl SchedulerApi for SchedulerService {
         let NotifyTaskStateArgs {
             task,      // TODO: We should use `None` to indicate the handshake task.
             success,   // TODO: Switch to status enum.
-            result: _, // TODO: Remove this field from the proto, replace with pointer.
+            result_url: _, // TODO: Remove this field from the proto, replace with pointer.
         } = request.into_inner();
 
         if !success {
@@ -219,7 +219,7 @@ impl SchedulerApi for SchedulerService {
 
             let response = NotifyTaskStateRet {
                 has_new_task: true,
-                should_send_results: false,
+                is_final_stage: false,
                 task: Some(TaskId {
                     query_id: task.task_id.query_id,
                     stage_id: task.task_id.stage_id,

@@ -162,7 +162,8 @@ async fn file_mode(file_path: String) {
 
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
-    let reference_executor = Executor::new(&CATALOG_PATH, -1).await;
+    println!("Generating reference result sets from file: {:?}", file_path);
+    let reference_result_sets = generate_reference_results(&file_path).await;
 
     let sql_statements = parser
         .read_sql_from_file(&file_path)
@@ -171,53 +172,17 @@ async fn file_mode(file_path: String) {
             panic!("Unable to parse file {}: {:?}", file_path, err);
         });
 
-    // Caches the correct results for each sql query
-    let mut results: Vec<RecordBatch> = Vec::new();
-
-    // Execute each SQL statement
     for sql in sql_statements {
-        let execution_result = reference_executor.execute_sql(&sql).await;
+        println!("Running query: {}", sql);
+        match frontend.run_sql(&sql).await {
+        Ok(res) => {
+            println!("Result: {:?}", res);
+        }
 
-        // Check for errors in execution
-        let record_batches = execution_result.unwrap_or_else(|err| {
-            panic!("Error executing SQL '{}': {:?}", sql, err);
-        });
-
-        // Ensure there's exactly one RecordBatch
-        if record_batches.len() == 1 {
-            results.push(record_batches[0].clone());
-        } else {
-            panic!(
-                "The SQL statement '{}' should only contain one RecordBatch, found {}",
-                sql,
-                record_batches.len()
-            );
+        Err(e) => {
+            println!("Error in running query: {}", e);
         }
     }
-
-    let mut input = String::new();
-    loop {
-        print!("sql> ");
-        io::stdout().flush().unwrap(); // flush the prompt
-        input.clear();
-        io::stdin().read_line(&mut input).unwrap();
-
-        let trimmed_input = input.trim();
-
-        // exit the loop if the user types 'exit'
-        if trimmed_input.eq_ignore_ascii_case("exit") {
-            break;
-        }
-
-        match frontend.run_sql(trimmed_input).await {
-            Ok(res) => {
-                println!("Result: {:?}", res);
-            }
-
-            Err(e) => {
-                println!("Error in running query: {}", e);
-            }
-        }
     }
 }
 
@@ -233,4 +198,5 @@ mod tests {
         // 1 since each TPC-H query only contains 1 result set
         assert_eq!(1, results.len());
     }
+
 }
