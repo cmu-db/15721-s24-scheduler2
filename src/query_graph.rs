@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 
+use crate::query_graph::StageStatus::NotStarted;
+use crate::server::composable_database::TaskId;
+use crate::task::TaskStatus::Ready;
 use crate::task::{Task, TaskStatus};
-use std::collections::HashSet;
-use std::ops::DerefMut;
+use crate::task_queue::TaskQueue;
 use datafusion::arrow::datatypes::Schema;
 use datafusion::physical_plan::aggregates::AggregateExec;
 use datafusion::physical_plan::limit::GlobalLimitExec;
@@ -10,12 +12,11 @@ use datafusion::physical_plan::placeholder_row::PlaceholderRowExec;
 use datafusion::physical_plan::sorts::sort::SortExec;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::ops::DerefMut;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{mem, sync::Arc};
-use tokio::sync::RwLock;
-use crate::server::composable_database::TaskId;
-use crate::query_graph::StageStatus::NotStarted;
-use crate::task::TaskStatus::Ready;
+use tokio::sync::{Mutex, RwLock};
 
 // TODO Change to Waiting, Ready, Running(vec[taskid]), Finished(vec[locations?])
 #[derive(Clone, Debug, Default)]
@@ -40,7 +41,10 @@ pub struct QueryGraph {
     tid_counter: AtomicU64, // TODO: add mutex to stages and make elements pointers to avoid copying
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
-    frontier: tokio::sync::RwLock<Vec<Task>>,
+    task_queue: Arc<TaskQueue>, // Ready tasks in this graph
+    finished_time: u64,     // millis
+    rts_total: u64,         // millis
+    running_tasks: Arc<HashMap<u64, Task>>,
 }
 
 impl QueryGraph {
@@ -50,6 +54,7 @@ impl QueryGraph {
 
         let tid_counter = AtomicU64::new(0);
         let id = tid_counter.fetch_add(1, Ordering::SeqCst);
+        // for now, create single task
         let task = Task {
             task_id: TaskId {
                 task_id: id,
@@ -58,14 +63,23 @@ impl QueryGraph {
             },
             status: Ready,
         };
+        let mut queue = TaskQueue::new();
+        queue.add_tasks(vec![task]);
         Self {
             query_id,
             done: false,
             plan: plan.clone(),
             tid_counter,
-            stages: vec![QueryStage{plan: plan.clone(), status: NotStarted, outputs: Vec::new(), inputs: Vec::new()}],
-            // stages,
-            frontier: RwLock::new(vec![task]),
+            stages: vec![QueryStage {
+                plan: plan.clone(),
+                status: NotStarted,
+                outputs: Vec::new(),
+                inputs: Vec::new(),
+            }],
+            task_queue: Arc::new(queue),
+            finished_time: 0,
+            rts_total: 0,
+            running_tasks: Arc::new(HashMap::new()),
         }
     }
 
@@ -77,12 +91,12 @@ impl QueryGraph {
         self.tid_counter.fetch_add(1, Ordering::SeqCst)
     }
 
-    // Atomically clear frontier vector and return old frontier.
-    pub async fn get_frontier(&self) -> Vec<Task> {
-        let f = self.frontier.write();
-        let mut old_frontier = Vec::new();
-        mem::swap(f.await.deref_mut(), &mut old_frontier);
-        old_frontier
+    pub async fn next_task(&self) -> Task {
+        self.task_queue.next_task().await
+    }
+
+    pub fn num_running(&self) -> u64 {
+        self.running_tasks.len() as u64
     }
 
     pub async fn update_stage_status(
@@ -113,18 +127,18 @@ impl QueryGraph {
                         if let Some(output_stage) = self.stages.get_mut(*output_stage_id as usize) {
                             // output_stage.inputs.remove(&stage_id);
 
-                            // Add output stage to frontier if its input size is zero
+                            // Add output stage to queue if its input size is zero
                             if output_stage.inputs.len() == 0 {
                                 output_stage.status = StageStatus::Running(0); // TODO: "ready stage status?"
                                 let new_output_task = Task {
-                                    task_id: TaskId{
+                                    task_id: TaskId {
                                         query_id: self.query_id,
                                         task_id: *output_stage_id,
-                                        stage_id: *output_stage_id
+                                        stage_id: *output_stage_id,
                                     },
                                     status: TaskStatus::Ready,
                                 };
-                                self.frontier.write().await.push(new_output_task);
+                                self.task_queue.add_tasks(vec![new_output_task]);
                             }
                         } else {
                             return Err("Output stage not found.");
@@ -207,7 +221,10 @@ impl GraphBuilder {
         let root_plan = self.parse_plan(plan, root);
         self.pipelines[root].set_plan(root_plan);
 
-        self.pipelines.iter().map(|stage| stage.clone().into()).collect()
+        self.pipelines
+            .iter()
+            .map(|stage| stage.clone().into())
+            .collect()
     }
 
     fn parse_plan(

@@ -1,10 +1,10 @@
+use crate::executor::Executor;
+use crate::mock_frontend::MockFrontend;
+use crate::project_config::Config;
+use crate::project_config::{load_catalog, read_config};
 use crate::server::composable_database::scheduler_api_server::SchedulerApiServer;
 use crate::server::composable_database::TaskId;
 use crate::server::SchedulerService;
-use crate::executor::Executor;
-use crate::mock_frontend::MockFrontend;
-use crate::project_config::{load_catalog, read_config};
-use crate::project_config::Config;
 use datafusion::prelude::{CsvReadOptions, SessionContext};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -94,7 +94,6 @@ impl IntegrationTest {
         });
     }
     pub async fn run_client(&self) {
-
         let start = Instant::now(); // Start timing
         let scheduler_addr = format!(
             "{}:{}",
@@ -106,9 +105,7 @@ impl IntegrationTest {
             let mut mock_executor = Executor::new("./test_files/", executor.id).await;
             let scheduler_addr_copy = scheduler_addr.clone();
             tokio::spawn(async move {
-                mock_executor
-                    .connect(&scheduler_addr_copy)
-                    .await;
+                mock_executor.connect(&scheduler_addr_copy).await;
             });
         }
         let end = Instant::now();

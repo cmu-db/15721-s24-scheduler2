@@ -5,15 +5,15 @@ use datafusion::physical_plan::ExecutionPlan;
 use std::sync::Arc;
 use std::thread::sleep;
 use tokio::sync::{mpsc, oneshot};
-use tonic::transport::Channel;
 use tokio::time::{self, Duration};
+use tonic::transport::Channel;
 
 use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
 
 use crate::parser::Parser;
-use datafusion::error::Result;
 use crate::server::composable_database::QueryJobStatusArgs;
 use crate::server::composable_database::QueryStatus;
+use datafusion::error::Result;
 
 pub struct MockFrontend {
     parser: Parser,
@@ -37,7 +37,9 @@ impl MockFrontend {
         //     .await
         //     .expect("Failed to connect to scheduler");
 
-        let mut client = SchedulerApiClient::connect("http://0.0.0.0:15721").await.expect("Fail to connect to scheduler");
+        let mut client = SchedulerApiClient::connect("http://0.0.0.0:15721")
+            .await
+            .expect("Fail to connect to scheduler");
 
         let (sender, mut receiver) = mpsc::channel::<SqlExecutionRequest>(32);
 
@@ -64,17 +66,21 @@ impl MockFrontend {
                 // TODO: how does the scheduler store the query and return the result?
                 match client.schedule_query(schedule_query_request).await {
                     Ok(response) => {
-
                         let query_id = response.into_inner().query_id;
-                        println!("FrontEnd: Got response from scheduler, query id is {}", query_id);
-
+                        println!(
+                            "FrontEnd: Got response from scheduler, query id is {}",
+                            query_id
+                        );
 
                         loop {
-
-                            let status = client.query_job_status(tonic::Request::new(QueryJobStatusArgs{ query_id }))
+                            let status = client
+                                .query_job_status(tonic::Request::new(QueryJobStatusArgs {
+                                    query_id,
+                                }))
                                 .await
                                 .expect("invalid query job status response")
-                                .into_inner().query_status;
+                                .into_inner()
+                                .query_status;
 
                             println!("Status of current query is {:?}", status);
 

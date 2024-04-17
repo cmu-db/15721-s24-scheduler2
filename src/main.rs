@@ -6,9 +6,10 @@ pub mod parser;
 pub mod project_config;
 mod query_graph;
 mod query_table;
+mod server;
 mod task;
 mod task_queue;
-mod server;
+mod queue;
 
 use crate::integration_test::IntegrationTest;
 use clap::{App, Arg, SubCommand};

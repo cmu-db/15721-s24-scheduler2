@@ -1,5 +1,5 @@
-use crate::server::composable_database::QueryStatus;
 use crate::query_graph::{QueryGraph, StageStatus};
+use crate::server::composable_database::QueryStatus;
 use crate::task::Task;
 use crate::SchedulerError;
 use datafusion_proto::bytes::physical_plan_to_bytes;

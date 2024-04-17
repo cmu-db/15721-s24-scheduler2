@@ -1,6 +1,6 @@
-use tokio::sync::{Mutex, Notify};
-use std::collections::VecDeque;
 use crate::task::Task;
+use std::collections::VecDeque;
+use tokio::sync::{Mutex, Notify};
 
 #[derive(Debug)]
 pub struct TaskQueue {
@@ -20,11 +20,8 @@ impl TaskQueue {
         self.queue.lock().await.len()
     }
 
-    pub async fn add_tasks(&self, tasks: Vec<Task>) -> bool {
+    pub async fn add_tasks(&self, tasks: Vec<Task>) {
         let task_count = tasks.len();
-        if task_count == 0 {
-            return false;
-        }
 
         let mut queue = self.queue.lock().await;
         queue.extend(tasks);
@@ -34,8 +31,6 @@ impl TaskQueue {
         } else {
             self.avail.notify_waiters();
         }
-
-        true
     }
 
     pub async fn next_task(&self) -> Task {

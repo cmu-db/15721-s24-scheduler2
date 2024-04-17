@@ -1,10 +1,11 @@
 use crate::server::composable_database::TaskId;
+use std::time::SystemTime;
 
 #[derive(Debug)]
 pub enum TaskStatus {
     Waiting,
     Ready,
-    Running(u32), // ID of executor running this task
+    Running(SystemTime), // ID of executor running this task
     Finished,
     Failed,
     Aborted,
@@ -13,5 +14,5 @@ pub enum TaskStatus {
 #[derive(Debug)]
 pub struct Task {
     pub(crate) task_id: TaskId,
-    pub(crate) status: TaskStatus,
+    pub(crate) status: TaskStatus, // TODO: unused?
 }
