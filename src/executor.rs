@@ -16,13 +16,11 @@ const HANDSHAKE_QUERY_ID: u64 = u64::MAX;
 const HANDSHAKE_TASK_ID: u64 = u64::MAX;
 const HANDSHAKE_STAGE_ID: u64 = u64::MAX;
 
-
 pub struct Executor {
     id: i32,
     ctx: SessionContext,
     scheduler: Option<SchedulerApiClient<Channel>>, // api client for the scheduler
 }
-
 
 // TODO: Clean up gRPC calling code.
 impl Executor {
@@ -60,16 +58,16 @@ impl Executor {
                 .expect("Failed to deserialize physical plan");
 
             // Rewrite the query plan to attach intermediate data
-            let plan= rewrite_query(plan, cur_task_inner.query_id).await.expect("fail to rewrite query");
+            let plan = rewrite_query(plan, cur_task_inner.query_id)
+                .await
+                .expect("fail to rewrite query");
 
             let execution_result = self.execute(plan).await;
             let execution_success = execution_result.is_ok();
             println!("Finish executing, status {}", execution_success);
 
-
             if execution_success {
                 let result = execution_result.unwrap();
-
 
                 // insert intermediate results into intermediate result hashmap
                 insert_results(
@@ -161,8 +159,6 @@ impl Executor {
         }
         Ok(results)
     }
-
-
 
     #[allow(dead_code)]
     pub async fn execute_sql(&self, query: &str) -> Result<Vec<RecordBatch>, DataFusionError> {

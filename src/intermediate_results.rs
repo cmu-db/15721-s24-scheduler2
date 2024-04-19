@@ -1,13 +1,12 @@
 use datafusion::arrow::array::RecordBatch;
+use datafusion::common::tree_node::Transformed;
+use datafusion::error::DataFusionError;
+use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use datafusion::common::tree_node::Transformed;
-use datafusion::error::DataFusionError;
-use datafusion::physical_plan::{ExecutionPlan, with_new_children_if_necessary};
 use tokio::sync::Mutex;
-
 
 // Definition of the key used in the map
 #[derive(Debug, Clone, Copy)]
@@ -58,7 +57,10 @@ pub async fn remove_results(task: &TaskKey) -> Option<Vec<RecordBatch>> {
     lock.remove(task)
 }
 
-async fn rewrite_node(plan: Arc<dyn ExecutionPlan>, query_id: u64) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+async fn rewrite_node(
+    plan: Arc<dyn ExecutionPlan>,
+    query_id: u64,
+) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
     let children = plan.children();
     let mut new_children = Vec::with_capacity(children.len());
     let mut changed = false;
@@ -83,7 +85,10 @@ async fn rewrite_node(plan: Arc<dyn ExecutionPlan>, query_id: u64) -> Result<Arc
     }
 }
 
-pub async fn rewrite_query(plan: Arc<dyn ExecutionPlan>, query_id: u64) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+pub async fn rewrite_query(
+    plan: Arc<dyn ExecutionPlan>,
+    query_id: u64,
+) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
     let result = Box::pin(rewrite_node(plan, query_id));
     result.await
 }
