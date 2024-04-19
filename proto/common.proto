@@ -27,9 +27,6 @@ message NotifyTaskStateArgs {
 
 message NotifyTaskStateRet {
     bool has_new_task = 1; // true if there is a new task (details given below)
-    
-    // true if this is the last task in the query and the executor should send back results upon completion
-    bool is_final_stage = 4;
     TaskID task = 2;
     bytes physical_plan = 3;
 }

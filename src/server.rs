@@ -219,7 +219,6 @@ impl SchedulerApi for SchedulerService {
 
             let response = NotifyTaskStateRet {
                 has_new_task: true,
-                is_final_stage: false,
                 task: Some(TaskId {
                     query_id: task.task_id.query_id,
                     stage_id: task.task_id.stage_id,
