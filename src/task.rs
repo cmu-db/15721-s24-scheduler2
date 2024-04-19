@@ -1,6 +1,6 @@
 use crate::server::composable_database::TaskId;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum TaskStatus {
     Waiting,
     Ready,
@@ -10,7 +10,7 @@ pub enum TaskStatus {
     Aborted,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Task {
     pub(crate) task_id: TaskId,
     pub(crate) status: TaskStatus,

@@ -84,6 +84,7 @@ impl Executor {
         }
     }
 
+    // TODO Clean up
     // Given an initialized executor and channel, do the initial handshake with the server and return the first task
     pub async fn client_handshake(&mut self) -> NotifyTaskStateRet {
         assert!(self.scheduler.is_some());

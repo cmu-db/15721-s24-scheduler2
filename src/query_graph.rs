@@ -40,7 +40,7 @@ pub struct QueryGraph {
     tid_counter: AtomicU64, // TODO: add mutex to stages and make elements pointers to avoid copying
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
-    frontier: tokio::sync::RwLock<Vec<Task>>,
+    frontier: Vec<Task>,
 }
 
 impl QueryGraph {
@@ -65,7 +65,7 @@ impl QueryGraph {
             tid_counter,
             stages: vec![QueryStage{plan: plan.clone(), status: NotStarted, outputs: Vec::new(), inputs: Vec::new()}],
             // stages,
-            frontier: RwLock::new(vec![task]),
+            frontier: vec![task],
         }
     }
 
@@ -78,31 +78,33 @@ impl QueryGraph {
     }
 
     // Atomically clear frontier vector and return old frontier.
-    pub async fn get_frontier(&self) -> Vec<Task> {
-        let f = self.frontier.write();
-        let mut old_frontier = Vec::new();
-        mem::swap(f.await.deref_mut(), &mut old_frontier);
-        old_frontier
+    pub fn get_frontier(&self) -> Vec<Task> {
+        self.frontier.clone()
     }
 
-    pub async fn update_stage_status(
+    pub fn update_stage(
+        &mut self,
+        stage_id: u64,
+        status: StageStatus,
+    ) -> Result<Vec<Task>, &'static str> {
+        Ok(vec![])
+    }
+
+    pub fn update_stage_status(
         &mut self,
         stage_id: u64,
         status: StageStatus,
     ) -> Result<(), &'static str> {
-        if self.stages.get(stage_id as usize).is_some() {
-            match (&self.stages.get(stage_id as usize).unwrap().status, &status) {
+        if let Some(stage) = self.stages.get_mut(stage_id as usize) {
+            match (&stage.status, &status) {
                 // TODO: handle input/output stuff
                 (StageStatus::NotStarted, StageStatus::Running(_)) => {
-                    self.stages.get_mut(stage_id as usize).unwrap().status = status;
+                    stage.status = status;
                     Ok(())
                 }
                 (StageStatus::Running(_a), StageStatus::Finished(_b)) => {
-                    let outputs = {
-                        let stage = self.stages.get_mut(stage_id as usize).unwrap();
-                        stage.status = status;
-                        stage.outputs.clone()
-                    };
+                    stage.status = status;
+                    let outputs = stage.outputs.clone();
 
                     if outputs.is_empty() {
                         self.done = true;
@@ -124,7 +126,7 @@ impl QueryGraph {
                                     },
                                     status: TaskStatus::Ready,
                                 };
-                                self.frontier.write().await.push(new_output_task);
+                                self.frontier.push(new_output_task);
                             }
                         } else {
                             return Err("Output stage not found.");
@@ -132,7 +134,11 @@ impl QueryGraph {
                     }
                     Ok(())
                 }
-                _ => Err("Mismatched stage statuses."),
+
+                s => {
+                    let msg = format!("Mismatched stage statuses. Got: {:?}", s.clone()).leak();
+                    Err(msg)
+                }
             }
         } else {
             Err("Task not found.")
@@ -219,6 +225,7 @@ impl GraphBuilder {
             return plan;
         }
 
+        // TODO: Parse joins into 2 not 3 stages.
         let mut children = vec![];
         if plan.children().len() > 1
             || plan.as_any().is::<GlobalLimitExec>()

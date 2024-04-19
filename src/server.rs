@@ -52,7 +52,7 @@ impl fmt::Debug for SchedulerService {
 impl SchedulerService {
     pub async fn new(catalog_path: &str) -> Self {
         Self {
-            query_table: Arc::new(QueryTable::new().await),
+            query_table: Arc::new(QueryTable::new()),
             task_queue: Arc::new(TaskQueue::new()),
             ctx: load_catalog(catalog_path).await,
             query_id_counter: AtomicU64::new(0),
@@ -76,7 +76,7 @@ impl SchedulerService {
     }
 
     async fn next_task(&self) -> Result<(Task, Vec<u8>), SchedulerError> {
-        let task = self.task_queue.next_task().await;
+        let task = self.task_queue.next_task().await.unwrap();
         let stage = self
             .query_table
             .get_plan_bytes(task.task_id.query_id, task.task_id.stage_id)
@@ -142,8 +142,7 @@ impl SchedulerApi for SchedulerService {
         //     query_status: query_status.into(),
         //     query_result: Vec::new(),
         // }))
-        let graph_opt_guard = self.query_table.table.read().await;
-        let graph_opt = &graph_opt_guard.get(&query_id);
+        let graph_opt = self.query_table.table.get(&query_id);
         if graph_opt.is_none() {
             return Ok(Response::new(QueryJobStatusRet {
                 query_status: QueryStatus::NotFound.into(),
@@ -151,8 +150,9 @@ impl SchedulerApi for SchedulerService {
             }));
         }
 
-        let graph = graph_opt.unwrap().read().await;
-        if graph.done {
+        let graph = graph_opt.unwrap();
+        let graph_done = graph.read().await.done;
+        if graph_done {
             let stage_id = 0;
             let final_result_opt = get_results(&TaskKey { stage_id, query_id }).await;
             let final_result =
