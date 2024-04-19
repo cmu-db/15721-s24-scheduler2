@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{mem, sync::Arc};
 use tokio::sync::RwLock;
-use crate::server::composable_database::TaskId;
+use crate::composable_database::TaskId;
 use crate::query_graph::StageStatus::NotStarted;
 use crate::task::TaskStatus::Ready;
 

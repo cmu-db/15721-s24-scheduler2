@@ -1,5 +1,5 @@
-use crate::server::composable_database::scheduler_api_server::SchedulerApiServer;
-use crate::server::composable_database::TaskId;
+use crate::composable_database::scheduler_api_server::SchedulerApiServer;
+use crate::composable_database::TaskId;
 use crate::server::SchedulerService;
 use crate::executor::Executor;
 use crate::mock_frontend::MockFrontend;
@@ -36,16 +36,14 @@ Establishing connection:
 During integration tests, executors utilize NotifyTaskStateArgs to establish initial communication with the scheduler. The initial message contains the HANDSHAKE_TASK_ID. Upon receipt, the scheduler begins assigning tasks using NotifyTaskStateRet messages.
  */
 
-lazy_static! {
-    static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
-    static ref HANDSHAKE_TASK_ID: u64 = -1i64 as u64;
-    static ref HANDSHAKE_STAGE_ID: u64 = -1i64 as u64;
-    static ref HANDSHAKE_TASK: TaskId = TaskId {
-        query_id: *HANDSHAKE_QUERY_ID,
-        stage_id: *HANDSHAKE_STAGE_ID,
-        task_id: *HANDSHAKE_TASK_ID,
-    };
-}
+static HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
+static HANDSHAKE_TASK_ID: u64 = -1i64 as u64;
+static HANDSHAKE_STAGE_ID: u64 = -1i64 as u64;
+static HANDSHAKE_TASK: TaskId = TaskId {
+    query_id: HANDSHAKE_QUERY_ID,
+    stage_id: HANDSHAKE_STAGE_ID,
+    task_id: HANDSHAKE_TASK_ID,
+};
 
 pub struct IntegrationTest {
     catalog_path: String,

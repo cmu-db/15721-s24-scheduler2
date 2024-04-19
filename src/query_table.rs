@@ -1,4 +1,4 @@
-use crate::server::composable_database::QueryStatus;
+use crate::composable_database::QueryStatus;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::task::Task;
 use crate::SchedulerError;

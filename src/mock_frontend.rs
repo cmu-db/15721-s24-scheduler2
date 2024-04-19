@@ -1,4 +1,4 @@
-use crate::server::composable_database::{QueryInfo, ScheduleQueryArgs};
+use crate::composable_database::{QueryInfo, ScheduleQueryArgs};
 use datafusion::arrow::array::RecordBatch;
 use datafusion::common::DataFusionError;
 use datafusion::physical_plan::ExecutionPlan;
@@ -8,12 +8,12 @@ use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
 use tokio::time::{self, Duration};
 
-use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
+use crate::composable_database::scheduler_api_client::SchedulerApiClient;
 
 use crate::parser::Parser;
 use datafusion::error::Result;
-use crate::server::composable_database::QueryJobStatusArgs;
-use crate::server::composable_database::QueryStatus;
+use crate::composable_database::QueryJobStatusArgs;
+use crate::composable_database::QueryStatus;
 
 pub struct MockFrontend {
     parser: Parser,

@@ -1,8 +1,4 @@
 #![allow(dead_code)]
-pub mod composable_database {
-    tonic::include_proto!("composable_database");
-}
-
 use crate::intermediate_results::{get_results, TaskKey};
 use crate::project_config::load_catalog;
 use crate::query_graph::{QueryGraph, StageStatus};
@@ -10,8 +6,8 @@ use crate::query_table::QueryTable;
 use crate::task::Task;
 use crate::task_queue::TaskQueue;
 use crate::SchedulerError;
-use composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
-use composable_database::{
+use crate::composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
+use crate::composable_database::{
     AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
     QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
     TaskId,
@@ -19,10 +15,10 @@ use composable_database::{
 use datafusion::arrow::util::pretty::print_batches;
 use datafusion::execution::context::SessionContext;
 use datafusion_proto::bytes::physical_plan_from_bytes;
+use tonic::transport::Server;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Once};
-use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
 // Static query_id generator
@@ -235,25 +231,12 @@ impl SchedulerApi for SchedulerService {
     }
 }
 
-#[tokio::main]
-async fn _main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "0.0.0.0:15721".parse().unwrap();
-
-    let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
-    let scheduler_service = SchedulerService::new(catalog_path).await;
-
-    let server = SchedulerApiServer::new(scheduler_service);
-    Server::builder().add_service(server).serve(addr).await?;
-
-    Ok(())
-}
-
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
     use crate::parser::Parser;
-    use crate::server::composable_database::scheduler_api_server::SchedulerApi;
-    use crate::server::composable_database::{
+    use crate::composable_database::scheduler_api_server::SchedulerApi;
+    use crate::composable_database::{
         AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
         QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
         TaskId,

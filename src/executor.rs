@@ -1,5 +1,5 @@
-use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
-use crate::server::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, TaskId};
+use crate::composable_database::scheduler_api_client::SchedulerApiClient;
+use crate::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, TaskId};
 use crate::intermediate_results::{insert_results, TaskKey};
 use crate::project_config::load_catalog;
 use datafusion::arrow::record_batch::RecordBatch;

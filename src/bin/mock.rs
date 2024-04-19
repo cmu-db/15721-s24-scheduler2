@@ -1,29 +1,11 @@
-mod executor;
-pub mod integration_test;
-pub mod intermediate_results;
-mod mock_frontend;
-pub mod parser;
-pub mod project_config;
-mod query_graph;
-mod query_table;
-mod task;
-mod task_queue;
-mod server;
-
-use crate::integration_test::IntegrationTest;
+use scheduler2::integration_test::IntegrationTest;
 use clap::{App, Arg, SubCommand};
-use datafusion::error::DataFusionError;
 use std::path::PathBuf;
 
-use crate::parser::DFColumnType;
+use scheduler2::parser::DFColumnType;
 use sqllogictest::Record;
 use std::io::{self, Write};
 use std::time::Duration;
-
-pub enum SchedulerError {
-    Error(String),
-    DfError(DataFusionError),
-}
 
 #[tokio::main]
 async fn main() {
