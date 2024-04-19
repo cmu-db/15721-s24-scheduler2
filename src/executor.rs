@@ -1,4 +1,4 @@
-use crate::intermediate_results::{insert_results, TaskKey};
+use crate::intermediate_results::{insert_results, rewrite_query, TaskKey};
 use crate::project_config::load_catalog;
 use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
 use crate::server::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, TaskId};
@@ -53,36 +53,33 @@ impl Executor {
             println!("Got new task {:?}", cur_task);
             assert_eq!(true, cur_task.has_new_task);
 
+            let cur_task_inner = cur_task.task.clone().unwrap();
+
             let bytes = &cur_task.physical_plan;
             let plan = physical_plan_from_bytes(bytes, &self.ctx)
                 .expect("Failed to deserialize physical plan");
+
+            // Rewrite the query plan to attach intermediate data
+            let plan= rewrite_query(plan, cur_task_inner.query_id).await.expect("fail to rewrite query");
 
             let execution_result = self.execute(plan).await;
             let execution_success = execution_result.is_ok();
             println!("Finish executing, status {}", execution_success);
 
+
             if execution_success {
                 let result = execution_result.unwrap();
 
-                let cur_task_inner = cur_task.task.clone().unwrap();
 
-                match cur_task.is_final_stage {
-                    true => {
-                        // TODO: write final results to disk, generate random UUID as filename
-                    }
-
-                    false => {
-                        // insert intermediate results into intermediate result hashmap
-                        insert_results(
-                            TaskKey {
-                                stage_id: cur_task_inner.stage_id,
-                                query_id: cur_task_inner.query_id,
-                            },
-                            result,
-                        )
-                        .await;
-                    }
-                }
+                // insert intermediate results into intermediate result hashmap
+                insert_results(
+                    TaskKey {
+                        stage_id: cur_task_inner.stage_id,
+                        query_id: cur_task_inner.query_id,
+                    },
+                    result,
+                )
+                .await;
             }
 
             cur_task = self

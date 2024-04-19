@@ -6,11 +6,8 @@ use std::sync::Arc;
 use datafusion::common::tree_node::Transformed;
 use datafusion::error::DataFusionError;
 use datafusion::physical_plan::{ExecutionPlan, with_new_children_if_necessary};
-use datafusion::physical_plan::memory::MemoryExec;
-use datafusion::physical_plan::placeholder_row::PlaceholderRowExec;
 use tokio::sync::Mutex;
-use crate::intermediate_results;
-use crate::task::Task;
+
 
 // Definition of the key used in the map
 #[derive(Debug, Clone, Copy)]
