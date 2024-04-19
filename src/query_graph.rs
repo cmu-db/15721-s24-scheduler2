@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
+use crate::composable_database::TaskId;
+use crate::query_graph::StageStatus::NotStarted;
+use crate::task::TaskStatus::Ready;
 use crate::task::{Task, TaskStatus};
-use std::collections::HashSet;
-use std::ops::DerefMut;
 use datafusion::arrow::datatypes::Schema;
 use datafusion::physical_plan::aggregates::AggregateExec;
 use datafusion::physical_plan::limit::GlobalLimitExec;
@@ -10,18 +11,17 @@ use datafusion::physical_plan::placeholder_row::PlaceholderRowExec;
 use datafusion::physical_plan::sorts::sort::SortExec;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{mem, sync::Arc};
-use tokio::sync::RwLock;
-use crate::composable_database::TaskId;
-use crate::query_graph::StageStatus::NotStarted;
-use crate::task::TaskStatus::Ready;
 
 // TODO Change to Waiting, Ready, Running(vec[taskid]), Finished(vec[locations?])
 #[derive(Clone, Debug, Default)]
 pub enum StageStatus {
     #[default]
     NotStarted,
+    // Waiting,
+    // Runnable,
     Running(u64),
     Finished(u64), // More detailed datatype to describe location(s) of ALL output data.
 }
@@ -41,6 +41,8 @@ pub struct QueryGraph {
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
     frontier: Vec<Task>,
+    // runnable: Vec<usize>,
+    // resource_group: Vec<Task>,
 }
 
 impl QueryGraph {
@@ -63,7 +65,12 @@ impl QueryGraph {
             done: false,
             plan: plan.clone(),
             tid_counter,
-            stages: vec![QueryStage{plan: plan.clone(), status: NotStarted, outputs: Vec::new(), inputs: Vec::new()}],
+            stages: vec![QueryStage {
+                plan: plan.clone(),
+                status: NotStarted,
+                outputs: Vec::new(),
+                inputs: Vec::new(),
+            }],
             // stages,
             frontier: vec![task],
         }
@@ -73,7 +80,7 @@ impl QueryGraph {
         self.stages.len() as u64
     }
 
-    fn next_task_id(&mut self) -> u64 {
+    fn next_task_id(&self) -> u64 {
         self.tid_counter.fetch_add(1, Ordering::SeqCst)
     }
 
@@ -82,12 +89,16 @@ impl QueryGraph {
         self.frontier.clone()
     }
 
-    pub fn update_stage(
+    fn update_stage(
         &mut self,
         stage_id: u64,
         status: StageStatus,
     ) -> Result<Vec<Task>, &'static str> {
         Ok(vec![])
+    }
+
+    pub fn update_task(&mut self, task_id: u64, status: TaskStatus) -> Result<(), &'static str> {
+        todo!()
     }
 
     pub fn update_stage_status(
@@ -119,10 +130,10 @@ impl QueryGraph {
                             if output_stage.inputs.len() == 0 {
                                 output_stage.status = StageStatus::Running(0); // TODO: "ready stage status?"
                                 let new_output_task = Task {
-                                    task_id: TaskId{
+                                    task_id: TaskId {
                                         query_id: self.query_id,
                                         task_id: *output_stage_id,
-                                        stage_id: *output_stage_id
+                                        stage_id: *output_stage_id,
                                     },
                                     status: TaskStatus::Ready,
                                 };
@@ -213,7 +224,10 @@ impl GraphBuilder {
         let root_plan = self.parse_plan(plan, root);
         self.pipelines[root].set_plan(root_plan);
 
-        self.pipelines.iter().map(|stage| stage.clone().into()).collect()
+        self.pipelines
+            .iter()
+            .map(|stage| stage.clone().into())
+            .collect()
     }
 
     fn parse_plan(

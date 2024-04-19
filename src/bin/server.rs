@@ -1,6 +1,6 @@
 use tonic::transport::Server;
 
-use scheduler2::composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
+use scheduler2::composable_database::scheduler_api_server::SchedulerApiServer;
 use scheduler2::server::SchedulerService;
 
 #[tokio::main]

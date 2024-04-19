@@ -4,21 +4,29 @@ use crate::task::Task;
 use crate::SchedulerError;
 use dashmap::DashMap;
 use datafusion_proto::bytes::physical_plan_to_bytes;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Default)]
 pub struct QueryTable {
     // Maps query IDs to query graphs
-    pub table: DashMap<u64, RwLock<QueryGraph>>,
+    pub table: DashMap<u64, RwLock<QueryGraph>>, // TODO: make private
+    qid_counter: AtomicU64,
 }
 
 impl QueryTable {
     pub fn new() -> Self {
         Self {
             table: DashMap::new(),
+            qid_counter: AtomicU64::new(0),
         }
     }
+
+    fn next_query_id(&self) -> u64 {
+        self.qid_counter.fetch_add(1, Ordering::SeqCst)
+    }
+
 
     pub async fn get_frontier(&self, query_id: u64) -> Vec<Task> {
         let frontier = self.table.get(&query_id).unwrap().read().await.get_frontier();
@@ -26,9 +34,9 @@ impl QueryTable {
     }
 
     pub async fn add_query(&self, graph: QueryGraph) -> Vec<Task> {
-        println!("scheduler: adding query graph: {:#?}", graph);
         let frontier = graph.get_frontier();
-        self.table.insert(graph.query_id, RwLock::new(graph));
+        let query_id = self.next_query_id();
+        self.table.insert(query_id, RwLock::new(graph));
         frontier
     }
 
@@ -53,6 +61,10 @@ impl QueryTable {
         }
     }
 
+    pub async fn delete_query(&self, query_id: u64) {
+        todo!()
+    }
+
     pub async fn get_plan_bytes(
         &self,
         query_id: u64,
@@ -66,9 +78,5 @@ impl QueryTable {
         } else {
             Err(SchedulerError::Error("Graph not found.".to_string()))
         }
-    }
-
-    pub async fn remove_query(&self, query_id: u64) {
-        todo!()
     }
 }
