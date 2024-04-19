@@ -16,11 +16,13 @@ const HANDSHAKE_QUERY_ID: u64 = u64::MAX;
 const HANDSHAKE_TASK_ID: u64 = u64::MAX;
 const HANDSHAKE_STAGE_ID: u64 = u64::MAX;
 
+
 pub struct Executor {
     id: i32,
     ctx: SessionContext,
     scheduler: Option<SchedulerApiClient<Channel>>, // api client for the scheduler
 }
+
 
 // TODO: Clean up gRPC calling code.
 impl Executor {
@@ -162,6 +164,8 @@ impl Executor {
         }
         Ok(results)
     }
+
+
 
     #[allow(dead_code)]
     pub async fn execute_sql(&self, query: &str) -> Result<Vec<RecordBatch>, DataFusionError> {
