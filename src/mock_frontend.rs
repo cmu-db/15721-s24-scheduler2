@@ -28,7 +28,7 @@ struct JobInfo {
     status: QueryStatus,
     submitted_at: time::Instant,
     finished_at: Option<time::Instant>,
-    result: Option<Vec<RecordBatch>>,
+    result: Option<RecordBatch>,
 }
 
 pub struct MockFrontend {

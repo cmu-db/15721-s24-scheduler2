@@ -1,7 +1,7 @@
 use crate::project_config::load_catalog;
 use datafusion::arrow::array::RecordBatch;
 use datafusion::arrow::ipc::reader::StreamReader;
-use datafusion::arrow::ipc::writer::{IpcWriteOptions, StreamWriter};
+use datafusion::arrow::ipc::writer::{FileWriter, IpcWriteOptions, StreamWriter};
 use datafusion::arrow::ipc::MetadataVersion;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::SessionContext;
@@ -14,6 +14,7 @@ use sqlparser::parser::Parser;
 use std::fmt;
 use std::io::Cursor;
 use std::sync::Arc;
+use datafusion::arrow::error::ArrowError;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -88,36 +89,35 @@ impl ExecutionPlanParser {
         plan.create_physical_plan().await
     }
 
-    pub fn serialize_record_batch(batches: Vec<RecordBatch>) -> Result<Vec<Vec<u8>>> {
-        let mut res: Vec<Vec<u8>> = Vec::new();
-
-        for batch in batches {
-            let buffer: Vec<u8> = Vec::new();
-            let options = IpcWriteOptions::try_new(8, false, MetadataVersion::V5)?;
-            let stream_writer =
-                StreamWriter::try_new_with_options(buffer, &batch.schema(), options)?;
-            let serialized_batch = stream_writer.into_inner()?;
-            res.push(serialized_batch);
+    fn serialize_record_batch(batch: RecordBatch) -> Result<Vec<u8>> {
+        let mut buffer: Vec<u8> = Vec::new();
+        let schema = batch.schema();
+        {
+            let mut writer = FileWriter::try_new(&mut buffer, &schema)?;
+            writer.write(&batch)?;
+            writer.finish()?;
         }
-        Ok(res)
+
+        Ok(buffer)
     }
 
-    pub fn deserialize_record_batch(bytes: Vec<u8>) -> Result<Vec<RecordBatch>> {
-        let mut batches = Vec::new();
-        // Create a Cursor around the byte slice for the StreamReader
+
+    pub fn deserialize_record_batch(bytes: Vec<u8>) -> Result<RecordBatch> {
         let cursor = Cursor::new(bytes);
         let mut reader = StreamReader::try_new(cursor, None)?;
-        while let Some(batch) = reader.next() {
-            if batch.is_err() {
-                return Err(DataFusionError::Internal(
-                    "deserialize_record_batch: fail to read from vector"
-                        .parse()
-                        .unwrap(),
-                ));
-            }
-            batches.push(batch.unwrap());
+
+        // Attempt to read the first record batch from the stream
+        let first_batch = match reader.next() {
+            Some(Ok(batch)) => batch,
+            Some(Err(e)) => return Err(DataFusionError::Internal("Error parsing the bytes".to_string())),
+            None => return Err(DataFusionError::Internal("No record batch found in the stream".to_string())),
+        };
+
+        // Ensure no more batches are present
+        match reader.next() {
+            Some(_) => Err(DataFusionError::Internal("stream contains more than one record batch".to_string())),
+            None => Ok(first_batch),
         }
-        Ok(batches)
     }
 }
 
