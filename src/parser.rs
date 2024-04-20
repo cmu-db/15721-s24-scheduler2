@@ -1,5 +1,6 @@
 use crate::project_config::load_catalog;
 use datafusion::arrow::array::RecordBatch;
+use datafusion::arrow::ipc::reader::StreamReader;
 use datafusion::arrow::ipc::writer::{IpcWriteOptions, StreamWriter};
 use datafusion::arrow::ipc::MetadataVersion;
 use datafusion::error::{DataFusionError, Result};
@@ -13,7 +14,6 @@ use sqlparser::parser::Parser;
 use std::fmt;
 use std::io::Cursor;
 use std::sync::Arc;
-use datafusion::arrow::ipc::reader::StreamReader;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -109,7 +109,11 @@ impl ExecutionPlanParser {
         let mut reader = StreamReader::try_new(cursor, None)?;
         while let Some(batch) = reader.next() {
             if batch.is_err() {
-                return Err(DataFusionError::Internal("deserialize_record_batch: fail to read from vector".parse().unwrap()));
+                return Err(DataFusionError::Internal(
+                    "deserialize_record_batch: fail to read from vector"
+                        .parse()
+                        .unwrap(),
+                ));
             }
             batches.push(batch.unwrap());
         }
@@ -217,7 +221,5 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_deserialize_record_batch() {
-        
-    }
+    async fn test_deserialize_record_batch() {}
 }

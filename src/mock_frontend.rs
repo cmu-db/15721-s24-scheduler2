@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::os::linux::raw::stat;
 use std::sync::Arc;
 use std::thread::sleep;
-use tokio::sync::{mpsc, Mutex, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::time::{self, Duration};
 use tonic::transport::Channel;
 
@@ -42,7 +42,6 @@ pub struct MockFrontend {
 }
 
 impl MockFrontend {
-
     async fn run_polling_task(shared_frontend: Arc<Mutex<MockFrontend>>) {
         let polling_period_ms = 1000;
         let mut interval = tokio::time::interval(Duration::from_millis(polling_period_ms));
@@ -54,7 +53,6 @@ impl MockFrontend {
             // Drop the lock manually if needed or it will be dropped at the end of the block
         }
     }
-
 
     pub async fn new(catalog_path: &str) -> Self {
         let ctx = load_catalog(catalog_path).await;
@@ -109,10 +107,7 @@ impl MockFrontend {
 
         let mut client = self.scheduler_api_client.as_mut().unwrap();
 
-
-        match client.schedule_query(schedule_query_request)
-            .await
-        {
+        match client.schedule_query(schedule_query_request).await {
             Ok(response) => {
                 let query_id = response.into_inner().query_id;
                 let existing_value = jobs.insert(
@@ -144,38 +139,50 @@ impl MockFrontend {
         let mut res: HashSet<u64> = HashSet::new();
         let mut client = self.scheduler_api_client.as_mut().unwrap();
 
-
         let keys: Vec<u64> = jobs.keys().cloned().collect();
         for query_id in keys {
-            let job = jobs.get(&query_id).unwrap_or_else(|| {panic!("poll_results: job for query id {} does not exist", query_id)});
+            let job = jobs.get(&query_id).unwrap_or_else(|| {
+                panic!("poll_results: job for query id {} does not exist", query_id)
+            });
 
             // Send request to scheduler only when job is in progress
             if job.status != InProgress {
                 continue;
             }
 
-            let status = match client.query_job_status(tonic::Request::new(QueryJobStatusArgs { query_id })).await {
+            let status = match client
+                .query_job_status(tonic::Request::new(QueryJobStatusArgs { query_id }))
+                .await
+            {
                 Ok(response) => response.into_inner(),
                 Err(err) => {
-                    eprintln!("poll_results: fail to get job status for query id {}: {}", query_id, err);
+                    eprintln!(
+                        "poll_results: fail to get job status for query id {}: {}",
+                        query_id, err
+                    );
                     continue;
                 }
             };
 
-            let new_query_status = QueryStatus::try_from(status.query_status).expect("poll results: fail to decode query status");
+            let new_query_status = QueryStatus::try_from(status.query_status)
+                .expect("poll results: fail to decode query status");
             match new_query_status {
                 QueryStatus::Done => {
                     res.insert(query_id);
 
                     let serialized_results = status.query_result;
 
-                    let results = match ExecutionPlanParser::deserialize_record_batch(serialized_results) {
-                        Ok(res) => res,
-                        Err(err) => {
-                            eprintln!("poll_results: fail to deserialize results for query {}: {}", query_id, err);
-                            continue;
-                        }
-                    };
+                    let results =
+                        match ExecutionPlanParser::deserialize_record_batch(serialized_results) {
+                            Ok(res) => res,
+                            Err(err) => {
+                                eprintln!(
+                                    "poll_results: fail to deserialize results for query {}: {}",
+                                    query_id, err
+                                );
+                                continue;
+                            }
+                        };
 
                     let updated_job_info = JobInfo {
                         status: QueryStatus::Done,
@@ -188,11 +195,13 @@ impl MockFrontend {
                     let v = jobs.insert(query_id, updated_job_info);
                     // original value must already exist in the map
                     assert!(!v.is_none());
-
                 }
 
                 QueryStatus::NotFound => {
-                    panic!("poll_results: query id {} not found from the scheduler", query_id);
+                    panic!(
+                        "poll_results: query id {} not found from the scheduler",
+                        query_id
+                    );
                 }
 
                 QueryStatus::Failed => {
@@ -208,13 +217,13 @@ impl MockFrontend {
                     // original value must already exist in the map
                     assert!(!v.is_none());
                 }
-                _ => {panic!("poll_results: invalid query status: {:?}", new_query_status);}
+                _ => {
+                    panic!("poll_results: invalid query status: {:?}", new_query_status);
+                }
             }
         }
         res
     }
-
-
 
     // pub async fn run_sql(&self, sql: &str) -> Result<Vec<RecordBatch>> {
     //     let physical_plan = self.parser.sql_to_physical_plan(sql).await?;
