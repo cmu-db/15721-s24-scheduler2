@@ -61,7 +61,7 @@ pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
                         .register_parquet(table_name, file_path.to_str().unwrap(), options)
                         .await;
                     eprintln!(
-                        "Have registerd {}, at path {:?}",
+                        "Registered {}, at path {:?}",
                         table_name,
                         file_path.to_str().as_slice()
                     );

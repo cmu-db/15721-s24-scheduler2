@@ -1,4 +1,7 @@
 use crate::project_config::load_catalog;
+use datafusion::arrow::array::RecordBatch;
+use datafusion::arrow::ipc::writer::{IpcWriteOptions, StreamWriter};
+use datafusion::arrow::ipc::MetadataVersion;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
@@ -72,7 +75,6 @@ impl ExecutionPlanParser {
 
     // Convert a sql string to a physical plan
     pub async fn sql_to_physical_plan(&self, query: &str) -> Result<Arc<dyn ExecutionPlan>> {
-        // self.ctx.sql(query).await?.create_physical_plan().await
         let plan_result = self.ctx.sql(&query).await;
         let plan = match plan_result {
             Ok(plan) => plan,
@@ -82,6 +84,20 @@ impl ExecutionPlanParser {
             }
         };
         plan.create_physical_plan().await
+    }
+
+    pub fn serialize_record_batch(batches: Vec<RecordBatch>) -> Result<Vec<Vec<u8>>> {
+        let mut res: Vec<Vec<u8>> = Vec::new();
+
+        for batch in batches {
+            let buffer: Vec<u8> = Vec::new();
+            let options = IpcWriteOptions::try_new(8, false, MetadataVersion::V5)?;
+            let stream_writer =
+                StreamWriter::try_new_with_options(buffer, &batch.schema(), options)?;
+            let serialized_batch = stream_writer.into_inner()?;
+            res.push(serialized_batch);
+        }
+        Ok(res)
     }
 }
 

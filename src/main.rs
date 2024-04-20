@@ -2,6 +2,7 @@ mod executor;
 pub mod integration_test;
 pub mod intermediate_results;
 mod mock_frontend;
+mod mock_optimizer;
 pub mod parser;
 pub mod project_config;
 mod query_graph;
