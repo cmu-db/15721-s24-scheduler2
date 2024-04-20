@@ -11,7 +11,9 @@ use futures::TryFutureExt;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use std::fmt;
+use std::io::Cursor;
 use std::sync::Arc;
+use datafusion::arrow::ipc::reader::StreamReader;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -98,6 +100,20 @@ impl ExecutionPlanParser {
             res.push(serialized_batch);
         }
         Ok(res)
+    }
+
+    pub fn deserialize_record_batch(bytes: Vec<u8>) -> Result<Vec<RecordBatch>> {
+        let mut batches = Vec::new();
+        // Create a Cursor around the byte slice for the StreamReader
+        let cursor = Cursor::new(bytes);
+        let mut reader = StreamReader::try_new(cursor, None)?;
+        while let Some(batch) = reader.next() {
+            if batch.is_err() {
+                return Err(DataFusionError::Internal("deserialize_record_batch: fail to read from vector".parse().unwrap()));
+            }
+            batches.push(batch.unwrap());
+        }
+        Ok(batches)
     }
 }
 
@@ -193,5 +209,15 @@ mod tests {
             CORRECT_SQL_2,
             sql_vec.get(1).expect("fail to get test select statement")
         );
+    }
+
+    #[tokio::test]
+    async fn test_serialize_record_batch() {
+        // TODO: write tests for serializing record batches
+    }
+
+    #[tokio::test]
+    async fn test_deserialize_record_batch() {
+        
     }
 }

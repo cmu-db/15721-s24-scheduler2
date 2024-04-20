@@ -20,6 +20,6 @@ impl Optimizer {
         &self,
         logical_plan: &LogicalPlan,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        self.ctx.state().create_physical_plan(logical_plan)
+        self.ctx.state().create_physical_plan(logical_plan).await
     }
 }

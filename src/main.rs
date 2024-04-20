@@ -99,15 +99,15 @@ async fn interactive_mode() {
             break;
         }
 
-        match frontend.run_sql(trimmed_input).await {
-            Ok(res) => {
-                println!("Result: {:?}", res);
-            }
-
-            Err(e) => {
-                println!("Error in running query: {}", e);
-            }
-        }
+        // match frontend.run_sql(trimmed_input).await {
+        //     Ok(res) => {
+        //         println!("Result: {:?}", res);
+        //     }
+        //
+        //     Err(e) => {
+        //         println!("Error in running query: {}", e);
+        //     }
+        // }
     }
 }
 
@@ -175,19 +175,19 @@ async fn file_mode(file_path: String) {
         .unwrap_or_else(|err| {
             panic!("Unable to parse file {}: {:?}", file_path, err);
         });
-
-    for sql in sql_statements {
-        println!("Running query: {}", sql);
-        match frontend.run_sql(&sql).await {
-            Ok(res) => {
-                println!("Result: {:?}", res);
-            }
-
-            Err(e) => {
-                println!("Error in running query: {}", e);
-            }
-        }
-    }
+    //
+    // for sql in sql_statements {
+    //     println!("Running query: {}", sql);
+    //     match frontend.run_sql(&sql).await {
+    //         Ok(res) => {
+    //             println!("Result: {:?}", res);
+    //         }
+    //
+    //         Err(e) => {
+    //             println!("Error in running query: {}", e);
+    //         }
+    //     }
+    // }
 }
 
 #[cfg(test)]

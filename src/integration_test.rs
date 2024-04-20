@@ -124,12 +124,9 @@ impl IntegrationTest {
             "{}:{}",
             self.config.scheduler.id_addr, self.config.scheduler.port
         );
-        let catalog_path = self.catalog_path.clone();
 
-        let frontend =
-            tokio::spawn(async move { MockFrontend::new(&catalog_path, &scheduler_addr).await })
-                .await
-                .expect("Failed to join the async task");
+        let mut frontend = MockFrontend::new(&self.catalog_path).await;
+        frontend.connect(&scheduler_addr).await;
 
         frontend
     }
