@@ -42,7 +42,7 @@ pub struct MockFrontend {
 }
 
 impl MockFrontend {
-    async fn run_polling_task(shared_frontend: Arc<Mutex<MockFrontend>>) {
+    pub(crate) async fn run_polling_task(shared_frontend: Arc<Mutex<MockFrontend>>) {
         let polling_period_ms = 1000;
         let mut interval = tokio::time::interval(Duration::from_millis(polling_period_ms));
         loop {

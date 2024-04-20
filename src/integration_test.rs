@@ -12,6 +12,7 @@ use datafusion::prelude::SessionContext;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::time::Instant;
 use tonic::transport::Server;
 
@@ -55,6 +56,7 @@ pub struct IntegrationTest {
     config_path: String,
     ctx: Arc<SessionContext>,
     config: Config,
+    frontend: Arc<Mutex<MockFrontend>>
 }
 
 /**
@@ -72,11 +74,13 @@ impl IntegrationTest {
     pub async fn new(catalog_path: String, config_path: String) -> Self {
         let ctx = load_catalog(&catalog_path).await;
         let config = read_config(&config_path);
+        let frontend = MockFrontend::new(&catalog_path).await;
         Self {
             ctx,
             config,
             catalog_path,
             config_path,
+            frontend: Arc::new(Mutex::new(frontend))
         }
     }
 
@@ -100,7 +104,6 @@ impl IntegrationTest {
         });
     }
     pub async fn run_client(&self) {
-        let start = Instant::now(); // Start timing
         let scheduler_addr = format!(
             "{}:{}",
             self.config.scheduler.id_addr, self.config.scheduler.port
@@ -114,21 +117,19 @@ impl IntegrationTest {
                 mock_executor.connect(&scheduler_addr_copy).await;
             });
         }
-        let end = Instant::now();
-        let duration = end.duration_since(start);
-        println!("Time elapsed: {:?}", duration);
     }
 
-    pub async fn run_frontend(&self) -> MockFrontend {
+    pub async fn run_frontend(&self) {
         let scheduler_addr = format!(
             "{}:{}",
             self.config.scheduler.id_addr, self.config.scheduler.port
         );
 
-        let mut frontend = MockFrontend::new(&self.catalog_path).await;
-        frontend.connect(&scheduler_addr).await;
-
-        frontend
+        self.frontend.lock().await.connect(&scheduler_addr).await;
+        let frontend_clone = Arc::clone(&self.frontend);
+        tokio::spawn(async move {
+            MockFrontend::run_polling_task(frontend_clone).await;
+        });
     }
 
     async fn sort_batch_by_all_columns(
