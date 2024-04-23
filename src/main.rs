@@ -20,6 +20,9 @@ use datafusion::error::DataFusionError;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
+use prost::Message;
+use tokio::time::Interval;
+use crate::server::composable_database::QueryStatus::{Done, InProgress};
 
 pub enum SchedulerError {
     Error(String),
@@ -71,19 +74,30 @@ async fn main() {
 
 const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
 const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
+const POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+// creates server, executors, and the frontend
+async fn start_system() -> IntegrationTest {
+    const startup_time: Duration = Duration::from_millis(2000);
+
+    let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
+
+    tester.run_server().await;
+    tokio::time::sleep(startup_time).await;
+
+    tester.run_frontend().await;
+    tokio::time::sleep(startup_time).await;
+
+    tester.run_client().await;
+    tokio::time::sleep(startup_time).await;
+
+    tester
+}
 
 async fn interactive_mode() {
     println!("Entering interactive mode. Type your SQL queries or 'exit' to quit:");
 
-    let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
-    tester.run_server().await;
-    tokio::time::sleep(Duration::from_millis(2000)).await;
-
-    let frontend = tester.run_frontend().await;
-    tokio::time::sleep(Duration::from_millis(2000)).await;
-
-    tester.run_client().await;
-    tokio::time::sleep(Duration::from_millis(2000)).await;
+    let tester = start_system().await;
 
     let mut input = String::new();
     loop {
@@ -98,16 +112,36 @@ async fn interactive_mode() {
         if trimmed_input.eq_ignore_ascii_case("exit") {
             break;
         }
+        
+        match tester.frontend.lock().await.submit_job(trimmed_input).await {
+            Ok(query_id) => {
+                loop {
 
-        // match frontend.run_sql(trimmed_input).await {
-        //     Ok(res) => {
-        //         println!("Result: {:?}", res);
-        //     }
-        //
-        //     Err(e) => {
-        //         println!("Error in running query: {}", e);
-        //     }
-        // }
+                    let mut frontend_lock = tester.frontend.lock().await;
+                    let job_info = frontend_lock
+                        .check_job_status(query_id)
+                        .await
+                        .unwrap_or_else(|| {
+                            panic!("submitted query id {} but not found on scheduler", query_id)
+                        });
+
+                    if job_info.status == InProgress {
+                        drop(frontend_lock);
+                        tokio::time::sleep(POLL_INTERVAL).await;
+                        continue;
+                    }
+
+                    println!("{}", job_info);
+                    drop(frontend_lock);
+                    break;
+                }
+            }
+
+            Err(e) => {
+                eprintln!("main: fail to run sql {}: {}", trimmed_input, e);
+                continue;
+            }
+        }
     }
 }
 
@@ -155,7 +189,7 @@ async fn file_mode(file_path: String) {
     tester.run_server().await;
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    let frontend = tester.run_frontend().await;
+    tester.run_frontend().await;
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
     tester.run_client().await;

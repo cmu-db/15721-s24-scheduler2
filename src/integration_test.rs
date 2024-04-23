@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::executor::Executor;
 use crate::mock_frontend::MockFrontend;
 use crate::project_config::Config;
@@ -56,7 +57,7 @@ pub struct IntegrationTest {
     config_path: String,
     ctx: Arc<SessionContext>,
     config: Config,
-    frontend: Arc<Mutex<MockFrontend>>
+    pub frontend: Arc<Mutex<MockFrontend>>
 }
 
 /**
@@ -131,6 +132,7 @@ impl IntegrationTest {
             MockFrontend::run_polling_task(frontend_clone).await;
         });
     }
+
 
     async fn sort_batch_by_all_columns(
         &self,
