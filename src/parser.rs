@@ -89,7 +89,7 @@ impl ExecutionPlanParser {
         plan.create_physical_plan().await
     }
 
-    fn serialize_record_batch(batch: RecordBatch) -> Result<Vec<u8>> {
+    pub fn serialize_record_batch(batch: RecordBatch) -> Result<Vec<u8>> {
         let mut buffer: Vec<u8> = Vec::new();
         let schema = batch.schema();
         {

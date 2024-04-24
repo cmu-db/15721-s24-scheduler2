@@ -210,6 +210,9 @@ mod tests {
     use datafusion::arrow::array::{Int32Array, RecordBatch};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use std::sync::Arc;
+    use std::time::Duration;
+    use crate::{CATALOG_PATH, CONFIG_PATH, POLL_INTERVAL};
+    use crate::server::composable_database::QueryStatus::InProgress;
 
     async fn initialize_integration_test() -> IntegrationTest {
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
@@ -301,5 +304,65 @@ mod tests {
         // different query: results should not be equal
         assert!(!t.results_eq(&res1, &res3).await.unwrap());
         assert!(!t.results_eq(&res2, &res4).await.unwrap());
+    }
+
+
+    #[tokio::test]
+    async fn test_frontend() {
+        let t = initialize_integration_test().await;
+        const STARTUP_TIME: Duration = Duration::from_millis(2000);
+
+        t.run_server().await;
+        tokio::time::sleep(STARTUP_TIME).await;
+
+        t.run_frontend().await;
+        tokio::time::sleep(STARTUP_TIME).await;
+
+        t.run_client().await;
+        tokio::time::sleep(STARTUP_TIME).await;
+
+//         const QUERY: &str = r"select
+//     l_returnflag,
+//     l_linestatus,
+//     sum(l_quantity) as sum_qty,
+//     sum(l_extendedprice) as sum_base_price,
+//     sum(l_extendedprice * (1 - l_discount)) as sum_disc_price,
+//     sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,
+//     avg(l_quantity) as avg_qty,
+//     avg(l_extendedprice) as avg_price,
+//     avg(l_discount) as avg_disc,
+//     count(*) as count_order
+// from
+//     lineitem
+// where
+//     l_shipdate <= date '1998-09-02'
+// group by
+//     l_returnflag,
+//     l_linestatus
+// order by
+//     l_returnflag,
+//     l_linestatus;";
+
+        const QUERY: &str = r"SELECT * FROM lineitem LIMIT 2";
+
+        let query_id = t.frontend.lock().await.submit_job(QUERY).await.expect("fail to submit QUERY");
+
+         loop {
+            let mut frontend_lock = t.frontend.lock().await;
+            let job_info = frontend_lock
+                .check_job_status(query_id)
+                .await
+                .unwrap_or_else(|| {
+                    panic!("submitted QUERY id {} but not found on scheduler", query_id)
+                });
+
+            if job_info.status == InProgress {
+                println!("Checking...");
+                drop(frontend_lock);
+                tokio::time::sleep(POLL_INTERVAL).await;
+                continue;
+            }
+        }
+
     }
 }

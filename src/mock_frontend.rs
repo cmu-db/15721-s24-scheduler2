@@ -201,6 +201,9 @@ impl MockFrontend {
                 continue;
             }
 
+            self.num_running_jobs -= 1;
+            self.num_finished_jobs += 1;
+
             let status = match client
                 .query_job_status(tonic::Request::new(QueryJobStatusArgs { query_id }))
                 .await
