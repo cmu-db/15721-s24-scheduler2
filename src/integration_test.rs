@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use crate::executor::Executor;
 use crate::mock_frontend::MockFrontend;
 use crate::project_config::Config;
@@ -12,6 +11,7 @@ use datafusion::logical_expr::{col, Expr};
 use datafusion::prelude::SessionContext;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
@@ -57,7 +57,7 @@ pub struct IntegrationTest {
     config_path: String,
     ctx: Arc<SessionContext>,
     config: Config,
-    pub frontend: Arc<Mutex<MockFrontend>>
+    pub frontend: Arc<Mutex<MockFrontend>>,
 }
 
 /**
@@ -81,7 +81,7 @@ impl IntegrationTest {
             config,
             catalog_path,
             config_path,
-            frontend: Arc::new(Mutex::new(frontend))
+            frontend: Arc::new(Mutex::new(frontend)),
         }
     }
 
@@ -132,7 +132,6 @@ impl IntegrationTest {
             MockFrontend::run_polling_task(frontend_clone).await;
         });
     }
-
 
     async fn sort_batch_by_all_columns(
         &self,

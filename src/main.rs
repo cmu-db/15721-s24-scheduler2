@@ -14,15 +14,15 @@ mod task_queue;
 use crate::executor::Executor;
 use crate::integration_test::IntegrationTest;
 use crate::parser::ExecutionPlanParser;
+use crate::server::composable_database::QueryStatus::{Done, InProgress};
 use clap::{App, Arg, SubCommand};
 use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
+use prost::Message;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
-use prost::Message;
 use tokio::time::Interval;
-use crate::server::composable_database::QueryStatus::{Done, InProgress};
 
 pub enum SchedulerError {
     Error(String),
@@ -46,7 +46,6 @@ async fn main() {
                 ),
         )
         .get_matches();
-
 
     match matches.subcommand() {
         Some(("interactive", _)) => {
@@ -111,28 +110,25 @@ async fn interactive_mode() {
         }
 
         match tester.frontend.lock().await.submit_job(trimmed_input).await {
-            Ok(query_id) => {
-                loop {
+            Ok(query_id) => loop {
+                let mut frontend_lock = tester.frontend.lock().await;
+                let job_info = frontend_lock
+                    .check_job_status(query_id)
+                    .await
+                    .unwrap_or_else(|| {
+                        panic!("submitted query id {} but not found on scheduler", query_id)
+                    });
 
-                    let mut frontend_lock = tester.frontend.lock().await;
-                    let job_info = frontend_lock
-                        .check_job_status(query_id)
-                        .await
-                        .unwrap_or_else(|| {
-                            panic!("submitted query id {} but not found on scheduler", query_id)
-                        });
-
-                    if job_info.status == InProgress {
-                        drop(frontend_lock);
-                        tokio::time::sleep(POLL_INTERVAL).await;
-                        continue;
-                    }
-
-                    println!("{}", job_info);
+                if job_info.status == InProgress {
                     drop(frontend_lock);
-                    break;
+                    tokio::time::sleep(POLL_INTERVAL).await;
+                    continue;
                 }
-            }
+
+                println!("{}", job_info);
+                drop(frontend_lock);
+                break;
+            },
 
             Err(e) => {
                 eprintln!("main: fail to run sql {}: {}", trimmed_input, e);
@@ -197,7 +193,6 @@ async fn file_mode(file_path: String) {
         .unwrap_or_else(|err| {
             panic!("Unable to parse file {}: {:?}", file_path, err);
         });
-
 
     // Batch submit all queries
     for sql in sql_statements {

@@ -1,5 +1,6 @@
 use crate::project_config::load_catalog;
 use datafusion::arrow::array::RecordBatch;
+use datafusion::arrow::error::ArrowError;
 use datafusion::arrow::ipc::reader::StreamReader;
 use datafusion::arrow::ipc::writer::{FileWriter, IpcWriteOptions, StreamWriter};
 use datafusion::arrow::ipc::MetadataVersion;
@@ -14,7 +15,6 @@ use sqlparser::parser::Parser;
 use std::fmt;
 use std::io::Cursor;
 use std::sync::Arc;
-use datafusion::arrow::error::ArrowError;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -101,7 +101,6 @@ impl ExecutionPlanParser {
         Ok(buffer)
     }
 
-
     pub fn deserialize_record_batch(bytes: Vec<u8>) -> Result<RecordBatch> {
         let cursor = Cursor::new(bytes);
         let mut reader = StreamReader::try_new(cursor, None)?;
@@ -109,13 +108,23 @@ impl ExecutionPlanParser {
         // Attempt to read the first record batch from the stream
         let first_batch = match reader.next() {
             Some(Ok(batch)) => batch,
-            Some(Err(e)) => return Err(DataFusionError::Internal("Error parsing the bytes".to_string())),
-            None => return Err(DataFusionError::Internal("No record batch found in the stream".to_string())),
+            Some(Err(e)) => {
+                return Err(DataFusionError::Internal(
+                    "Error parsing the bytes".to_string(),
+                ))
+            }
+            None => {
+                return Err(DataFusionError::Internal(
+                    "No record batch found in the stream".to_string(),
+                ))
+            }
         };
 
         // Ensure no more batches are present
         match reader.next() {
-            Some(_) => Err(DataFusionError::Internal("stream contains more than one record batch".to_string())),
+            Some(_) => Err(DataFusionError::Internal(
+                "stream contains more than one record batch".to_string(),
+            )),
             None => Ok(first_batch),
         }
     }

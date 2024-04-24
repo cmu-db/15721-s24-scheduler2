@@ -1,5 +1,6 @@
 use crate::server::composable_database::{QueryInfo, ScheduleQueryArgs};
 use datafusion::arrow::array::RecordBatch;
+use datafusion::arrow::util::pretty::{pretty_format_batches, print_batches};
 use datafusion::common::DataFusionError;
 use datafusion::physical_plan::ExecutionPlan;
 use std::collections::{HashMap, HashSet};
@@ -7,7 +8,6 @@ use std::fmt;
 use std::os::linux::raw::stat;
 use std::sync::Arc;
 use std::thread::sleep;
-use datafusion::arrow::util::pretty::{pretty_format_batches, print_batches};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::time::{self, Duration};
 use tonic::transport::Channel;
@@ -25,7 +25,6 @@ use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::SessionContext;
 use sqlparser::parser::Parser;
 
-
 #[derive(Clone)]
 pub struct JobInfo {
     pub sql_string: String,
@@ -37,12 +36,14 @@ pub struct JobInfo {
 impl fmt::Display for JobInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let submitted_at = self.submitted_at.elapsed().as_secs();
-        let finished_at = self.finished_at
+        let finished_at = self
+            .finished_at
             .map(|t| t.elapsed().as_secs())
             .map_or_else(|| "not finished".to_string(), |secs| secs.to_string());
 
         let result_summary = if let Some(ref batch) = self.result {
-            match pretty_format_batches(&[batch.clone()]) {  // Assuming you can clone or have a reference
+            match pretty_format_batches(&[batch.clone()]) {
+                // Assuming you can clone or have a reference
                 Ok(formatted_batches) => formatted_batches.to_string(),
                 Err(e) => format!("Error formatting results: {}", e),
             }
@@ -50,8 +51,11 @@ impl fmt::Display for JobInfo {
             "No result".to_string()
         };
 
-        write!(f, "SQL Query: '{}', Status: {:?}, Submitted: {} seconds ago, Finished: {}, Result: {}",
-               self.sql_string, self.status, submitted_at, finished_at, result_summary)
+        write!(
+            f,
+            "SQL Query: '{}', Status: {:?}, Submitted: {} seconds ago, Finished: {}, Result: {}",
+            self.sql_string, self.status, submitted_at, finished_at, result_summary
+        )
     }
 }
 
@@ -68,7 +72,6 @@ pub struct MockFrontend {
     num_running_jobs: u64,
     num_finished_jobs: u64,
 }
-
 
 impl MockFrontend {
     pub(crate) async fn run_polling_task(shared_frontend: Arc<Mutex<MockFrontend>>) {
@@ -92,7 +95,7 @@ impl MockFrontend {
             ctx: (*ctx).clone(),
             scheduler_api_client: None,
             num_finished_jobs: 0,
-            num_running_jobs: 0
+            num_running_jobs: 0,
         }
     }
 
@@ -158,17 +161,23 @@ impl MockFrontend {
     }
 
     // check status of a job
-    pub async fn check_job_status(&mut self, query_id: u64) -> Option<&JobInfo>{
-        return self.jobs.get(&query_id)
+    pub async fn check_job_status(&mut self, query_id: u64) -> Option<&JobInfo> {
+        return self.jobs.get(&query_id);
     }
 
     pub async fn get_num_running_jobs(&self) -> u64 {
-        assert_eq!(self.jobs.len() as u64, self.num_finished_jobs + self.num_running_jobs);
+        assert_eq!(
+            self.jobs.len() as u64,
+            self.num_finished_jobs + self.num_running_jobs
+        );
         self.num_running_jobs
     }
 
     pub async fn get_num_finished_jobs(&self) -> u64 {
-        assert_eq!(self.jobs.len() as u64, self.num_finished_jobs + self.num_running_jobs);
+        assert_eq!(
+            self.jobs.len() as u64,
+            self.num_finished_jobs + self.num_running_jobs
+        );
         self.num_finished_jobs
     }
 
@@ -176,8 +185,7 @@ impl MockFrontend {
         self.jobs.clone()
     }
 
-
-    async fn poll_results(&mut self)  {
+    async fn poll_results(&mut self) {
         assert!(self.scheduler_api_client.is_some());
 
         let mut client = self.scheduler_api_client.as_mut().unwrap();
@@ -211,7 +219,6 @@ impl MockFrontend {
                 .expect("poll results: fail to decode query status");
             match new_query_status {
                 QueryStatus::Done => {
-
                     let serialized_results = status.query_result;
 
                     let results =
