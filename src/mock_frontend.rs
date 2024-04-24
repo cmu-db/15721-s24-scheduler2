@@ -80,9 +80,7 @@ impl MockFrontend {
         loop {
             interval.tick().await;
             let mut frontend = shared_frontend.lock().await;
-            let results = frontend.poll_results().await;
-            println!("Poll results: {:?}", results);
-            // Drop the lock manually if needed or it will be dropped at the end of the block
+            frontend.poll_results().await;
         }
     }
 
@@ -187,6 +185,7 @@ impl MockFrontend {
     }
 
     async fn poll_results(&mut self) {
+        // eprintln!("Polling!");
         assert!(self.scheduler_api_client.is_some());
 
         let mut client = self.scheduler_api_client.as_mut().unwrap();
@@ -202,8 +201,6 @@ impl MockFrontend {
                 continue;
             }
 
-            self.num_running_jobs -= 1;
-            self.num_finished_jobs += 1;
 
             let status = match client
                 .query_job_status(tonic::Request::new(QueryJobStatusArgs { query_id }))
@@ -222,7 +219,12 @@ impl MockFrontend {
             let new_query_status = QueryStatus::try_from(status.query_status)
                 .expect("poll results: fail to decode query status");
             match new_query_status {
+
+                QueryStatus::InProgress => {}
                 QueryStatus::Done => {
+                    self.num_running_jobs -= 1;
+                    self.num_finished_jobs += 1;
+
                     let serialized_results = status.query_result;
 
                     let results =
@@ -258,6 +260,9 @@ impl MockFrontend {
                 }
 
                 QueryStatus::Failed => {
+                    self.num_running_jobs -= 1;
+                    self.num_finished_jobs += 1;
+
                     let updated_job_info = JobInfo {
                         status: QueryStatus::Failed,
                         finished_at: Some(time::Instant::now()),

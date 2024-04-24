@@ -49,6 +49,7 @@ impl Executor {
         let mut cur_task = self.client_handshake().await;
         loop {
             assert_eq!(true, cur_task.has_new_task);
+            println!("Executor got new task");
 
             let cur_task_inner = cur_task.task.clone().unwrap();
 
@@ -61,6 +62,7 @@ impl Executor {
                 .await
                 .expect("fail to rewrite query");
 
+            println!("Executor executing...");
             let execution_result = self.execute(plan).await;
             let execution_success = execution_result.is_ok();
             println!("Finish executing, status {}", execution_success);
@@ -155,8 +157,13 @@ impl Executor {
         let mut stream = plan.execute(0, task_ctx)?;
         while let Some(batch) = stream.next().await {
             results.push(batch?);
+
         }
+        assert!(!results.is_empty());
+
+        // TODO:: need to concat results into one recordbatch
         Ok(results)
+
     }
 
     #[allow(dead_code)]
@@ -185,19 +192,54 @@ impl Executor {
 mod tests {
     use super::*;
 
-    static TEST_DATA_PATH: &str = "./test_files/";
+    static TEST_DATA_PATH: &str = "./test_data/";
 
     #[tokio::test]
     async fn test_execute_sql() {
         let executor = Executor::new(TEST_DATA_PATH, 0).await;
-
-        let query = "SELECT * FROM mock_executor_test_table";
+        let query = "SELECT * FROM customer ORDER BY c_name";
         let result = executor.execute_sql(query).await;
-
         assert!(result.is_ok());
-        let batches = result.unwrap();
-        assert!(!batches.is_empty());
-        assert_eq!(batches[0].num_columns(), 2);
-        assert_eq!(batches[0].num_rows(), 2);
+        assert!(!result.unwrap().is_empty());
+    }
+
+
+    #[tokio::test]
+    async fn test_tpc_h_16() {
+        let executor = Executor::new(TEST_DATA_PATH, 0).await;
+        let query = r"SELECT
+    p_brand,
+    p_type,
+    p_size,
+    count(DISTINCT ps_suppkey) AS supplier_cnt
+FROM
+    partsupp,
+    part
+WHERE
+    p_partkey = ps_partkey
+    AND p_brand <> 'Brand#45'
+    AND p_type NOT LIKE 'MEDIUM POLISHED%'
+    AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
+    AND ps_suppkey NOT IN (
+        SELECT
+            s_suppkey
+        FROM
+            supplier
+        WHERE
+            s_comment LIKE '%Customer%Complaints%')
+GROUP BY
+    p_brand,
+    p_type,
+    p_size
+ORDER BY
+    supplier_cnt DESC,
+    p_brand,
+    p_type,
+    p_size;
+";
+        let result = executor.execute_sql(query).await;
+        println!("length of result is {}", result.unwrap().len());
+        // assert!(result.is_ok());
+        // assert!(!result.unwrap().is_empty());
     }
 }

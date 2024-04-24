@@ -223,6 +223,9 @@ impl GraphBuilder {
         plan: Arc<dyn ExecutionPlan>,
         pipeline: usize,
     ) -> Arc<dyn ExecutionPlan> {
+
+        return plan;
+
         if plan.children().is_empty() {
             return plan;
         }

@@ -71,12 +71,13 @@ async fn get_table(
     let state = ctx.state();
     let (format, path, extension): (Arc<dyn FileFormat>, String, &'static str) = {
                 let path = format!("{catalog_path}/{table}.tbl");
+                eprintln!("Path is {}", path);
 
                 let format = CsvFormat::default()
                     .with_delimiter(b'|')
                     .with_has_header(false);
 
-                (Arc::new(format), catalog_path.to_string(), ".tbl")};
+                (Arc::new(format), path, ".tbl")};
 
     let options = ListingOptions::new(format)
         .with_file_extension(extension)
@@ -93,7 +94,7 @@ async fn get_table(
 /// The `.tbl` file contains a trailing column
 pub fn get_tbl_tpch_table_schema(table: &str) -> Schema {
     let mut schema = SchemaBuilder::from(get_tpch_table_schema(table).fields);
-    schema.push(Field::new("__placeholder", DataType::Utf8, false));
+    schema.push(Field::new("__placeholder", DataType::Utf8, true));
     schema.finish()
 }
 

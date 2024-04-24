@@ -165,6 +165,7 @@ mod tests {
                 // Check if the file is a .sql file
                 if path.extension().and_then(std::ffi::OsStr::to_str) == Some("sql") {
                     let test_file = path.to_str().unwrap();
+                    eprintln!("Testing file {}", test_file);
                     let res = parser.get_execution_plan_from_file(test_file).await;
                     assert!(res.is_ok());
 

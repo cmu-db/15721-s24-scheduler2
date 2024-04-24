@@ -258,7 +258,7 @@ mod tests {
             .map_or(false, |ext| ext == "sql") && path.file_stem()
             .and_then(|name| name.to_str())
             .map_or(false, |name| {
-                matches!(name.parse::<u32>(), Ok(3..=22))
+                matches!(name.parse::<u32>(), Ok(1..=22))
             })
     }
 
@@ -366,31 +366,31 @@ mod tests {
         t.run_client().await;
         tokio::time::sleep(STARTUP_TIME).await;
 
-        // let queries = get_all_tpch_queries_test().await;
+        let queries = get_all_tpch_queries_test().await;
 
-        let queries = vec![r"select
-    l_orderkey,
-    sum(l_extendedprice * (1 - l_discount)) as revenue,
-    o_orderdate,
-    o_shippriority
-from
-    customer,
-    orders,
-    lineitem
-where
-        c_mktsegment = 'BUILDING'
-  and c_custkey = o_custkey
-  and l_orderkey = o_orderkey
-  and o_orderdate < date '1995-03-15'
-  and l_shipdate > date '1995-03-15'
-group by
-    l_orderkey,
-    o_orderdate,
-    o_shippriority
-order by
-    revenue desc,
-    o_orderdate
-"];
+//         let queries = vec![r"select
+//     l_orderkey,
+//     sum(l_extendedprice * (1 - l_discount)) as revenue,
+//     o_orderdate,
+//     o_shippriority
+// from
+//     customer,
+//     orders,
+//     lineitem
+// where
+//         c_mktsegment = 'BUILDING'
+//   and c_custkey = o_custkey
+//   and l_orderkey = o_orderkey
+//   and o_orderdate < date '1995-03-15'
+//   and l_shipdate > date '1995-03-15'
+// group by
+//     l_orderkey,
+//     o_orderdate,
+//     o_shippriority
+// order by
+//     revenue desc,
+//     o_orderdate
+// "];
         println!("length of query is {}", queries.len());
         let mut cnt = 1;
         for query in queries {
