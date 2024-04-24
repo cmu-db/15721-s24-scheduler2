@@ -103,7 +103,7 @@ impl SchedulerApi for SchedulerService {
 
         let plan = physical_plan_from_bytes(bytes.as_slice(), &self.ctx)
             .expect("Failed to deserialize physical plan");
-        println!("schedule_query: received plan {:?}", plan);
+        // println!("schedule_query: received plan {:?}", plan);
 
         // Build a query graph, store in query table, enqueue new tasks.
         let qid = self.next_query_id();

@@ -17,6 +17,8 @@ use std::io::Cursor;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
+use bytes::Bytes;
+use crc32fast::Hasher;
 
 #[derive(Default)]
 pub struct ExecutionPlanParser {
@@ -78,6 +80,7 @@ impl ExecutionPlanParser {
 
     // Convert a sql string to a physical plan
     pub async fn sql_to_physical_plan(&self, query: &str) -> Result<Arc<dyn ExecutionPlan>> {
+        eprintln!("QUERY IS {}", query);
         let plan_result = self.ctx.sql(&query).await;
         let plan = match plan_result {
             Ok(plan) => plan,
@@ -125,6 +128,11 @@ impl ExecutionPlanParser {
 mod tests {
     use crate::parser::ExecutionPlanParser;
     use std::fmt::Debug;
+    use bytes::Bytes;
+    use crc32fast::Hasher;
+    use datafusion::physical_plan::displayable;
+    use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
+    use difference::{Changeset, Difference};
     use tokio::runtime::Builder;
 
     const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
@@ -154,6 +162,11 @@ mod tests {
 
             for path in paths {
                 let path = path.unwrap().path();
+                // if !path.ends_with("16.sql") {
+                //     eprintln!("skip shit");
+                //     continue;
+                // }
+                eprintln!("path is {:?}", path);
                 // Check if the file is a .sql file
                 if path.extension().and_then(std::ffi::OsStr::to_str) == Some("sql") {
                     let test_file = path.to_str().unwrap();
@@ -168,11 +181,28 @@ mod tests {
                         let original_plan =
                             parser.deserialize_physical_plan(serialization_result.unwrap());
                         assert!(original_plan.is_ok());
+
+                        let plan_formatted = format!("{}", displayable(plan.as_ref()).indent(false));
+                        let original_plan_formatted = format!("{}", displayable(original_plan.expect("").as_ref()).indent(false));
+                        assert_eq!(plan_formatted, original_plan_formatted);
                     }
                 }
             }
         });
     }
+
+    fn display_diff(text1: &str, text2: &str) {
+        let changeset = Changeset::new(text1, text2, "\n");
+
+        for diff in changeset.diffs {
+            match diff {
+                Difference::Same(ref x) => println!(" {}", x),
+                Difference::Add(ref x) => println!("+{}", x),
+                Difference::Rem(ref x) => println!("-{}", x),
+            }
+        }
+    }
+
 
     #[tokio::test]
     async fn read_sql_from_file() {
@@ -213,6 +243,69 @@ mod tests {
             CORRECT_SQL_2,
             sql_vec.get(1).expect("fail to get test select statement")
         );
+    }
+
+    fn compute_crc32_checksum(data: &Bytes) -> u32 {
+        let mut hasher = Hasher::new();
+        hasher.update(&data);
+        hasher.finalize()
+    }
+
+
+    #[tokio::test]
+    async fn test_physical_plan() {
+        let query = r"select
+    p_brand,
+    p_type,
+    p_size,
+    count(distinct ps_suppkey) as supplier_cnt
+from
+    partsupp,
+    part
+where
+        p_partkey = ps_partkey
+  and p_brand <> 'Brand#45'
+  and p_type not like 'MEDIUM POLISHED%'
+  and p_size in (49, 14, 23, 45, 19, 3, 36, 9)
+  and ps_suppkey not in (
+    select
+        s_suppkey
+    from
+        supplier
+    where
+            s_comment like '%Customer%Complaints%'
+)
+group by
+    p_brand,
+    p_type,
+    p_size
+order by
+    supplier_cnt desc,
+    p_brand,
+    p_type,
+    p_size;";
+        let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+
+        let plan = parser.ctx.sql(&query).await.expect("hi");
+        let plan = plan.create_physical_plan().await.expect("hi2");
+        let bytes = physical_plan_to_bytes(plan.clone()).expect("hi3");
+
+        let checksum = compute_crc32_checksum(&bytes);
+        println!("CRC32 Checksum: {:08x}", checksum);
+
+
+
+
+        let plan2 = physical_plan_from_bytes(&bytes, &parser.ctx).expect("hi4");
+        let plan_formatted = format!("{}", displayable(plan.as_ref()).indent(false));
+        let plan2_formatted =
+            format!("{}", displayable(plan2.as_ref()).indent(false));
+
+        eprintln!("About to print difference");
+        display_diff(&plan_formatted, &plan2_formatted);
+        eprintln!("Done printing difference");
+        assert_eq!(plan_formatted, plan2_formatted);
+
     }
 
     #[tokio::test]

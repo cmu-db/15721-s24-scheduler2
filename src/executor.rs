@@ -48,7 +48,6 @@ impl Executor {
         // get the first task by sending handshake message to scheduler
         let mut cur_task = self.client_handshake().await;
         loop {
-            println!("Got new task {:?}", cur_task);
             assert_eq!(true, cur_task.has_new_task);
 
             let cur_task_inner = cur_task.task.clone().unwrap();

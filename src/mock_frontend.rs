@@ -123,7 +123,7 @@ impl MockFrontend {
         let physical_plan = self.optimizer.optimize(&logical_plan).await?;
         let plan_bytes = self
             .parser
-            .serialize_physical_plan(physical_plan)
+            .serialize_physical_plan(physical_plan.clone())
             .expect("MockFrontend: fail to parse physical plan");
 
         let schedule_query_request = tonic::Request::new(ScheduleQueryArgs {

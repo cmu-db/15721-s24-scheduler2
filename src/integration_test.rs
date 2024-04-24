@@ -204,6 +204,7 @@ impl IntegrationTest {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use crate::executor::Executor;
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
@@ -213,12 +214,54 @@ mod tests {
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use std::sync::Arc;
     use std::time::Duration;
+    use tokio::fs;
+    use tokio::fs::DirEntry;
 
     async fn initialize_integration_test() -> IntegrationTest {
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
         let config_path = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
         IntegrationTest::new(catalog_path.to_string(), config_path.to_string()).await
     }
+
+    async fn get_all_tpch_queries_test() -> Vec<String> {
+        let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+        let mut res = Vec::new();
+
+        // Async read directory and collect all entries
+        let mut entries = fs::read_dir("./test_sql").await.expect("Failed to read directory");
+        let mut paths = Vec::new();
+
+        // Collect all valid paths first
+        while let Some(entry) = entries.next_entry().await.expect("Failed to fetch entry") {
+            let path = entry.path();
+            if is_target_file(&path) {
+                paths.push(path);
+            }
+        }
+
+        // Sort paths by filename to maintain order from 1.sql to 22.sql
+        paths.sort_by_key(|path| path.file_stem().unwrap().to_str().unwrap().parse::<u32>().unwrap());
+
+        // Now process each file in order
+        for path in paths {
+            let path_str = path.to_str().expect("Failed to convert path to string");
+            let sqls = parser.read_sql_from_file(path_str).await.expect("Failed to read SQL from file");
+            assert_eq!(sqls.len(), 1, "Expected exactly one SQL query per file");
+            res.push(sqls[0].clone());
+        }
+
+        res
+    }
+
+    fn is_target_file(path: &PathBuf) -> bool {
+        path.extension()
+            .map_or(false, |ext| ext == "sql") && path.file_stem()
+            .and_then(|name| name.to_str())
+            .map_or(false, |name| {
+                matches!(name.parse::<u32>(), Ok(3..=22))
+            })
+    }
+
 
     #[tokio::test]
     async fn test_results_eq_basic() {
@@ -307,8 +350,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_frontend() {
+    async fn test_interactive_frontend() {
         let t = initialize_integration_test().await;
+
+        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
+        let parser = ExecutionPlanParser::new(catalog_path).await;
         const STARTUP_TIME: Duration = Duration::from_millis(2000);
 
         t.run_server().await;
@@ -320,52 +366,61 @@ mod tests {
         t.run_client().await;
         tokio::time::sleep(STARTUP_TIME).await;
 
-        const QUERY: &str = r"select
-    l_returnflag,
-    l_linestatus,
-    sum(l_quantity) as sum_qty,
-    sum(l_extendedprice) as sum_base_price,
-    sum(l_extendedprice * (1 - l_discount)) as sum_disc_price,
-    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,
-    avg(l_quantity) as avg_qty,
-    avg(l_extendedprice) as avg_price,
-    avg(l_discount) as avg_disc,
-    count(*) as count_order
+        // let queries = get_all_tpch_queries_test().await;
+
+        let queries = vec![r"select
+    l_orderkey,
+    sum(l_extendedprice * (1 - l_discount)) as revenue,
+    o_orderdate,
+    o_shippriority
 from
+    customer,
+    orders,
     lineitem
 where
-    l_shipdate <= date '1998-09-02'
+        c_mktsegment = 'BUILDING'
+  and c_custkey = o_custkey
+  and l_orderkey = o_orderkey
+  and o_orderdate < date '1995-03-15'
+  and l_shipdate > date '1995-03-15'
 group by
-    l_returnflag,
-    l_linestatus
+    l_orderkey,
+    o_orderdate,
+    o_shippriority
 order by
-    l_returnflag,
-    l_linestatus;";
-
-        let query_id = t
-            .frontend
-            .lock()
-            .await
-            .submit_job(QUERY)
-            .await
-            .expect("fail to submit QUERY");
-
-        loop {
-            let mut frontend_lock = t.frontend.lock().await;
-            let job_info = frontend_lock
-                .check_job_status(query_id)
+    revenue desc,
+    o_orderdate
+"];
+        println!("length of query is {}", queries.len());
+        let mut cnt = 1;
+        for query in queries {
+            eprintln!("Testing sql {} of 22", cnt);
+            eprintln!("SQL string is \n {}", query);
+            cnt += 1;
+            let query_id = t
+                .frontend
+                .lock()
                 .await
-                .unwrap_or_else(|| {
-                    panic!("submitted QUERY id {} but not found on scheduler", query_id)
-                });
+                .submit_job(&query)
+                .await
+                .expect("fail to submit QUERY");
 
-            if job_info.status == InProgress {
-                drop(frontend_lock);
-                tokio::time::sleep(POLL_INTERVAL).await;
-                continue;
+            loop {
+                let mut frontend_lock = t.frontend.lock().await;
+                let job_info = frontend_lock
+                    .check_job_status(query_id)
+                    .await
+                    .unwrap_or_else(|| {
+                        panic!("submitted QUERY id {} but not found on scheduler", query_id)
+                    });
+
+                if job_info.status == InProgress {
+                    drop(frontend_lock);
+                    tokio::time::sleep(POLL_INTERVAL).await;
+                    continue;
+                }
+                break;
             }
-
-            break;
         }
     }
 }
