@@ -150,6 +150,7 @@ impl MockFrontend {
                 );
                 // The new query cannot already be in the hashmap of jobs
                 assert!(existing_value.is_none());
+                self.num_running_jobs += 1;
                 Ok(query_id)
             }
 

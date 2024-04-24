@@ -356,12 +356,16 @@ mod tests {
                     panic!("submitted QUERY id {} but not found on scheduler", query_id)
                 });
 
+             eprintln!("Job info is {}", job_info);
+
             if job_info.status == InProgress {
                 println!("Checking...");
                 drop(frontend_lock);
                 tokio::time::sleep(POLL_INTERVAL).await;
                 continue;
             }
+
+             break;
         }
 
     }

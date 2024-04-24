@@ -1,7 +1,7 @@
 use crate::project_config::load_catalog;
-use datafusion::arrow::array::RecordBatch;
+use datafusion::arrow::array::{RecordBatch, RecordBatchReader};
 use datafusion::arrow::error::ArrowError;
-use datafusion::arrow::ipc::reader::StreamReader;
+use datafusion::arrow::ipc::reader::{FileReader, StreamReader};
 use datafusion::arrow::ipc::writer::{FileWriter, IpcWriteOptions, StreamWriter};
 use datafusion::arrow::ipc::MetadataVersion;
 use datafusion::error::{DataFusionError, Result};
@@ -103,29 +103,18 @@ impl ExecutionPlanParser {
 
     pub fn deserialize_record_batch(bytes: Vec<u8>) -> Result<RecordBatch> {
         let cursor = Cursor::new(bytes);
-        let mut reader = StreamReader::try_new(cursor, None)?;
 
-        // Attempt to read the first record batch from the stream
-        let first_batch = match reader.next() {
-            Some(Ok(batch)) => batch,
-            Some(Err(e)) => {
-                return Err(DataFusionError::Internal(
-                    "Error parsing the bytes".to_string(),
-                ))
-            }
-            None => {
-                return Err(DataFusionError::Internal(
-                    "No record batch found in the stream".to_string(),
-                ))
-            }
-        };
+        let mut reader = FileReader::try_new(cursor, None)?;
+
+        let first_batch = reader
+                                                                .next()
+                                                                .expect("deserialize_record_batch: empty batch")
+                                                                .expect("deserialize_record_batch: error reading first batch");
 
         // Ensure no more batches are present
         match reader.next() {
-            Some(_) => Err(DataFusionError::Internal(
-                "stream contains more than one record batch".to_string(),
-            )),
-            None => Ok(first_batch),
+            Some(_) => {panic!("deserialize_record_batch: more than one batch");}
+            None => Ok(first_batch)
         }
     }
 }
