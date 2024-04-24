@@ -74,17 +74,11 @@ async fn rewrite_node(
         new_children.push(new_child);
     }
 
-    Ok(plan)
-
-    // if changed {
-    //     match with_new_children_if_necessary(plan, new_children) {
-    //         Ok(Transformed::no(plan)) => Ok(plan),
-    //         Ok(Transformed::yes(plan)) => Ok(plan),
-    //         Err(e) => Err(e),
-    //     }
-    // } else {
-    //     Ok(plan)
-    // }
+    if changed {
+       with_new_children_if_necessary(plan, new_children)
+    } else {
+        Ok(plan)
+    }
 }
 
 pub async fn rewrite_query(

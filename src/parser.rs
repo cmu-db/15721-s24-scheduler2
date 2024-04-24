@@ -80,7 +80,6 @@ impl ExecutionPlanParser {
 
     // Convert a sql string to a physical plan
     pub async fn sql_to_physical_plan(&self, query: &str) -> Result<Arc<dyn ExecutionPlan>> {
-        eprintln!("QUERY IS {}", query);
         let plan_result = self.ctx.sql(&query).await;
         let plan = match plan_result {
             Ok(plan) => plan,
@@ -162,10 +161,6 @@ mod tests {
 
             for path in paths {
                 let path = path.unwrap().path();
-                // if !path.ends_with("16.sql") {
-                //     eprintln!("skip shit");
-                //     continue;
-                // }
                 eprintln!("path is {:?}", path);
                 // Check if the file is a .sql file
                 if path.extension().and_then(std::ffi::OsStr::to_str) == Some("sql") {
@@ -249,63 +244,6 @@ mod tests {
         let mut hasher = Hasher::new();
         hasher.update(&data);
         hasher.finalize()
-    }
-
-
-    #[tokio::test]
-    async fn test_physical_plan() {
-        let query = r"select
-    p_brand,
-    p_type,
-    p_size,
-    count(distinct ps_suppkey) as supplier_cnt
-from
-    partsupp,
-    part
-where
-        p_partkey = ps_partkey
-  and p_brand <> 'Brand#45'
-  and p_type not like 'MEDIUM POLISHED%'
-  and p_size in (49, 14, 23, 45, 19, 3, 36, 9)
-  and ps_suppkey not in (
-    select
-        s_suppkey
-    from
-        supplier
-    where
-            s_comment like '%Customer%Complaints%'
-)
-group by
-    p_brand,
-    p_type,
-    p_size
-order by
-    supplier_cnt desc,
-    p_brand,
-    p_type,
-    p_size;";
-        let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
-
-        let plan = parser.ctx.sql(&query).await.expect("hi");
-        let plan = plan.create_physical_plan().await.expect("hi2");
-        let bytes = physical_plan_to_bytes(plan.clone()).expect("hi3");
-
-        let checksum = compute_crc32_checksum(&bytes);
-        println!("CRC32 Checksum: {:08x}", checksum);
-
-
-
-
-        let plan2 = physical_plan_from_bytes(&bytes, &parser.ctx).expect("hi4");
-        let plan_formatted = format!("{}", displayable(plan.as_ref()).indent(false));
-        let plan2_formatted =
-            format!("{}", displayable(plan2.as_ref()).indent(false));
-
-        eprintln!("About to print difference");
-        display_diff(&plan_formatted, &plan2_formatted);
-        eprintln!("Done printing difference");
-        assert_eq!(plan_formatted, plan2_formatted);
-
     }
 
     #[tokio::test]

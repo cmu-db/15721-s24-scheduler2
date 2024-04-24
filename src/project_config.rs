@@ -6,12 +6,14 @@ use std::path::Path;
 use std::sync::Arc;
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaBuilder};
 use datafusion::common::{DEFAULT_CSV_EXTENSION, DEFAULT_PARQUET_EXTENSION};
+use datafusion::config::CatalogOptions;
 use datafusion::datasource::file_format::csv::CsvFormat;
 use datafusion::datasource::file_format::FileFormat;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::{ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl};
 use datafusion::datasource::TableProvider;
 use datafusion::error::DataFusionError;
+use sqlparser::test_utils::table;
 use walkdir::WalkDir;
 
 // Format definitions for the config file
@@ -40,57 +42,18 @@ pub fn read_config(config_path: &str) -> Config {
     toml::from_str(&config_str).expect("Failed to parse config file")
 }
 
-// pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
-//     let ctx = SessionContext::new();
-//     // Bulk load files in the context (simulating API calls to the catalog)
-//     for entry in WalkDir::new(catalog_path) {
-//         let entry = entry.unwrap();
-//         if entry.file_type().is_file() {
-//             let file_path = entry.path();
-//             let table_name = file_path.file_stem().unwrap().to_str().unwrap();
-//
-//             let extension = file_path.extension().and_then(OsStr::to_str);
-//
-//             match extension {
-//                 Some("csv") => {
-//                     let options = CsvReadOptions::new();
-//                     let result = ctx
-//                         .register_csv(table_name, file_path.to_str().unwrap(), options)
-//                         .await;
-//                     assert!(
-//                         result.is_ok(),
-//                         "Failed to register CSV file: {:?}",
-//                         file_path
-//                     );
-//                 }
-//                 Some("parquet") => {
-//                     let options = ParquetReadOptions::default();
-//                     let result = ctx
-//                         .register_parquet(table_name, file_path.to_str().unwrap(), options)
-//                         .await;
-//                     // eprintln!(
-//                     //     "Registered {}, at path {:?}",
-//                     //     table_name,
-//                     //     file_path.to_str().as_slice()
-//                     // );
-//                     assert!(
-//                         result.is_ok(),
-//                         "Failed to register Parquet file: {:?}",
-//                         file_path
-//                     );
-//                 }
-//                 _ => {}
-//             }
-//         }
-//     }
-//
-//     Arc::new(ctx)
-// }
 
+pub const TPCH_TABLES: &[&str] = &[
+    "part", "supplier", "partsupp", "customer", "orders", "lineitem", "nation", "region",
+];
 
 pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
     let ctx = SessionContext::new();
-    register_tables(&ctx).await.expect("You must work!!");
+    
+    for table in TPCH_TABLES {
+        let table_provider = { get_table(&ctx, table, catalog_path).await.expect("error loading catalog") };
+        ctx.register_table(*table, table_provider).expect("error registering table");
+    }
     Arc::new(ctx)
 }
 
@@ -98,68 +61,31 @@ pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
 async fn get_table(
     ctx: &SessionContext,
     table: &str,
+    catalog_path: &str
 ) -> Result<Arc<dyn TableProvider>, DataFusionError> {
 
 
-    let path = "test_data";
-    let table_format = "tbl";
     let target_partitions = 2;
 
     // Obtain a snapshot of the SessionState
     let state = ctx.state();
-    let (format, path, extension): (Arc<dyn FileFormat>, String, &'static str) =
-        match table_format {
-            "tbl" => {
-                let path = format!("{path}/{table}.tbl");
+    let (format, path, extension): (Arc<dyn FileFormat>, String, &'static str) = {
+                let path = format!("{catalog_path}/{table}.tbl");
 
                 let format = CsvFormat::default()
                     .with_delimiter(b'|')
                     .with_has_header(false);
 
-                (Arc::new(format), path, ".tbl")
-            }
-
-            "csv" => {
-                let path = format!("{path}/{table}.csv");
-                let format = CsvFormat::default()
-                    .with_delimiter(b',')
-                    .with_has_header(true);
-
-                (Arc::new(format), path, DEFAULT_CSV_EXTENSION)
-            }
-            "parquet" => {
-                let path = format!("{path}/{table}.parquet");
-                let format = ParquetFormat::default().with_enable_pruning(true);
-
-                (Arc::new(format), path, DEFAULT_PARQUET_EXTENSION)
-            }
-            other => {
-                unimplemented!("Invalid file format '{}'", other);
-            }
-        };
-
-    eprintln!("Good here");
+                (Arc::new(format), catalog_path.to_string(), ".tbl")};
 
     let options = ListingOptions::new(format)
         .with_file_extension(extension)
         .with_target_partitions(target_partitions)
         .with_collect_stat(state.config().collect_statistics());
 
-    eprintln!("Ok1!");
-
     let table_path = ListingTableUrl::parse(path)?;
-    eprintln!("Table path is {}", table_path);
-
-    eprintln!("Ok2!");
     let config = ListingTableConfig::new(table_path).with_listing_options(options);
-
-    let config = match table_format {
-        "parquet" => config.infer_schema(&state).await?,
-        "tbl" => config.with_schema(Arc::new(get_tbl_tpch_table_schema(table))),
-        _ => unreachable!(),
-    };
-
-    eprintln!("Ok!");
+    let config = config.with_schema(Arc::new(get_tbl_tpch_table_schema(table)));
 
     Ok(Arc::new(ListingTable::try_new(config)?))
 }
@@ -173,10 +99,6 @@ pub fn get_tbl_tpch_table_schema(table: &str) -> Schema {
 
 /// Get the schema for the benchmarks derived from TPC-H
 pub fn get_tpch_table_schema(table: &str) -> Schema {
-    // note that the schema intentionally uses signed integers so that any generated Parquet
-    // files can also be used to benchmark tools that only support signed integers, such as
-    // Apache Spark
-
     match table {
         "part" => Schema::new(vec![
             Field::new("p_partkey", DataType::Int64, false),
@@ -267,17 +189,6 @@ pub fn get_tpch_table_schema(table: &str) -> Schema {
     }
 }
 
-
-pub const TPCH_TABLES: &[&str] = &[
-    "part", "supplier", "partsupp", "customer", "orders", "lineitem", "nation", "region",
-];
-async fn register_tables(ctx: &SessionContext) -> Result<(), DataFusionError> {
-    for table in TPCH_TABLES {
-        let table_provider = { get_table(ctx, table).await? };
-            ctx.register_table(*table, table_provider)?;
-    }
-    Ok(())
-}
 
 
 
