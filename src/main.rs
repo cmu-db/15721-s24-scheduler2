@@ -47,29 +47,26 @@ async fn main() {
         )
         .get_matches();
 
-    interactive_mode().await;
 
-    loop {}
+    match matches.subcommand() {
+        Some(("interactive", _)) => {
+            interactive_mode().await;
+        }
+        Some(("file", file_matches)) => {
+            if let Some(file_path) = file_matches.value_of("FILE") {
+                file_mode(file_path.to_string()).await;
+            } else {
+                eprintln!("File path not provided.");
+            }
+        }
+        None => {
+            panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
+        }
 
-    // match matches.subcommand() {
-    //     Some(("interactive", _)) => {
-    //         interactive_mode();
-    //     }
-    //     Some(("file", file_matches)) => {
-    //         if let Some(file_path) = file_matches.value_of("FILE") {
-    //             file_mode(PathBuf::from(file_path));
-    //         } else {
-    //             eprintln!("File path not provided.");
-    //         }
-    //     }
-    //     None => {
-    //         panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
-    //     }
-    //
-    //     _ => {
-    //         panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
-    //     }
-    // }
+        _ => {
+            panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
+        }
+    }
 }
 
 const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
@@ -78,18 +75,18 @@ const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 // creates server, executors, and the frontend
 async fn start_system() -> IntegrationTest {
-    const startup_time: Duration = Duration::from_millis(2000);
+    const STARTUP_TIME: Duration = Duration::from_millis(2000);
 
     let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
 
     tester.run_server().await;
-    tokio::time::sleep(startup_time).await;
+    tokio::time::sleep(STARTUP_TIME).await;
 
     tester.run_frontend().await;
-    tokio::time::sleep(startup_time).await;
+    tokio::time::sleep(STARTUP_TIME).await;
 
     tester.run_client().await;
-    tokio::time::sleep(startup_time).await;
+    tokio::time::sleep(STARTUP_TIME).await;
 
     tester
 }
@@ -112,7 +109,7 @@ async fn interactive_mode() {
         if trimmed_input.eq_ignore_ascii_case("exit") {
             break;
         }
-        
+
         match tester.frontend.lock().await.submit_job(trimmed_input).await {
             Ok(query_id) => {
                 loop {
@@ -185,15 +182,7 @@ async fn generate_reference_results(file_path: &str) -> Vec<RecordBatch> {
 async fn file_mode(file_path: String) {
     println!("Executing tests from file: {:?}", file_path);
 
-    let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
-    tester.run_server().await;
-    tokio::time::sleep(Duration::from_millis(2000)).await;
-
-    tester.run_frontend().await;
-    tokio::time::sleep(Duration::from_millis(2000)).await;
-
-    tester.run_client().await;
-    tokio::time::sleep(Duration::from_millis(2000)).await;
+    let tester = start_system().await;
 
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
@@ -201,7 +190,6 @@ async fn file_mode(file_path: String) {
         "Generating reference result sets from file: {:?}",
         file_path
     );
-    let reference_result_sets = generate_reference_results(&file_path).await;
 
     let sql_statements = parser
         .read_sql_from_file(&file_path)
@@ -209,19 +197,33 @@ async fn file_mode(file_path: String) {
         .unwrap_or_else(|err| {
             panic!("Unable to parse file {}: {:?}", file_path, err);
         });
-    //
-    // for sql in sql_statements {
-    //     println!("Running query: {}", sql);
-    //     match frontend.run_sql(&sql).await {
-    //         Ok(res) => {
-    //             println!("Result: {:?}", res);
-    //         }
-    //
-    //         Err(e) => {
-    //             println!("Error in running query: {}", e);
-    //         }
-    //     }
-    // }
+
+
+    // Batch submit all queries
+    for sql in sql_statements {
+        match tester.frontend.lock().await.submit_job(&sql).await {
+            Ok(query_id) => {
+                println!("Submitted query id: {}, query: {}", query_id, sql);
+            }
+            Err(e) => {
+                panic!("Error in submitting query: {}: {}", sql, e);
+            }
+        }
+    }
+
+    // Wait until all jobs completed
+    loop {
+        tokio::time::sleep(POLL_INTERVAL).await;
+        if tester.frontend.lock().await.get_num_running_jobs().await == 0 {
+            break;
+        }
+    }
+
+    let jobs_map = tester.frontend.lock().await.get_all_jobs();
+
+    for (job_id, job_info) in jobs_map.iter() {
+        println!("Query ID: {}, Info: {}", job_id, job_info);
+    }
 }
 
 #[cfg(test)]

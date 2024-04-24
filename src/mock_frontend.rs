@@ -26,6 +26,7 @@ use datafusion::prelude::SessionContext;
 use sqlparser::parser::Parser;
 
 
+#[derive(Clone)]
 pub struct JobInfo {
     pub sql_string: String,
     pub status: QueryStatus,
@@ -62,6 +63,10 @@ pub struct MockFrontend {
     // gRPC client for the scheduler
     scheduler_api_client: Option<SchedulerApiClient<Channel>>,
     jobs: HashMap<u64, JobInfo>,
+
+    // counters
+    num_running_jobs: u64,
+    num_finished_jobs: u64,
 }
 
 
@@ -86,6 +91,8 @@ impl MockFrontend {
             jobs: HashMap::new(),
             ctx: (*ctx).clone(),
             scheduler_api_client: None,
+            num_finished_jobs: 0,
+            num_running_jobs: 0
         }
     }
 
@@ -125,7 +132,6 @@ impl MockFrontend {
         });
 
         let mut client = self.scheduler_api_client.as_mut().unwrap();
-
         match client.schedule_query(schedule_query_request).await {
             Ok(response) => {
                 let query_id = response.into_inner().query_id;
@@ -156,10 +162,24 @@ impl MockFrontend {
         return self.jobs.get(&query_id)
     }
 
-    pub async fn poll_results(&mut self) -> HashSet<u64> {
+    pub async fn get_num_running_jobs(&self) -> u64 {
+        assert_eq!(self.jobs.len() as u64, self.num_finished_jobs + self.num_running_jobs);
+        self.num_running_jobs
+    }
+
+    pub async fn get_num_finished_jobs(&self) -> u64 {
+        assert_eq!(self.jobs.len() as u64, self.num_finished_jobs + self.num_running_jobs);
+        self.num_finished_jobs
+    }
+
+    pub fn get_all_jobs(&self) -> HashMap<u64, JobInfo> {
+        self.jobs.clone()
+    }
+
+
+    async fn poll_results(&mut self)  {
         assert!(self.scheduler_api_client.is_some());
 
-        let mut res: HashSet<u64> = HashSet::new();
         let mut client = self.scheduler_api_client.as_mut().unwrap();
 
         let keys: Vec<u64> = self.jobs.keys().cloned().collect();
@@ -191,7 +211,6 @@ impl MockFrontend {
                 .expect("poll results: fail to decode query status");
             match new_query_status {
                 QueryStatus::Done => {
-                    res.insert(query_id);
 
                     let serialized_results = status.query_result;
 
@@ -217,18 +236,17 @@ impl MockFrontend {
 
                     let v = self.jobs.insert(query_id, updated_job_info);
                     // original value must already exist in the map
-                    assert!(!v.is_none());
+                    assert!(v.is_some());
                 }
 
                 QueryStatus::NotFound => {
                     panic!(
-                        "poll_results: query id {} not found from the scheduler",
+                        "poll_results: inconsistent state: query id {} not found from the scheduler",
                         query_id
                     );
                 }
 
                 QueryStatus::Failed => {
-                    res.insert(query_id);
                     let updated_job_info = JobInfo {
                         status: QueryStatus::Failed,
                         finished_at: Some(time::Instant::now()),
@@ -245,8 +263,5 @@ impl MockFrontend {
                 }
             }
         }
-        res
     }
-
-
 }
