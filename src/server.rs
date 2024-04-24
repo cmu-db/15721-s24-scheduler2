@@ -4,6 +4,7 @@ pub mod composable_database {
 }
 
 use crate::intermediate_results::{get_results, TaskKey};
+use crate::parser::ExecutionPlanParser;
 use crate::project_config::load_catalog;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
@@ -24,7 +25,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Once};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
-use crate::parser::ExecutionPlanParser;
 
 // Static query_id generator
 static QID_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -37,7 +37,7 @@ pub struct SchedulerService {
     query_table: Arc<QueryTable>,
     task_queue: Arc<TaskQueue>,
     ctx: Arc<SessionContext>, // If we support changing the catalog at runtime, this should be a RwLock.
-    query_id_counter: AtomicU64
+    query_id_counter: AtomicU64,
 }
 
 impl fmt::Debug for SchedulerService {
@@ -56,7 +56,7 @@ impl SchedulerService {
             query_table: Arc::new(QueryTable::new().await),
             task_queue: Arc::new(TaskQueue::new()),
             ctx: load_catalog(catalog_path).await,
-            query_id_counter: AtomicU64::new(0)
+            query_id_counter: AtomicU64::new(0),
         }
     }
 
@@ -163,9 +163,12 @@ impl SchedulerApi for SchedulerService {
 
             assert_eq!(1, final_result.len());
             let final_result_bytes = ExecutionPlanParser::serialize_record_batch(
-                final_result.get(0)
-                .expect("server: result empty").to_owned())
-                .expect("fail to serialize record batch");
+                final_result
+                    .get(0)
+                    .expect("server: result empty")
+                    .to_owned(),
+            )
+            .expect("fail to serialize record batch");
 
             Ok(Response::new(QueryJobStatusRet {
                 query_status: QueryStatus::Done.into(),

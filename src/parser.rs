@@ -107,14 +107,16 @@ impl ExecutionPlanParser {
         let mut reader = FileReader::try_new(cursor, None)?;
 
         let first_batch = reader
-                                                                .next()
-                                                                .expect("deserialize_record_batch: empty batch")
-                                                                .expect("deserialize_record_batch: error reading first batch");
+            .next()
+            .expect("deserialize_record_batch: empty batch")
+            .expect("deserialize_record_batch: error reading first batch");
 
         // Ensure no more batches are present
         match reader.next() {
-            Some(_) => {panic!("deserialize_record_batch: more than one batch");}
-            None => Ok(first_batch)
+            Some(_) => {
+                panic!("deserialize_record_batch: more than one batch");
+            }
+            None => Ok(first_batch),
         }
     }
 }
