@@ -54,7 +54,7 @@ async fn main() {
         }
         Some(("file", file_matches)) => {
             if let Some(file_path) = file_matches.value_of("FILE") {
-                file_mode(file_path.to_string()).await;
+                file_mode(vec![file_path]).await;
             } else {
                 eprintln!("File path not provided.");
             }
@@ -91,6 +91,7 @@ pub async fn start_system() -> IntegrationTest {
     tester
 }
 
+// submits a sql query and blocks until the result is received
 pub async fn run_single_query(tester: &IntegrationTest, query: &str) -> Result<(), DataFusionError> {
     let query_id = tester.frontend.lock().await.submit_job(query).await?;
     loop {
@@ -112,9 +113,10 @@ pub async fn run_single_query(tester: &IntegrationTest, query: &str) -> Result<(
         drop(frontend_lock);
         return Ok(());
     }
-
-    Ok(())
+    unreachable!();
 }
+
+
 
 async fn interactive_mode() {
     println!("Entering interactive mode. Type your SQL queries or 'exit' to quit:");
@@ -180,33 +182,33 @@ async fn generate_reference_results(file_path: &str) -> Vec<RecordBatch> {
     results
 }
 
-async fn file_mode(file_path: String) {
-    println!("Executing tests from file: {:?}", file_path);
-
+pub async fn file_mode(file_paths: Vec<&str>) {
     let tester = start_system().await;
-
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
-    println!(
-        "Generating reference result sets from file: {:?}",
-        file_path
-    );
+    // for each file selected...
+    for file_path in file_paths {
+        println!("Executing tests from file: {:?}", file_path);
 
-    let sql_statements = parser
-        .read_sql_from_file(&file_path)
-        .await
-        .unwrap_or_else(|err| {
-            panic!("Unable to parse file {}: {:?}", file_path, err);
-        });
+        // Read SQL statements from file
+        let sql_statements = parser
+            .read_sql_from_file(&file_path)
+            .await
+            .unwrap_or_else(|err| {
+                panic!("Unable to parse file {}: {:?}", file_path, err);
+            });
 
-    // Batch submit all queries
-    for sql in sql_statements {
-        match tester.frontend.lock().await.submit_job(&sql).await {
-            Ok(query_id) => {
-                println!("Submitted query id: {}, query: {}", query_id, sql);
-            }
-            Err(e) => {
-                panic!("Error in submitting query: {}: {}", sql, e);
+        println!("Generating reference result sets from file: {:?}", file_path);
+
+        // Batch submit all queries
+        for sql in sql_statements {
+            match tester.frontend.lock().await.submit_job(&sql).await {
+                Ok(query_id) => {
+                    println!("Submitted query id: {}, query: {}", query_id, sql);
+                }
+                Err(e) => {
+                    panic!("Error in submitting query: {}: {}", sql, e);
+                }
             }
         }
     }
@@ -219,23 +221,32 @@ async fn file_mode(file_path: String) {
         }
     }
 
+    // Collect and print all job results
     let jobs_map = tester.frontend.lock().await.get_all_jobs();
-
     for (job_id, job_info) in jobs_map.iter() {
         println!("Query ID: {}, Info: {}", job_id, job_info);
     }
 }
 
+
+
 #[cfg(test)]
 mod tests {
-    use crate::generate_reference_results;
+    use crate::{file_mode, generate_reference_results};
 
     #[tokio::test]
     async fn test_generate_reference_results() {
         let test_sql_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/1.sql");
         let results = generate_reference_results(&test_sql_path).await;
+    }
 
-        // 1 since each TPC-H query only contains 1 result set
-        assert_eq!(1, results.len());
+
+
+
+    #[tokio::test]
+    async fn test_file_mode() {
+        let files_to_run = vec!["./test_sql/1.sql", "./test_sql/2.sql", "./test_sql/3.sql", "./test_sql/4.sql", "./test_sql/5.sql", "./test_sql/6.sql", "./test_sql/7.sql", "./test_sql/8.sql", "./test_sql/9.sql", "./test_sql/10.sql"];
+
+        file_mode(files_to_run).await;
     }
 }

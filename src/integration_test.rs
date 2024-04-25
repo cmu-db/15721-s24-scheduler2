@@ -223,7 +223,7 @@ mod tests {
         IntegrationTest::new(catalog_path.to_string(), config_path.to_string()).await
     }
 
-    async fn get_all_tpch_queries_test() -> Vec<String> {
+    pub async fn get_all_tpch_queries_test() -> Vec<String> {
         let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
         let mut res = Vec::new();
 
