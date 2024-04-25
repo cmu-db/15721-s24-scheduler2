@@ -1,19 +1,21 @@
-use datafusion::prelude::{CsvReadOptions, ParquetReadOptions, SessionContext};
-use serde::{Deserialize, Serialize};
-use std::ffi::OsStr;
-use std::fs;
-use std::path::Path;
-use std::sync::Arc;
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaBuilder};
 use datafusion::common::{DEFAULT_CSV_EXTENSION, DEFAULT_PARQUET_EXTENSION};
 use datafusion::config::CatalogOptions;
 use datafusion::datasource::file_format::csv::CsvFormat;
-use datafusion::datasource::file_format::FileFormat;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
-use datafusion::datasource::listing::{ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl};
+use datafusion::datasource::file_format::FileFormat;
+use datafusion::datasource::listing::{
+    ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
+};
 use datafusion::datasource::TableProvider;
 use datafusion::error::DataFusionError;
+use datafusion::prelude::{CsvReadOptions, ParquetReadOptions, SessionContext};
+use serde::{Deserialize, Serialize};
 use sqlparser::test_utils::table;
+use std::ffi::OsStr;
+use std::fs;
+use std::path::Path;
+use std::sync::Arc;
 use walkdir::WalkDir;
 
 // Format definitions for the config file
@@ -42,42 +44,44 @@ pub fn read_config(config_path: &str) -> Config {
     toml::from_str(&config_str).expect("Failed to parse config file")
 }
 
-
 pub const TPCH_TABLES: &[&str] = &[
     "part", "supplier", "partsupp", "customer", "orders", "lineitem", "nation", "region",
 ];
 
 pub async fn load_catalog(catalog_path: &str) -> Arc<SessionContext> {
     let ctx = SessionContext::new();
-    
+
     for table in TPCH_TABLES {
-        let table_provider = { get_table(&ctx, table, catalog_path).await.expect("error loading catalog") };
-        ctx.register_table(*table, table_provider).expect("error registering table");
+        let table_provider = {
+            get_table(&ctx, table, catalog_path)
+                .await
+                .expect("error loading catalog")
+        };
+        ctx.register_table(*table, table_provider)
+            .expect("error registering table");
     }
     Arc::new(ctx)
 }
 
-
 async fn get_table(
     ctx: &SessionContext,
     table: &str,
-    catalog_path: &str
+    catalog_path: &str,
 ) -> Result<Arc<dyn TableProvider>, DataFusionError> {
-
-
     let target_partitions = 2;
 
     // Obtain a snapshot of the SessionState
     let state = ctx.state();
     let (format, path, extension): (Arc<dyn FileFormat>, String, &'static str) = {
-                let path = format!("{catalog_path}/{table}.tbl");
-                eprintln!("Path is {}", path);
+        let path = format!("{catalog_path}/{table}.tbl");
+        eprintln!("Path is {}", path);
 
-                let format = CsvFormat::default()
-                    .with_delimiter(b'|')
-                    .with_has_header(false);
+        let format = CsvFormat::default()
+            .with_delimiter(b'|')
+            .with_has_header(false);
 
-                (Arc::new(format), path, ".tbl")};
+        (Arc::new(format), path, ".tbl")
+    };
 
     let options = ListingOptions::new(format)
         .with_file_extension(extension)
@@ -189,9 +193,6 @@ pub fn get_tpch_table_schema(table: &str) -> Schema {
         _ => unimplemented!(),
     }
 }
-
-
-
 
 #[cfg(test)]
 mod tests {

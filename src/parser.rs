@@ -1,4 +1,6 @@
 use crate::project_config::load_catalog;
+use bytes::Bytes;
+use crc32fast::Hasher;
 use datafusion::arrow::array::{RecordBatch, RecordBatchReader};
 use datafusion::arrow::error::ArrowError;
 use datafusion::arrow::ipc::reader::{FileReader, StreamReader};
@@ -10,6 +12,7 @@ use datafusion::physical_plan::ExecutionPlan;
 use datafusion::physical_planner::PhysicalPlanner;
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use futures::TryFutureExt;
+use serde_json::error::Category::Data;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use std::fmt;
@@ -17,9 +20,6 @@ use std::io::Cursor;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use bytes::Bytes;
-use crc32fast::Hasher;
-use serde_json::error::Category::Data;
 
 #[derive(Default)]
 pub struct ExecutionPlanParser {
@@ -101,7 +101,6 @@ impl ExecutionPlanParser {
         }
         let schema = batches[0].schema();
 
-        // Create a nested scope for the FileWriter
         {
             let mut writer = FileWriter::try_new(&mut buffer, &schema)?;
 
@@ -110,9 +109,8 @@ impl ExecutionPlanParser {
                 writer.write(&batch)?;
             }
 
-            // Complete the writing process to ensure all data is flushed to the buffer
             writer.finish()?;
-        } // `writer` goes out of scope here, releasing the borrow on `buffer`
+        }
 
         Ok(buffer)
     }
@@ -138,12 +136,12 @@ impl ExecutionPlanParser {
 #[cfg(test)]
 mod tests {
     use crate::parser::ExecutionPlanParser;
-    use std::fmt::Debug;
     use bytes::Bytes;
     use crc32fast::Hasher;
     use datafusion::physical_plan::displayable;
     use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
     use difference::{Changeset, Difference};
+    use std::fmt::Debug;
     use tokio::runtime::Builder;
 
     const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
@@ -190,8 +188,12 @@ mod tests {
                             parser.deserialize_physical_plan(serialization_result.unwrap());
                         assert!(original_plan.is_ok());
 
-                        let plan_formatted = format!("{}", displayable(plan.as_ref()).indent(false));
-                        let original_plan_formatted = format!("{}", displayable(original_plan.expect("").as_ref()).indent(false));
+                        let plan_formatted =
+                            format!("{}", displayable(plan.as_ref()).indent(false));
+                        let original_plan_formatted = format!(
+                            "{}",
+                            displayable(original_plan.expect("").as_ref()).indent(false)
+                        );
                         assert_eq!(plan_formatted, original_plan_formatted);
                     }
                 }
@@ -210,7 +212,6 @@ mod tests {
             }
         }
     }
-
 
     #[tokio::test]
     async fn read_sql_from_file() {

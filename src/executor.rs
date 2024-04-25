@@ -157,13 +157,11 @@ impl Executor {
         let mut stream = plan.execute(0, task_ctx)?;
         while let Some(batch) = stream.next().await {
             results.push(batch?);
-
         }
         assert!(!results.is_empty());
 
         // TODO:: need to concat results into one recordbatch
         Ok(results)
-
     }
 
     #[allow(dead_code)]
@@ -202,7 +200,6 @@ mod tests {
         assert!(result.is_ok());
         assert!(!result.unwrap().is_empty());
     }
-
 
     #[tokio::test]
     async fn test_tpc_h_16() {

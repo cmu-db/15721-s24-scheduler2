@@ -162,10 +162,8 @@ impl SchedulerApi for SchedulerService {
             // ****************** BEGIN CHANGES FROM INTEGRATION TESTING ***************//
 
             assert_eq!(1, final_result.len());
-            let final_result_bytes = ExecutionPlanParser::serialize_record_batches(
-                final_result
-            )
-            .expect("fail to serialize record batch");
+            let final_result_bytes = ExecutionPlanParser::serialize_record_batches(final_result)
+                .expect("fail to serialize record batch");
 
             Ok(Response::new(QueryJobStatusRet {
                 query_status: QueryStatus::Done.into(),

@@ -204,7 +204,6 @@ impl IntegrationTest {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use crate::executor::Executor;
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
@@ -212,6 +211,7 @@ mod tests {
     use crate::{CATALOG_PATH, CONFIG_PATH, POLL_INTERVAL};
     use datafusion::arrow::array::{Int32Array, RecordBatch};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::fs;
@@ -228,7 +228,9 @@ mod tests {
         let mut res = Vec::new();
 
         // Async read directory and collect all entries
-        let mut entries = fs::read_dir("./test_sql").await.expect("Failed to read directory");
+        let mut entries = fs::read_dir("./test_sql")
+            .await
+            .expect("Failed to read directory");
         let mut paths = Vec::new();
 
         // Collect all valid paths first
@@ -240,12 +242,22 @@ mod tests {
         }
 
         // Sort paths by filename to maintain order from 1.sql to 22.sql
-        paths.sort_by_key(|path| path.file_stem().unwrap().to_str().unwrap().parse::<u32>().unwrap());
+        paths.sort_by_key(|path| {
+            path.file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .parse::<u32>()
+                .unwrap()
+        });
 
         // Now process each file in order
         for path in paths {
             let path_str = path.to_str().expect("Failed to convert path to string");
-            let sqls = parser.read_sql_from_file(path_str).await.expect("Failed to read SQL from file");
+            let sqls = parser
+                .read_sql_from_file(path_str)
+                .await
+                .expect("Failed to read SQL from file");
             assert_eq!(sqls.len(), 1, "Expected exactly one SQL query per file");
             res.push(sqls[0].clone());
         }
@@ -254,14 +266,12 @@ mod tests {
     }
 
     fn is_target_file(path: &PathBuf) -> bool {
-        path.extension()
-            .map_or(false, |ext| ext == "sql") && path.file_stem()
-            .and_then(|name| name.to_str())
-            .map_or(false, |name| {
-                matches!(name.parse::<u32>(), Ok(1..=22))
-            })
+        path.extension().map_or(false, |ext| ext == "sql")
+            && path
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .map_or(false, |name| matches!(name.parse::<u32>(), Ok(1..=22)))
     }
-
 
     #[tokio::test]
     async fn test_results_eq_basic() {
@@ -368,29 +378,29 @@ mod tests {
 
         let queries = get_all_tpch_queries_test().await;
 
-//         let queries = vec![r"select
-//     l_orderkey,
-//     sum(l_extendedprice * (1 - l_discount)) as revenue,
-//     o_orderdate,
-//     o_shippriority
-// from
-//     customer,
-//     orders,
-//     lineitem
-// where
-//         c_mktsegment = 'BUILDING'
-//   and c_custkey = o_custkey
-//   and l_orderkey = o_orderkey
-//   and o_orderdate < date '1995-03-15'
-//   and l_shipdate > date '1995-03-15'
-// group by
-//     l_orderkey,
-//     o_orderdate,
-//     o_shippriority
-// order by
-//     revenue desc,
-//     o_orderdate
-// "];
+        //         let queries = vec![r"select
+        //     l_orderkey,
+        //     sum(l_extendedprice * (1 - l_discount)) as revenue,
+        //     o_orderdate,
+        //     o_shippriority
+        // from
+        //     customer,
+        //     orders,
+        //     lineitem
+        // where
+        //         c_mktsegment = 'BUILDING'
+        //   and c_custkey = o_custkey
+        //   and l_orderkey = o_orderkey
+        //   and o_orderdate < date '1995-03-15'
+        //   and l_shipdate > date '1995-03-15'
+        // group by
+        //     l_orderkey,
+        //     o_orderdate,
+        //     o_shippriority
+        // order by
+        //     revenue desc,
+        //     o_orderdate
+        // "];
         println!("length of query is {}", queries.len());
         let mut cnt = 1;
         for query in queries {

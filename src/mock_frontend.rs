@@ -201,7 +201,6 @@ impl MockFrontend {
                 continue;
             }
 
-
             let status = match client
                 .query_job_status(tonic::Request::new(QueryJobStatusArgs { query_id }))
                 .await
@@ -219,7 +218,6 @@ impl MockFrontend {
             let new_query_status = QueryStatus::try_from(status.query_status)
                 .expect("poll results: fail to decode query status");
             match new_query_status {
-
                 QueryStatus::InProgress => {}
                 QueryStatus::Done => {
                     self.num_running_jobs -= 1;
