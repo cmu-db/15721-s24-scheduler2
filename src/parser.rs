@@ -1,18 +1,13 @@
 use crate::project_config::load_catalog;
-use bytes::Bytes;
-use crc32fast::Hasher;
 use datafusion::arrow::array::{RecordBatch, RecordBatchReader};
-use datafusion::arrow::error::ArrowError;
 use datafusion::arrow::ipc::reader::{FileReader, StreamReader};
 use datafusion::arrow::ipc::writer::{FileWriter, IpcWriteOptions, StreamWriter};
-use datafusion::arrow::ipc::MetadataVersion;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::physical_planner::PhysicalPlanner;
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use futures::TryFutureExt;
-use serde_json::error::Category::Data;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use std::fmt;
