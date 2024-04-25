@@ -22,6 +22,7 @@ use prost::Message;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
+use futures::TryFutureExt;
 use tokio::time::Interval;
 
 pub enum SchedulerError {
@@ -73,7 +74,7 @@ const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 // creates server, executors, and the frontend
-async fn start_system() -> IntegrationTest {
+pub async fn start_system() -> IntegrationTest {
     const STARTUP_TIME: Duration = Duration::from_millis(2000);
 
     let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
@@ -88,6 +89,31 @@ async fn start_system() -> IntegrationTest {
     tokio::time::sleep(STARTUP_TIME).await;
 
     tester
+}
+
+pub async fn run_single_query(tester: &IntegrationTest, query: &str) -> Result<(), DataFusionError> {
+    let query_id = tester.frontend.lock().await.submit_job(query).await?;
+    loop {
+        let mut frontend_lock = tester.frontend.lock().await;
+        let job_info = frontend_lock
+            .check_job_status(query_id)
+            .await
+            .unwrap_or_else(|| {
+                panic!("submitted query id {} but not found on scheduler", query_id)
+            });
+
+        if job_info.status == InProgress {
+            drop(frontend_lock);
+            tokio::time::sleep(POLL_INTERVAL).await;
+            continue;
+        }
+
+        println!("{}", job_info);
+        drop(frontend_lock);
+        return Ok(());
+    }
+
+    Ok(())
 }
 
 async fn interactive_mode() {
@@ -109,32 +135,11 @@ async fn interactive_mode() {
             break;
         }
 
-        match tester.frontend.lock().await.submit_job(trimmed_input).await {
-            Ok(query_id) => loop {
-                let mut frontend_lock = tester.frontend.lock().await;
-                let job_info = frontend_lock
-                    .check_job_status(query_id)
-                    .await
-                    .unwrap_or_else(|| {
-                        panic!("submitted query id {} but not found on scheduler", query_id)
-                    });
-
-                if job_info.status == InProgress {
-                    drop(frontend_lock);
-                    tokio::time::sleep(POLL_INTERVAL).await;
-                    continue;
-                }
-
-                println!("{}", job_info);
-                drop(frontend_lock);
-                break;
-            },
-
-            Err(e) => {
-                eprintln!("main: fail to run sql {}: {}", trimmed_input, e);
-                continue;
+        run_single_query(&tester, trimmed_input).await.unwrap_or_else(
+            |err| {
+                eprintln!("Error running query {}: {}", trimmed_input, err);
             }
-        }
+        );
     }
 }
 

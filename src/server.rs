@@ -160,8 +160,6 @@ impl SchedulerApi for SchedulerService {
                 final_result_opt.expect("api.rs: query is done but no results in table");
 
             // ****************** BEGIN CHANGES FROM INTEGRATION TESTING ***************//
-
-            // assert_eq!(1, final_result.len());
             let final_result_bytes = ExecutionPlanParser::serialize_record_batches(final_result)
                 .expect("fail to serialize record batch");
 

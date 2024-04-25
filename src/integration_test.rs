@@ -208,7 +208,7 @@ mod tests {
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
     use crate::server::composable_database::QueryStatus::InProgress;
-    use crate::{CATALOG_PATH, CONFIG_PATH, POLL_INTERVAL};
+    use crate::{CATALOG_PATH, CONFIG_PATH, POLL_INTERVAL, run_single_query, start_system};
     use datafusion::arrow::array::{Int32Array, RecordBatch};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use std::path::PathBuf;
@@ -361,76 +361,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_interactive_frontend() {
-        let t = initialize_integration_test().await;
-
-        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
-        let parser = ExecutionPlanParser::new(catalog_path).await;
-        const STARTUP_TIME: Duration = Duration::from_millis(2000);
-
-        t.run_server().await;
-        tokio::time::sleep(STARTUP_TIME).await;
-
-        t.run_frontend().await;
-        tokio::time::sleep(STARTUP_TIME).await;
-
-        t.run_client().await;
-        tokio::time::sleep(STARTUP_TIME).await;
+        let t = start_system().await;
 
         let queries = get_all_tpch_queries_test().await;
 
-        //         let queries = vec![r"select
-        //     l_orderkey,
-        //     sum(l_extendedprice * (1 - l_discount)) as revenue,
-        //     o_orderdate,
-        //     o_shippriority
-        // from
-        //     customer,
-        //     orders,
-        //     lineitem
-        // where
-        //         c_mktsegment = 'BUILDING'
-        //   and c_custkey = o_custkey
-        //   and l_orderkey = o_orderkey
-        //   and o_orderdate < date '1995-03-15'
-        //   and l_shipdate > date '1995-03-15'
-        // group by
-        //     l_orderkey,
-        //     o_orderdate,
-        //     o_shippriority
-        // order by
-        //     revenue desc,
-        //     o_orderdate
-        // "];
-        println!("length of query is {}", queries.len());
         let mut cnt = 1;
         for query in queries {
             eprintln!("Testing sql {} of 22", cnt);
             eprintln!("SQL string is \n {}", query);
             cnt += 1;
-            let query_id = t
-                .frontend
-                .lock()
-                .await
-                .submit_job(&query)
-                .await
-                .expect("fail to submit QUERY");
 
-            loop {
-                let mut frontend_lock = t.frontend.lock().await;
-                let job_info = frontend_lock
-                    .check_job_status(query_id)
-                    .await
-                    .unwrap_or_else(|| {
-                        panic!("submitted QUERY id {} but not found on scheduler", query_id)
-                    });
-
-                if job_info.status == InProgress {
-                    drop(frontend_lock);
-                    tokio::time::sleep(POLL_INTERVAL).await;
-                    continue;
-                }
-                break;
-            }
+          run_single_query(&t, &query).await.expect(
+              "fail to execute query"
+          );
         }
     }
 }
