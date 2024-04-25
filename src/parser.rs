@@ -19,6 +19,7 @@ use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use bytes::Bytes;
 use crc32fast::Hasher;
+use serde_json::error::Category::Data;
 
 #[derive(Default)]
 pub struct ExecutionPlanParser {
@@ -91,34 +92,45 @@ impl ExecutionPlanParser {
         plan.create_physical_plan().await
     }
 
-    pub fn serialize_record_batch(batch: RecordBatch) -> Result<Vec<u8>> {
+    pub fn serialize_record_batches(batches: Vec<RecordBatch>) -> Result<Vec<u8>> {
         let mut buffer: Vec<u8> = Vec::new();
-        let schema = batch.schema();
+
+        // Assuming all batches share the same schema for simplicity.
+        if batches.is_empty() {
+            DataFusionError::Internal("serialize_record_batches: empty batches".to_string());
+        }
+        let schema = batches[0].schema();
+
+        // Create a nested scope for the FileWriter
         {
             let mut writer = FileWriter::try_new(&mut buffer, &schema)?;
-            writer.write(&batch)?;
+
+            for batch in batches {
+                assert_eq!(batch.schema(), schema);
+                writer.write(&batch)?;
+            }
+
+            // Complete the writing process to ensure all data is flushed to the buffer
             writer.finish()?;
-        }
+        } // `writer` goes out of scope here, releasing the borrow on `buffer`
 
         Ok(buffer)
     }
 
-    pub fn deserialize_record_batch(bytes: Vec<u8>) -> Result<RecordBatch> {
+    /// Deserializes a `Vec<u8>` into a vector of `RecordBatch`.
+    pub fn deserialize_record_batches(bytes: Vec<u8>) -> Result<Vec<RecordBatch>> {
         let cursor = Cursor::new(bytes);
-
         let mut reader = FileReader::try_new(cursor, None)?;
+        let mut batches = Vec::new();
+        while let Some(batch) = reader.next() {
+            let batch = batch.expect("deserialize_record_batches: error reading batch");
+            batches.push(batch);
+        }
 
-        let first_batch = reader
-            .next()
-            .expect("deserialize_record_batch: empty batch")
-            .expect("deserialize_record_batch: error reading first batch");
-
-        // Ensure no more batches are present
-        match reader.next() {
-            Some(_) => {
-                panic!("deserialize_record_batch: more than one batch");
-            }
-            None => Ok(first_batch),
+        if batches.is_empty() {
+            panic!("deserialize_record_batches: no batches are found");
+        } else {
+            Ok(batches)
         }
     }
 }

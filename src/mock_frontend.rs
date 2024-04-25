@@ -31,7 +31,7 @@ pub struct JobInfo {
     pub status: QueryStatus,
     pub submitted_at: time::Instant,
     pub finished_at: Option<time::Instant>,
-    pub result: Option<RecordBatch>,
+    pub result: Option<Vec<RecordBatch>>,
 }
 impl fmt::Display for JobInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -42,7 +42,7 @@ impl fmt::Display for JobInfo {
             .map_or_else(|| "not finished".to_string(), |secs| secs.to_string());
 
         let result_summary = if let Some(ref batch) = self.result {
-            match pretty_format_batches(&[batch.clone()]) {
+            match pretty_format_batches(batch) {
                 // Assuming you can clone or have a reference
                 Ok(formatted_batches) => formatted_batches.to_string(),
                 Err(e) => format!("Error formatting results: {}", e),
@@ -228,7 +228,7 @@ impl MockFrontend {
                     let serialized_results = status.query_result;
 
                     let results =
-                        match ExecutionPlanParser::deserialize_record_batch(serialized_results) {
+                        match ExecutionPlanParser::deserialize_record_batches(serialized_results) {
                             Ok(res) => res,
                             Err(err) => {
                                 eprintln!(

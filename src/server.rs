@@ -162,11 +162,8 @@ impl SchedulerApi for SchedulerService {
             // ****************** BEGIN CHANGES FROM INTEGRATION TESTING ***************//
 
             assert_eq!(1, final_result.len());
-            let final_result_bytes = ExecutionPlanParser::serialize_record_batch(
+            let final_result_bytes = ExecutionPlanParser::serialize_record_batches(
                 final_result
-                    .get(0)
-                    .expect("server: result empty")
-                    .to_owned(),
             )
             .expect("fail to serialize record batch");
 
