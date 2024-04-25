@@ -208,7 +208,7 @@ mod tests {
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
     use crate::server::composable_database::QueryStatus::InProgress;
-    use crate::{CATALOG_PATH, CONFIG_PATH, POLL_INTERVAL, run_single_query, start_system};
+    use crate::{run_single_query, start_system, CATALOG_PATH, CONFIG_PATH, POLL_INTERVAL};
     use datafusion::arrow::array::{Int32Array, RecordBatch};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use std::path::PathBuf;
@@ -371,9 +371,9 @@ mod tests {
             eprintln!("SQL string is \n {}", query);
             cnt += 1;
 
-          run_single_query(&t, &query).await.expect(
-              "fail to execute query"
-          );
+            run_single_query(&t, &query)
+                .await
+                .expect("fail to execute query");
         }
     }
 }

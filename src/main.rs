@@ -18,11 +18,11 @@ use crate::server::composable_database::QueryStatus::{Done, InProgress};
 use clap::{App, Arg, SubCommand};
 use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
+use futures::TryFutureExt;
 use prost::Message;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
-use futures::TryFutureExt;
 use tokio::time::Interval;
 
 pub enum SchedulerError {
@@ -92,7 +92,10 @@ pub async fn start_system() -> IntegrationTest {
 }
 
 // submits a sql query and blocks until the result is received
-pub async fn run_single_query(tester: &IntegrationTest, query: &str) -> Result<(), DataFusionError> {
+pub async fn run_single_query(
+    tester: &IntegrationTest,
+    query: &str,
+) -> Result<(), DataFusionError> {
     let query_id = tester.frontend.lock().await.submit_job(query).await?;
     loop {
         let mut frontend_lock = tester.frontend.lock().await;
@@ -116,8 +119,6 @@ pub async fn run_single_query(tester: &IntegrationTest, query: &str) -> Result<(
     unreachable!();
 }
 
-
-
 async fn interactive_mode() {
     println!("Entering interactive mode. Type your SQL queries or 'exit' to quit:");
 
@@ -137,11 +138,11 @@ async fn interactive_mode() {
             break;
         }
 
-        run_single_query(&tester, trimmed_input).await.unwrap_or_else(
-            |err| {
+        run_single_query(&tester, trimmed_input)
+            .await
+            .unwrap_or_else(|err| {
                 eprintln!("Error running query {}: {}", trimmed_input, err);
-            }
-        );
+            });
     }
 }
 
@@ -198,7 +199,10 @@ pub async fn file_mode(file_paths: Vec<&str>) {
                 panic!("Unable to parse file {}: {:?}", file_path, err);
             });
 
-        println!("Generating reference result sets from file: {:?}", file_path);
+        println!(
+            "Generating reference result sets from file: {:?}",
+            file_path
+        );
 
         // Batch submit all queries
         for sql in sql_statements {
@@ -228,8 +232,6 @@ pub async fn file_mode(file_paths: Vec<&str>) {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use crate::{file_mode, generate_reference_results};
@@ -240,12 +242,32 @@ mod tests {
         let results = generate_reference_results(&test_sql_path).await;
     }
 
-
-
-
     #[tokio::test]
     async fn test_file_mode() {
-        let files_to_run = vec!["./test_sql/1.sql", "./test_sql/2.sql", "./test_sql/3.sql", "./test_sql/4.sql", "./test_sql/5.sql", "./test_sql/6.sql", "./test_sql/7.sql", "./test_sql/8.sql", "./test_sql/9.sql", "./test_sql/10.sql"];
+        let files_to_run = vec![
+            "./test_sql/1.sql",
+            "./test_sql/2.sql",
+            "./test_sql/3.sql",
+            "./test_sql/4.sql",
+            "./test_sql/5.sql",
+            "./test_sql/6.sql",
+            "./test_sql/7.sql",
+            "./test_sql/8.sql",
+            "./test_sql/9.sql",
+            "./test_sql/10.sql",
+            "./test_sql/11.sql",
+            "./test_sql/12.sql",
+            "./test_sql/13.sql",
+            "./test_sql/14.sql",
+            "./test_sql/15.sql",
+            "./test_sql/16.sql",
+            "./test_sql/17.sql",
+            "./test_sql/18.sql",
+            "./test_sql/19.sql",
+            "./test_sql/20.sql",
+            "./test_sql/21.sql",
+            "./test_sql/22.sql",
+        ];
 
         file_mode(files_to_run).await;
     }
