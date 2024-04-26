@@ -1,7 +1,7 @@
-use crate::project_config::load_catalog;
+use crate::mock_catalog::load_catalog;
 use datafusion::arrow::array::{RecordBatch, RecordBatchReader};
-use datafusion::arrow::ipc::reader::{FileReader, StreamReader};
-use datafusion::arrow::ipc::writer::{FileWriter, IpcWriteOptions, StreamWriter};
+use datafusion::arrow::ipc::reader::FileReader;
+use datafusion::arrow::ipc::writer::FileWriter;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
@@ -130,12 +130,9 @@ impl ExecutionPlanParser {
 
 #[cfg(test)]
 mod tests {
+    use crate::mock_executor::MockExecutor;
     use crate::parser::ExecutionPlanParser;
-    use bytes::Bytes;
-    use crc32fast::Hasher;
     use datafusion::physical_plan::displayable;
-    use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
-    use difference::{Changeset, Difference};
     use std::fmt::Debug;
     use tokio::runtime::Builder;
 
@@ -166,7 +163,6 @@ mod tests {
 
             for path in paths {
                 let path = path.unwrap().path();
-                eprintln!("path is {:?}", path);
                 // Check if the file is a .sql file
                 if path.extension().and_then(std::ffi::OsStr::to_str) == Some("sql") {
                     let test_file = path.to_str().unwrap();
@@ -194,18 +190,6 @@ mod tests {
                 }
             }
         });
-    }
-
-    fn display_diff(text1: &str, text2: &str) {
-        let changeset = Changeset::new(text1, text2, "\n");
-
-        for diff in changeset.diffs {
-            match diff {
-                Difference::Same(ref x) => println!(" {}", x),
-                Difference::Add(ref x) => println!("+{}", x),
-                Difference::Rem(ref x) => println!("-{}", x),
-            }
-        }
     }
 
     #[tokio::test]
@@ -249,17 +233,31 @@ mod tests {
         );
     }
 
-    fn compute_crc32_checksum(data: &Bytes) -> u32 {
-        let mut hasher = Hasher::new();
-        hasher.update(&data);
-        hasher.finalize()
-    }
-
     #[tokio::test]
-    async fn test_serialize_record_batch() {
-        // TODO: write tests for serializing record batches
-    }
+    async fn test_serialize_deserialize_record_batch() {
+        let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+        let mock_executor = MockExecutor::new(CATALOG_PATH).await;
 
-    #[tokio::test]
-    async fn test_deserialize_record_batch() {}
+        let plans = parser
+            .get_execution_plan_from_file("./test_sql/16.sql")
+            .await
+            .expect("bad plan");
+        assert_eq!(plans.len(), 1);
+
+        let record_batches_original = mock_executor
+            .execute(plans.get(0).expect("empty plan").clone())
+            .await
+            .expect("error executing sql");
+
+        let record_batches_bytes =
+            ExecutionPlanParser::serialize_record_batches(record_batches_original.clone())
+                .expect("fail to serialize record batches");
+        let record_batches_roundtrip =
+            ExecutionPlanParser::deserialize_record_batches(record_batches_bytes)
+                .expect("fail to deserialize record batches");
+
+        for (i, batch) in record_batches_roundtrip.iter().enumerate() {
+            assert_eq!(record_batches_original[i], batch.clone());
+        }
+    }
 }

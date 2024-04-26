@@ -5,13 +5,14 @@ pub mod intermediate_results;
 mod mock_executor;
 mod mock_optimizer;
 pub mod parser;
-pub mod project_config;
+pub mod mock_catalog;
 mod query_graph;
 mod query_table;
 mod server;
 mod task;
 mod task_queue;
 
+use std::collections::HashMap;
 use crate::executor_client::ExecutorClient;
 use crate::integration_test::IntegrationTest;
 use crate::parser::ExecutionPlanParser;
@@ -22,7 +23,11 @@ use datafusion::error::DataFusionError;
 use futures::TryFutureExt;
 use prost::Message;
 use std::io::{self, Write};
+use std::path::Path;
 use std::time::Duration;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
+use crate::frontend::JobInfo;
 
 pub enum SchedulerError {
     Error(String),
@@ -35,6 +40,7 @@ async fn main() {
         .version("0.1")
         .about("Command line tool for DBMS end-to-end testing")
         .subcommand(SubCommand::with_name("interactive").about("Enter interactive SQL mode"))
+        .subcommand(SubCommand::with_name("benchmark").about("Enter TPC-H benchmark mode"))
         .subcommand(
             SubCommand::with_name("file")
                 .about("Execute SQL logic tests from a file")
@@ -57,6 +63,10 @@ async fn main() {
             } else {
                 eprintln!("File path not provided.");
             }
+        }
+
+        Some(("benchmark", _)) => {
+            benchmark_mode().await;
         }
         None => {
             panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
@@ -145,7 +155,7 @@ async fn interactive_mode() {
     }
 }
 
-pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) {
+pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashMap<u64, JobInfo> {
     let tester = start_system().await;
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
@@ -222,45 +232,79 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) {
             }
         }
     }
+
+    jobs_map.clone()
+}
+
+const TPCH_FILES: &[&str] = &[
+    "./test_sql/1.sql",
+    "./test_sql/2.sql",
+    "./test_sql/3.sql",
+    "./test_sql/4.sql",
+    "./test_sql/5.sql",
+    "./test_sql/6.sql",
+    "./test_sql/7.sql",
+    "./test_sql/8.sql",
+    "./test_sql/9.sql",
+    "./test_sql/10.sql",
+    "./test_sql/11.sql",
+    "./test_sql/12.sql",
+    "./test_sql/13.sql",
+    "./test_sql/14.sql",
+    "./test_sql/15.sql",
+    "./test_sql/16.sql",
+    "./test_sql/17.sql",
+    "./test_sql/18.sql",
+    "./test_sql/19.sql",
+    "./test_sql/20.sql",
+    "./test_sql/21.sql",
+    "./test_sql/22.sql",
+];
+
+pub async fn benchmark_mode() {
+
+    const JOB_SUMMARY_OUTPUT_PATH: &str =  concat!(env!("CARGO_MANIFEST_DIR"), "/job_summary.json");
+
+    let job_map = file_mode(TPCH_FILES.to_vec(), true).await;
+
+    write_jobs_to_json(job_map.values().cloned().collect(), Path::new(JOB_SUMMARY_OUTPUT_PATH)).await.unwrap_or_else(
+        |err| {
+            panic!("Fail to write job summary: {}", err);
+        }
+    );
+}
+
+
+async fn write_jobs_to_json(jobs: Vec<JobInfo>, path: &Path) -> datafusion::common::Result<(), serde_json::Error> {
+    let json_string = serde_json::to_string_pretty(&jobs)?;
+    let mut file = File::create(path).await.expect("Unable to create file");
+    file.write_all(json_string.as_bytes()).await.expect("Unable to write data to file");
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{file_mode, generate_reference_results};
+    use crate::parser::ExecutionPlanParser;
+    use crate::{file_mode, run_single_query, start_system, CATALOG_PATH, TPCH_FILES};
 
-    #[tokio::test]
-    async fn test_generate_reference_results() {
-        let test_sql_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/1.sql");
-        let results = generate_reference_results(&test_sql_path).await;
-    }
 
     #[tokio::test]
     async fn test_file_mode() {
-        let files_to_run = vec![
-            "./test_sql/1.sql",
-            "./test_sql/2.sql",
-            "./test_sql/3.sql",
-            "./test_sql/4.sql",
-            "./test_sql/5.sql",
-            "./test_sql/6.sql",
-            "./test_sql/7.sql",
-            "./test_sql/8.sql",
-            "./test_sql/9.sql",
-            "./test_sql/10.sql",
-            "./test_sql/11.sql",
-            "./test_sql/12.sql",
-            "./test_sql/13.sql",
-            "./test_sql/14.sql",
-            "./test_sql/15.sql",
-            "./test_sql/16.sql",
-            "./test_sql/17.sql",
-            "./test_sql/18.sql",
-            "./test_sql/19.sql",
-            "./test_sql/20.sql",
-            "./test_sql/21.sql",
-            "./test_sql/22.sql",
-        ];
+        file_mode(TPCH_FILES.to_vec(), true).await;
+    }
 
-        file_mode(files_to_run, true).await;
+    #[tokio::test]
+    async fn test_interactive_frontend() {
+        let t = start_system().await;
+        let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+        for file in TPCH_FILES {
+            eprintln!("Testing sql file {}", file);
+            let queries = parser.read_sql_from_file(file).await.expect("bad sql file");
+            for query in queries {
+                run_single_query(&t, &query)
+                    .await
+                    .expect("fail to execute query");
+            }
+        }
     }
 }

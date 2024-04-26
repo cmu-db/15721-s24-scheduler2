@@ -1,22 +1,15 @@
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaBuilder};
-use datafusion::common::{DEFAULT_CSV_EXTENSION, DEFAULT_PARQUET_EXTENSION};
-use datafusion::config::CatalogOptions;
 use datafusion::datasource::file_format::csv::CsvFormat;
-use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::file_format::FileFormat;
 use datafusion::datasource::listing::{
     ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
 };
 use datafusion::datasource::TableProvider;
 use datafusion::error::DataFusionError;
-use datafusion::prelude::{CsvReadOptions, ParquetReadOptions, SessionContext};
+use datafusion::prelude::{SessionContext};
 use serde::{Deserialize, Serialize};
-use sqlparser::test_utils::table;
-use std::ffi::OsStr;
 use std::fs;
-use std::path::Path;
 use std::sync::Arc;
-use walkdir::WalkDir;
 
 // Format definitions for the config file
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,8 +67,6 @@ async fn get_table(
     let state = ctx.state();
     let (format, path, extension): (Arc<dyn FileFormat>, String, &'static str) = {
         let path = format!("{catalog_path}/{table}.tbl");
-        eprintln!("Path is {}", path);
-
         let format = CsvFormat::default()
             .with_delimiter(b'|')
             .with_has_header(false);
@@ -197,7 +188,7 @@ pub fn get_tpch_table_schema(table: &str) -> Schema {
 #[cfg(test)]
 mod tests {
 
-    use crate::project_config::read_config;
+    use crate::mock_catalog::read_config;
     #[test]
     pub fn test_read_config() {
         let config = read_config("./executors.toml");

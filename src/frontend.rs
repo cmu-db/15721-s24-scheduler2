@@ -1,14 +1,13 @@
 use crate::server::composable_database::{QueryInfo, ScheduleQueryArgs};
 use datafusion::arrow::array::RecordBatch;
-use datafusion::arrow::util::pretty::{pretty_format_batches, print_batches};
+use datafusion::arrow::util::pretty::{pretty_format_batches};
 use datafusion::common::DataFusionError;
-use datafusion::physical_plan::ExecutionPlan;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use std::fmt;
-use std::os::linux::raw::stat;
+use std::path::Path;
 use std::sync::Arc;
-use std::thread::sleep;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use chrono::{DateTime, Utc};
+use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 use tonic::transport::Channel;
 
@@ -16,29 +15,34 @@ use crate::server::composable_database::scheduler_api_client::SchedulerApiClient
 
 use crate::mock_optimizer::Optimizer;
 use crate::parser::ExecutionPlanParser;
-use crate::project_config::{load_catalog, SchedulerConfig};
+use crate::mock_catalog::load_catalog;
 use crate::server::composable_database::QueryJobStatusArgs;
 use crate::server::composable_database::QueryStatus;
 use crate::server::composable_database::QueryStatus::InProgress;
 use datafusion::error::Result;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::SessionContext;
-use sqlparser::parser::Parser;
+use serde::{Deserialize, Serialize};
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct JobInfo {
+    pub query_id: u64,
     pub sql_string: String,
+    #[serde(skip)]
     pub status: QueryStatus,
-    pub submitted_at: time::Instant,
-    pub finished_at: Option<time::Instant>,
+    pub submitted_at: DateTime<Utc>,
+    pub finished_at: Option<DateTime<Utc>>,
+    #[serde(skip)]
     pub result: Option<Vec<RecordBatch>>,
 }
 impl fmt::Display for JobInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let submitted_at = self.submitted_at.elapsed().as_secs();
+        let submitted_at = self.submitted_at.to_string();
         let finished_at = self
             .finished_at
-            .map(|t| t.elapsed().as_secs())
+            .map(|t| t.to_string())
             .map_or_else(|| "not finished".to_string(), |secs| secs.to_string());
 
         let result_summary = if let Some(ref batch) = self.result {
@@ -58,6 +62,9 @@ impl fmt::Display for JobInfo {
         )
     }
 }
+
+
+
 
 pub struct MockFrontend {
     optimizer: Optimizer,
@@ -139,7 +146,8 @@ impl MockFrontend {
                 let existing_value = self.jobs.insert(
                     query_id,
                     JobInfo {
-                        submitted_at: time::Instant::now(),
+                        query_id: query_id,
+                        submitted_at: Utc::now(),
                         sql_string: sql_string.to_string(),
                         result: None,
                         finished_at: None,
@@ -238,8 +246,9 @@ impl MockFrontend {
                         };
 
                     let updated_job_info = JobInfo {
+                        query_id,
                         status: QueryStatus::Done,
-                        finished_at: Some(time::Instant::now()),
+                        finished_at: Some(Utc::now()),
                         result: Some(results),
                         submitted_at: job.submitted_at,
                         sql_string: job.sql_string.to_string(),
@@ -262,8 +271,9 @@ impl MockFrontend {
                     self.num_finished_jobs += 1;
 
                     let updated_job_info = JobInfo {
+                        query_id,
                         status: QueryStatus::Failed,
-                        finished_at: Some(time::Instant::now()),
+                        finished_at: Some(Utc::now()),
                         result: None,
                         submitted_at: job.submitted_at,
                         sql_string: job.sql_string.to_string(),
@@ -271,9 +281,6 @@ impl MockFrontend {
                     let v = self.jobs.insert(query_id, updated_job_info);
                     // original value must already exist in the map
                     assert!(!v.is_none());
-                }
-                _ => {
-                    panic!("poll_results: invalid query status: {:?}", new_query_status);
                 }
             }
         }

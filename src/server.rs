@@ -5,7 +5,7 @@ pub mod composable_database {
 
 use crate::intermediate_results::{get_results, TaskKey};
 use crate::parser::ExecutionPlanParser;
-use crate::project_config::load_catalog;
+use crate::mock_catalog::load_catalog;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
 use crate::task::Task;
@@ -240,18 +240,18 @@ impl SchedulerApi for SchedulerService {
     }
 }
 
-#[tokio::main]
-async fn _main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "0.0.0.0:15721".parse().unwrap();
-
-    let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
-    let scheduler_service = SchedulerService::new(catalog_path).await;
-
-    let server = SchedulerApiServer::new(scheduler_service);
-    Server::builder().add_service(server).serve(addr).await?;
-
-    Ok(())
-}
+// #[tokio::main]
+// async fn _main() -> Result<(), Box<dyn std::error::Error>> {
+//     let addr = "0.0.0.0:15721".parse().unwrap();
+//
+//     let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
+//     let scheduler_service = SchedulerService::new(catalog_path).await;
+//
+//     let server = SchedulerApiServer::new(scheduler_service);
+//     Server::builder().add_service(server).serve(addr).await?;
+//
+//     Ok(())
+// }
 
 #[cfg(test)]
 #[allow(unused_imports)]

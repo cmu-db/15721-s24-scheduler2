@@ -14,7 +14,7 @@
 //
 // ======================================================================================
 
-use crate::project_config::load_catalog;
+use crate::mock_catalog::load_catalog;
 use datafusion::error::DataFusionError;
 use datafusion::execution::context::{SessionContext, SessionState};
 use datafusion::logical_expr::LogicalPlan;

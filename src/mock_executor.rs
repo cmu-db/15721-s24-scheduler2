@@ -12,7 +12,7 @@
 //
 // ======================================================================================
 
-use crate::project_config::load_catalog;
+use crate::mock_catalog::load_catalog;
 use datafusion::arrow::array::RecordBatch;
 use datafusion::common::DataFusionError;
 use datafusion::physical_plan::ExecutionPlan;

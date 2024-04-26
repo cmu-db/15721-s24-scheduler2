@@ -93,7 +93,6 @@ async fn rewrite_node(
     }
 
     if changed {
-        eprintln!("Executor: query rewritten");
         with_new_children_if_necessary(plan, new_children)
     } else {
         Ok(plan)

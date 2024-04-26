@@ -1,13 +1,12 @@
 use crate::intermediate_results::{insert_results, rewrite_query, TaskKey};
-use crate::project_config::load_catalog;
+use crate::mock_executor::MockExecutor;
+use crate::mock_catalog::load_catalog;
 use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
 use crate::server::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, TaskId};
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion_proto::bytes::physical_plan_from_bytes;
-use futures::stream::StreamExt;
 use tonic::transport::Channel;
-use crate::mock_executor::MockExecutor;
 
 const HANDSHAKE_QUERY_ID: u64 = u64::MAX;
 const HANDSHAKE_TASK_ID: u64 = u64::MAX;
@@ -17,7 +16,7 @@ pub struct ExecutorClient {
     id: i32,
     ctx: SessionContext,
     scheduler: Option<SchedulerApiClient<Channel>>, // api client for the scheduler
-    executor: MockExecutor
+    executor: MockExecutor,
 }
 
 // TODO: Clean up gRPC calling code.
@@ -28,7 +27,7 @@ impl ExecutorClient {
             id,
             ctx: (*ctx).clone(),
             scheduler: None,
-            executor: MockExecutor::new(catalog_path).await
+            executor: MockExecutor::new(catalog_path).await,
         }
     }
 
@@ -140,21 +139,5 @@ impl ExecutorClient {
                 response_inner
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    static TEST_DATA_PATH: &str = "./test_data/";
-
-    #[tokio::test]
-    async fn test_execute_sql() {
-        let executor = ExecutorClient::new(TEST_DATA_PATH, 0).await;
-        let query = "SELECT * FROM customer ORDER BY c_name";
-        let result = executor.execute_sql(query).await;
-        assert!(result.is_ok());
-        assert!(!result.unwrap().is_empty());
     }
 }

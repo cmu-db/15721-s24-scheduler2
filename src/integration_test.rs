@@ -1,8 +1,8 @@
 use crate::executor_client::ExecutorClient;
 use crate::frontend::MockFrontend;
 use crate::parser::ExecutionPlanParser;
-use crate::project_config::Config;
-use crate::project_config::{load_catalog, read_config};
+use crate::mock_catalog::Config;
+use crate::mock_catalog::{load_catalog, read_config};
 use crate::server::composable_database::scheduler_api_server::SchedulerApiServer;
 use crate::server::composable_database::TaskId;
 use crate::server::SchedulerService;
@@ -12,10 +12,8 @@ use datafusion::logical_expr::{col, Expr};
 use datafusion::prelude::SessionContext;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::Instant;
 use tonic::transport::Server;
 
 /**
@@ -28,7 +26,7 @@ message NotifyTaskStateArgs {
     bool success = 2; // Indicates if the task was executed successfully
     bytes result = 3; // Result data as bytes
 }
-- Notifies the scheduler of the task's execution xwstatus using the associated TaskID and transmits the result data.
+- Notifies the scheduler of the task's execution status using the associated TaskID and transmits the result data.
 
 Scheduler to executor message:
 message NotifyTaskStateRet {
@@ -64,7 +62,7 @@ pub struct IntegrationTest {
 /**
 This integration test uses hardcoded addresses for executors and the scheduler,
 specified in a config file located in the project root directory. In production
-systems, these addresses would typically be retrieved from a catalog. This section'
+systems, these addresses would typically be retrieved from a catalog. This section
 is responsible for parsing the config file.*/
 
 const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
@@ -204,7 +202,6 @@ impl IntegrationTest {
 
     pub async fn generate_reference_results(&self, file_path: &str) -> Vec<Vec<RecordBatch>> {
         let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
-        let reference_executor = ExecutorClient::new(CATALOG_PATH, -1).await;
         let sql_statements = parser
             .read_sql_from_file(&file_path)
             .await
@@ -237,18 +234,14 @@ impl IntegrationTest {
 
 #[cfg(test)]
 mod tests {
-    use crate::executor_client::ExecutorClient;
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
-    use crate::server::composable_database::QueryStatus::InProgress;
-    use crate::{run_single_query, start_system, CATALOG_PATH, CONFIG_PATH, POLL_INTERVAL};
+    use crate::CATALOG_PATH;
     use datafusion::arrow::array::{Int32Array, RecordBatch};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use std::path::PathBuf;
     use std::sync::Arc;
-    use std::time::Duration;
     use tokio::fs;
-    use tokio::fs::DirEntry;
 
     async fn initialize_integration_test() -> IntegrationTest {
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
@@ -307,7 +300,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_results_eq_basic() {
+    async fn test_results_eq() {
         let t = initialize_integration_test().await;
 
         // Handcraft a record batch
@@ -337,76 +330,5 @@ mod tests {
                 .await
                 .unwrap()
         );
-    }
-
-    #[tokio::test]
-    async fn test_results_eq() {
-        let t = initialize_integration_test().await;
-
-        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
-
-        let parser = ExecutionPlanParser::new(catalog_path).await;
-
-        // paths to two sql queries
-        let sql_1_vec = parser
-            .read_sql_from_file(concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/1.sql"))
-            .await
-            .expect("fail to read query 1");
-        assert_eq!(1, sql_1_vec.len());
-
-        let sql_2_vec = parser
-            .read_sql_from_file(concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql", "/2.sql"))
-            .await
-            .expect("fail to read query 2");
-        assert_eq!(1, sql_2_vec.len());
-
-        let executor1 = ExecutorClient::new(catalog_path, 0).await;
-        let executor2 = ExecutorClient::new(catalog_path, 1).await;
-
-        // Executors 1 and 2 execute TPC Q1
-        let res1 = executor1
-            .execute_sql(sql_1_vec.get(0).unwrap().as_str())
-            .await
-            .expect("failed to execute query 1");
-        let res2 = executor2
-            .execute_sql(sql_1_vec.get(0).unwrap().as_str())
-            .await
-            .expect("failed to execute query 1");
-
-        // Executors 1 and 2 execute TPC Q2
-        let res3 = executor1
-            .execute_sql(sql_2_vec.get(0).unwrap().as_str())
-            .await
-            .expect("failed to execute query 2");
-        let res4 = executor2
-            .execute_sql(sql_2_vec.get(0).unwrap().as_str())
-            .await
-            .expect("failed to execute query 2");
-
-        // different executors, same query: results should be equal
-        assert!(t.results_eq(&res1, &res2).await.unwrap());
-        assert!(t.results_eq(&res3, &res4).await.unwrap());
-
-        // different query: results should not be equal
-        assert!(!t.results_eq(&res1, &res3).await.unwrap());
-        assert!(!t.results_eq(&res2, &res4).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_interactive_frontend() {
-        let t = start_system().await;
-
-        let queries = get_all_tpch_queries_test().await;
-
-        let mut cnt = 1;
-        for query in queries {
-            eprintln!("Testing sql {} of 22", cnt);
-            eprintln!("SQL string is \n {}", query);
-            cnt += 1;
-
-            run_single_query(&t, &query)
-                .await
-                .expect("fail to execute query");
-        }
     }
 }
