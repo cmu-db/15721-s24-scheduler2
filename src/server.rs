@@ -134,7 +134,7 @@ impl SchedulerApi for SchedulerService {
             return Ok(Response::new(QueryJobStatusRet {
                 query_status: QueryStatus::Done.into(),
                 query_result: final_result_bytes,
-            }))
+            }));
             // ****************** END CHANGES FROM INTEGRATION TESTING****************//
         }
         return Ok(Response::new(QueryJobStatusRet {
@@ -267,7 +267,6 @@ mod tests {
         let mut send_task = NotifyTaskStateArgs {
             task: None,
             success: true,
-            result: vec![],
         };
         // may not terminate
         loop {
