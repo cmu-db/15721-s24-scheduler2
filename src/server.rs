@@ -21,7 +21,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::{Duration, sleep};
+use tokio::time::{sleep, Duration};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
@@ -57,8 +57,11 @@ impl SchedulerService {
     }
 
     // Get the next task from the queue.
-    async fn next_task(&self, task_id: TaskId) -> Result<(TaskId, Vec<u8>), SchedulerError> {
-        {
+    async fn next_task(
+        &self,
+        task_id_opt: Option<TaskId>,
+    ) -> Result<(TaskId, Vec<u8>), SchedulerError> {
+        if let Some(task_id) = task_id_opt {
             let mut queue = self.queue.lock().await;
             // Remove the current task from the queue.
             queue.remove_task(task_id, StageStatus::Finished(0)).await;
@@ -156,9 +159,7 @@ impl SchedulerApi for SchedulerService {
             ));
         }
 
-        // TODO: handle handshake in next_task
-        let task_id = task.unwrap();
-        if let Ok((new_task_id, bytes)) = self.next_task(task_id).await {
+        if let Ok((new_task_id, bytes)) = self.next_task(task).await {
             let response = NotifyTaskStateRet {
                 has_new_task: true,
                 task: Some(new_task_id),
@@ -251,5 +252,26 @@ mod tests {
             "test_scheduler: queued {} tasks.",
             scheduler_service.queue.lock().await.size()
         );
+
+        // TODO: add concurrent test eventually
+        let mut send_task = NotifyTaskStateArgs {
+            task: None,
+            success: true,
+            result: vec![],
+        };
+        // may not terminate
+        loop {
+            let ret = scheduler_service
+                .notify_task_state(Request::new(send_task.clone()))
+                .await
+                .unwrap();
+            let NotifyTaskStateRet {
+                has_new_task,
+                task,
+                physical_plan,
+            } = ret.into_inner();
+            assert!(task.is_some());
+            send_task.task = task;
+        }
     }
 }
