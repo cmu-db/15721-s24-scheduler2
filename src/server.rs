@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 pub mod composable_database {
     tonic::include_proto!("composable_database");
 }
@@ -8,7 +7,6 @@ use crate::project_config::load_catalog;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
 use crate::queue::Queue;
-use crate::task::Task;
 use crate::SchedulerError;
 use composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
 use composable_database::{
@@ -21,17 +19,10 @@ use datafusion::execution::context::SessionContext;
 use datafusion_proto::bytes::physical_plan_from_bytes;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Once};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
-
-// Static query_id generator
-static QID_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-const HANDSHAKE_QUERY_ID: u64 = u64::MAX;
-const HANDSHAKE_TASK_ID: u64 = u64::MAX;
-const HANDSHAKE_STAGE_ID: u64 = u64::MAX;
 
 pub struct SchedulerService {
     query_table: Arc<QueryTable>,
@@ -54,7 +45,7 @@ impl SchedulerService {
     pub async fn new(catalog_path: &str) -> Self {
         Self {
             query_table: Arc::new(QueryTable::new().await),
-            queue: Arc::new(Queue::new()),
+            queue: Arc::new(Mutex::new(Queue::new())),
             ctx: load_catalog(catalog_path).await,
             query_id_counter: AtomicU64::new(0),
         }
@@ -287,7 +278,7 @@ mod tests {
         }
         println!(
             "test_scheduler: queued {} tasks.",
-            scheduler_service.task_queue.size().await
+            scheduler_service.queue.lock().await.size().await
         );
     }
 }

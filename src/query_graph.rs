@@ -41,7 +41,7 @@ pub struct QueryGraph {
     tid_counter: AtomicU64, // TODO: add mutex to stages and make elements pointers to avoid copying
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
-    task_queue: Arc<TaskQueue>, // Ready tasks in this graph
+    task_queue: TaskQueue,  // Ready tasks in this graph
 }
 
 impl QueryGraph {
@@ -73,7 +73,7 @@ impl QueryGraph {
                 outputs: Vec::new(),
                 inputs: Vec::new(),
             }],
-            task_queue: Arc::new(queue),
+            task_queue: queue,
         }
     }
 
@@ -82,6 +82,7 @@ impl QueryGraph {
         self.tid_counter.fetch_add(1, Ordering::SeqCst)
     }
 
+    #[inline]
     // Returns whether the query is done, waiting for tasks, or has tasks ready
     async fn get_queue_status(&self) -> QueryQueueStatus {
         // If the query is done
@@ -98,7 +99,7 @@ impl QueryGraph {
 
     #[inline]
     pub async fn next_task(&mut self) -> Task {
-        self.task_queue.next_task().await;
+        self.task_queue.next_task().await
     }
 
     pub async fn update_stage_status(
@@ -146,6 +147,7 @@ impl QueryGraph {
                                 },
                                 status: TaskStatus::Ready,
                             };
+                            // Add new task to the queue
                             self.task_queue.add_tasks(vec![new_output_task]);
                         }
                     }

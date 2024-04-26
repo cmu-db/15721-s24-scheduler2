@@ -1,4 +1,4 @@
-use crate::query_graph::{QueryGraph, StageStatus};
+use crate::query_graph::{QueryGraph, QueryQueueStatus, StageStatus};
 use crate::server::composable_database::TaskId;
 use crate::task::{
     Task,
@@ -23,8 +23,10 @@ impl Hash for TaskId {
 
 impl Eq for TaskId {}
 
+impl Copy for TaskId {}
+
 // TODO: only use ft for comparisons
-#[derive(Debug, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct QueryKey {
     // pub running: u64,
     pub ft: Duration,
@@ -63,7 +65,7 @@ impl Queue {
         finished_stage_status: StageStatus,
     ) {
         // Get the graph for this query
-        let graph = self.query_map.get(&key.qid).unwrap();
+        let graph = Arc::clone(&self.query_map.get(&key.qid).unwrap().1);
         // Temporarily remove query from queue, if present, and get its graph
         // TODO: only do this if the query key was changed?
         let _ = self.queue.remove(&key);
@@ -72,23 +74,28 @@ impl Queue {
             .lock()
             .await
             .update_stage_status(finished_stage_id, finished_stage_status)
+            .await
             .unwrap()
         {
             // If query still has available tasks, re-insert with updated priority
-            Available => self.queue.insert(&key, Arc::clone(&graph)),
+            QueryQueueStatus::Available => {
+                self.queue.insert(key, Arc::clone(&graph));
+            }
             // If query is unavailable, do not re-insert
-            Waiting => {}
+            QueryQueueStatus::Waiting => {}
             // If query is done, do not re-insert and remove from query map
-            Done => self.query_map.remove(&key.qid).expect("Query not found."),
-        }
+            QueryQueueStatus::Done => {
+                self.query_map.remove(&key.qid).expect("Query not found.");
+            }
+        };
     }
 
     // Mark this task as running.
-    async fn add_running_task(&mut self, task: Task, key: Arc<QueryKey>) {
+    async fn add_running_task(&mut self, mut task: Task, key: QueryKey) {
         // Change the task's status to running.
         task.status = Running(SystemTime::now());
         // Add the task to the list of running tasks.
-        self.running_task_map.insert(&task.task_id, key);
+        self.running_task_map.insert(task.task_id, task.clone());
         // Send the update to the query graph and reorder queue.
         // WARNING: stage_status may not be 'running' if tasks and stages are not 1:1
         self.update_status(key, task.task_id.stage_id, StageStatus::Running(0))
@@ -133,12 +140,12 @@ impl Queue {
         // Get the query ID.
         let query = task.task_id.query_id;
         // Get the key corresponding to the task's query.
-        let key = self.query_map.get(&query).unwrap();
+        let key = Arc::clone(&self.query_map.get(&query).unwrap().0);
         // Ensure the task is running.
         if let Running(start_ts) = task.status {
             // Increment the query's pass using the task's elapsed time.
             key.ft += SystemTime::now().duration_since(start_ts).unwrap();
-            self.update_status(*key, finished_stage_id, finished_stage_status)
+            self.update_status(*key, finished_stage_id, finished_stage_status);
         } else {
             assert!(false);
         }
@@ -153,9 +160,10 @@ impl Queue {
         match self.min() {
             Some((key, graph)) => {
                 // If a query is available, get its next task
+                let graph = &self.query_map.get(&key.qid).unwrap().1;
                 let new_task = graph.lock().await.next_task().await;
                 debug_assert!(matches!(new_task.status, TaskStatus::Ready));
-                self.add_running_task(new_task, key);
+                self.add_running_task(new_task.clone(), key);
                 Some(new_task.task_id)
             }
             None => None,
