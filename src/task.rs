@@ -5,7 +5,6 @@ use std::time::SystemTime;
 // the task is only created when it is ready
 #[derive(Debug, Clone)]
 pub enum TaskStatus {
-    Waiting,
     Ready,
     Running(SystemTime), // ID of executor running this task
     Finished,

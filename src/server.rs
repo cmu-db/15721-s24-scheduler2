@@ -55,13 +55,21 @@ impl SchedulerService {
         self.query_id_counter.fetch_add(1, Ordering::SeqCst)
     }
 
-    async fn next_task(&self) -> Result<(TaskId, Vec<u8>), SchedulerError> {
-        let task_id = self.task_queue.next_task().await;
-        let stage = self
-            .query_table
-            .get_plan_bytes(task_id.query_id, task_id.stage_id)
-            .await?;
-        Ok((task_id, stage))
+    // Get the next task from the queue.
+    async fn next_task(&self, task_id: TaskId) -> Result<(TaskId, Vec<u8>), SchedulerError> {
+        let mut queue = self.queue.lock().await;
+        // Remove the current task from the queue.
+        queue.remove_task(task_id, StageStatus::Finished(0)).await;
+        loop {
+            if let Some(new_task_id) = queue.next_task().await {
+                let stage = self
+                    .query_table
+                    .get_plan_bytes(new_task_id.query_id, new_task_id.stage_id)
+                    .await?;
+                return Ok((new_task_id, stage));
+            }
+            // TODO: add notify
+        }
     }
 }
 
@@ -86,8 +94,9 @@ impl SchedulerApi for SchedulerService {
 
         // Build a query graph, store in query table, enqueue new tasks.
         let qid = self.next_query_id();
-        let query = QueryGraph::new(qid, plan);
+        let query = QueryGraph::new(qid, plan).await;
         let graph = self.query_table.add_query(query).await;
+        // self.queue.lock().await.add_query(qid, graph).await;
 
         let response = ScheduleQueryRet { query_id: qid };
         Ok(Response::new(response))
@@ -121,39 +130,52 @@ impl SchedulerApi for SchedulerService {
         //     query_status: query_status.into(),
         //     query_result: Vec::new(),
         // }))
-        let graph_opt_guard = self.query_table.table.read().await;
-        let graph_opt = &graph_opt_guard.get(&query_id);
-        if graph_opt.is_none() {
-            return Ok(Response::new(QueryJobStatusRet {
-                query_status: QueryStatus::NotFound.into(),
-                query_result: Vec::new(),
-            }));
-        }
 
-        let graph = graph_opt.unwrap().read().await;
-        if graph.done {
+        let status = self.queue.lock().await.get_query_status(query_id).await;
+        if status == QueryStatus::Done {
             let stage_id = 0;
             let final_result_opt = get_results(&TaskKey { stage_id, query_id }).await;
             let final_result =
                 final_result_opt.expect("api.rs: query is done but no results in table");
             print_batches(&final_result).unwrap();
-            Ok(Response::new(QueryJobStatusRet {
-                query_status: QueryStatus::Done.into(),
-                query_result: Vec::new(),
-            }))
-        } else {
-            Ok(Response::new(QueryJobStatusRet {
-                query_status: QueryStatus::InProgress.into(),
-                query_result: Vec::new(),
-            }))
         }
+        return Ok(Response::new(QueryJobStatusRet {
+            query_status: status.into(),
+            query_result: Vec::new(),
+        }));
+        // let graph_opt_guard = self.query_table.table.read().await;
+        // let graph_opt = &graph_opt_guard.get(&query_id);
+        // if graph_opt.is_none() {
+        //     return Ok(Response::new(QueryJobStatusRet {
+        //         query_status: QueryStatus::NotFound.into(),
+        //         query_result: Vec::new(),
+        //     }));
+        // }
+
+        // let graph = graph_opt.unwrap().read().await;
+        // if graph.done {
+        //     let stage_id = 0;
+        //     let final_result_opt = get_results(&TaskKey { stage_id, query_id }).await;
+        //     let final_result =
+        //         final_result_opt.expect("api.rs: query is done but no results in table");
+        //     print_batches(&final_result).unwrap();
+        //     Ok(Response::new(QueryJobStatusRet {
+        //         query_status: QueryStatus::Done.into(),
+        //         query_result: Vec::new(),
+        //     }))
+        // } else {
+        //     Ok(Response::new(QueryJobStatusRet {
+        //         query_status: QueryStatus::InProgress.into(),
+        //         query_result: Vec::new(),
+        //     }))
+        // }
     }
 
     async fn abort_query(
         &self,
         _request: Request<AbortQueryArgs>,
     ) -> Result<Response<AbortQueryRet>, Status> {
-        // TODO Actually call executor API to abort query.
+        // TODO: Actually call executor API to abort query.
         let response = AbortQueryRet { aborted: true };
         Ok(Response::new(response))
     }
@@ -176,21 +198,12 @@ impl SchedulerApi for SchedulerService {
             ));
         }
 
-        if let Some(task_id) = task {
-            // if task_id.task_id != HANDSHAKE_TASK_ID
-            //     && task_id.query_id != HANDSHAKE_QUERY_ID
-            //     && task_id.stage_id != HANDSHAKE_STAGE_ID
-            // {
-            //     self.update_task_state(task_id.query_id, task_id.task_id)
-            //         .await;
-            // }
-        }
-
-        // TODO: change task to taskId in self.next_task
-        if let Ok((task_id, bytes)) = self.next_task().await {
+        // TODO: handle handshake in next_task
+        let task_id = task.unwrap();
+        if let Ok((new_task_id, bytes)) = self.next_task(task_id).await {
             let response = NotifyTaskStateRet {
                 has_new_task: true,
-                task: Some(task_id),
+                task: Some(new_task_id),
                 physical_plan: bytes,
             };
             Ok(Response::new(response))

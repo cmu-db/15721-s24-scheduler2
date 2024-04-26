@@ -1,10 +1,10 @@
 use crate::query_graph::{QueryGraph, QueryQueueStatus, StageStatus};
-use crate::server::composable_database::TaskId;
+use crate::server::composable_database::{TaskId, QueryStatus};
 use crate::task::{
     Task,
     TaskStatus::{self, *},
 };
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -36,11 +36,11 @@ struct QueryKey {
 #[derive(Debug)]
 pub struct Queue {
     // The queue used to order queries by executor usage.
-    queue: BTreeMap<QueryKey, Arc<Mutex<QueryGraph>>>,
+    queue: BTreeSet<QueryKey>,
     // The startup time of the queue, used to calculate new global passes.
     start_ts: SystemTime,
     // Structure that maps query IDs to query keys.
-    query_map: HashMap<u64, (Arc<QueryKey>, Arc<Mutex<QueryGraph>>)>,
+    query_map: HashMap<u64, (Arc<Mutex<QueryKey>>, Arc<Mutex<QueryGraph>>)>,
     // List of currently running tasks.
     running_task_map: HashMap<TaskId, Task>,
 }
@@ -48,7 +48,7 @@ pub struct Queue {
 impl Queue {
     pub fn new() -> Self {
         Self {
-            queue: BTreeMap::new(),
+            queue: BTreeSet::new(),
             start_ts: SystemTime::now(),
             query_map: HashMap::new(),
             running_task_map: HashMap::new(),
@@ -79,7 +79,7 @@ impl Queue {
         {
             // If query still has available tasks, re-insert with updated priority
             QueryQueueStatus::Available => {
-                self.queue.insert(key, Arc::clone(&graph));
+                self.queue.insert(key);
             }
             // If query is unavailable, do not re-insert
             QueryQueueStatus::Waiting => {}
@@ -103,7 +103,7 @@ impl Queue {
     }
 
     /* Get the minimum element of the queue, or None if the queue is empty */
-    fn min(&mut self) -> Option<(QueryKey, Arc<Mutex<QueryGraph>>)> {
+    fn min(&mut self) -> Option<QueryKey> {
         self.queue.pop_first()
     }
 
@@ -113,15 +113,15 @@ impl Queue {
     }
 
     // TODO: take querygraph instead of qid
-    pub async fn new_query(&mut self, qid: u64, graph: Arc<Mutex<QueryGraph>>) {
+    pub async fn add_query(&mut self, qid: u64, graph: Arc<Mutex<QueryGraph>>) {
         let key = QueryKey {
             // running: 0,
             ft: SystemTime::now().duration_since(self.start_ts).unwrap(),
             qid,
         };
         self.query_map
-            .insert(qid, (Arc::new(key), Arc::clone(&graph)));
-        self.queue.insert(key, Arc::clone(&graph));
+            .insert(qid, (Arc::new(Mutex::new(key)), Arc::clone(&graph)));
+        self.queue.insert(key);
     }
 
     /*
@@ -131,23 +131,25 @@ impl Queue {
     */
     pub async fn remove_task(
         &mut self,
-        task: Task,
-        finished_stage_id: u64,
+        task_id: TaskId,
         finished_stage_status: StageStatus,
     ) {
         // Remove the task from the running map.
-        let _ = self.running_task_map.remove(&task.task_id).unwrap();
+        let task = self.running_task_map.remove(&task_id).unwrap();
+        debug_assert!(task.task_id == task_id);
         // Get the query ID.
-        let query = task.task_id.query_id;
+        let query = task_id.query_id;
         // Get the key corresponding to the task's query.
-        let key = Arc::clone(&self.query_map.get(&query).unwrap().0);
+        let mut key = self.query_map.get(&query).unwrap().0.lock().await;
         // Ensure the task is running.
         if let Running(start_ts) = task.status {
             // Increment the query's pass using the task's elapsed time.
-            key.ft += SystemTime::now().duration_since(start_ts).unwrap();
-            self.update_status(*key, finished_stage_id, finished_stage_status);
+            (*key).ft += SystemTime::now().duration_since(start_ts).unwrap();
+            let key_copy = *key;
+            drop(key); // to avoid double mutable borrow
+            self.update_status(key_copy, task_id.stage_id, finished_stage_status).await;
         } else {
-            assert!(false);
+            panic!("Task removed but is not running.");
         }
     }
 
@@ -158,16 +160,25 @@ impl Queue {
     pub async fn next_task(&mut self) -> Option<TaskId> {
         // Get the highest priority query.
         match self.min() {
-            Some((key, graph)) => {
+            Some(key) => {
                 // If a query is available, get its next task
                 let graph = &self.query_map.get(&key.qid).unwrap().1;
                 let new_task = graph.lock().await.next_task().await;
                 debug_assert!(matches!(new_task.status, TaskStatus::Ready));
-                self.add_running_task(new_task.clone(), key);
+                self.add_running_task(new_task.clone(), key).await;
                 Some(new_task.task_id)
             }
             None => None,
         }
+    }
+
+    // TODO: if the query is done, remove it at this point
+    pub async fn get_query_status(&self, qid: u64) -> QueryStatus {
+      if let Some(query_entry) = self.query_map.get(&qid) {
+        return query_entry.1.lock().await.status;
+      } else {
+        return QueryStatus::NotFound;
+      }
     }
 }
 

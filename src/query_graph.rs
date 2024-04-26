@@ -45,7 +45,7 @@ pub struct QueryGraph {
 }
 
 impl QueryGraph {
-    pub fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
+    pub async fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
         let mut builder = GraphBuilder::new();
         let stages = builder.build(plan.clone());
 
@@ -61,7 +61,7 @@ impl QueryGraph {
             status: TaskStatus::Ready,
         };
         let mut queue = TaskQueue::new();
-        queue.add_tasks(vec![task]);
+        queue.add_tasks(vec![task]).await;
         Self {
             query_id,
             status: QueryStatus::InProgress,
@@ -148,7 +148,7 @@ impl QueryGraph {
                                 status: TaskStatus::Ready,
                             };
                             // Add new task to the queue
-                            self.task_queue.add_tasks(vec![new_output_task]);
+                            self.task_queue.add_tasks(vec![new_output_task]).await;
                         }
                     }
                     return Ok(self.get_queue_status().await);
