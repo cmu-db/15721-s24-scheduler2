@@ -165,20 +165,20 @@ impl Queue {
 
 #[cfg(test)]
 mod tests {
-  use crate::queue::QueryKey;
-  use std::time::SystemTime;
+    use crate::queue::QueryKey;
+    use std::time::SystemTime;
 
-  #[tokio::test]
-  async fn test_query_key_cmp() {
-    let then = SystemTime::now();
-    let key1 = QueryKey {
-      ft: SystemTime::now().duration_since(then).unwrap(),
-      qid: 0
-    };
-    let key2 = QueryKey {
-      ft: SystemTime::now().duration_since(then).unwrap(),
-      qid: 0
-    };
-    assert!(key1 < key2);
-  }
+    #[tokio::test]
+    async fn test_query_key_cmp() {
+        let then = SystemTime::now();
+        let key1 = QueryKey {
+            ft: SystemTime::now().duration_since(then).unwrap(),
+            qid: 0,
+        };
+        let key2 = QueryKey {
+            ft: SystemTime::now().duration_since(then).unwrap(),
+            qid: 0,
+        };
+        assert!(key1 < key2);
+    }
 }

@@ -1,8 +1,4 @@
-#![allow(dead_code)]
-
-use crate::query_graph::StageStatus::NotStarted;
-use crate::server::composable_database::TaskId;
-use crate::task::TaskStatus::Ready;
+use crate::server::composable_database::{QueryStatus, TaskId};
 use crate::task::{Task, TaskStatus};
 use crate::task_queue::TaskQueue;
 use datafusion::arrow::datatypes::Schema;
@@ -12,11 +8,8 @@ use datafusion::physical_plan::placeholder_row::PlaceholderRowExec;
 use datafusion::physical_plan::sorts::sort::SortExec;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::ops::DerefMut;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::{mem, sync::Arc};
-use tokio::sync::{Mutex, RwLock};
+use std::sync::Arc;
 
 // TODO Change to Waiting, Ready, Running(vec[taskid]), Finished(vec[locations?])
 #[derive(Clone, Debug, Default)]
@@ -44,14 +37,11 @@ pub struct QueryStage {
 #[derive(Debug)]
 pub struct QueryGraph {
     pub query_id: u64,
-    pub done: bool,
+    pub status: QueryStatus,
     tid_counter: AtomicU64, // TODO: add mutex to stages and make elements pointers to avoid copying
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
     task_queue: Arc<TaskQueue>, // Ready tasks in this graph
-    finished_time: u64,     // millis
-    rts_total: u64,         // millis
-    running_tasks: Arc<HashMap<u64, Task>>,
 }
 
 impl QueryGraph {
@@ -68,30 +58,23 @@ impl QueryGraph {
                 query_id,
                 stage_id: id,
             },
-            status: Ready,
+            status: TaskStatus::Ready,
         };
         let mut queue = TaskQueue::new();
         queue.add_tasks(vec![task]);
         Self {
             query_id,
-            done: false,
+            status: QueryStatus::InProgress,
             plan: plan.clone(),
             tid_counter,
             stages: vec![QueryStage {
                 plan: plan.clone(),
-                status: NotStarted,
+                status: StageStatus::NotStarted,
                 outputs: Vec::new(),
                 inputs: Vec::new(),
             }],
             task_queue: Arc::new(queue),
-            finished_time: 0,
-            rts_total: 0,
-            running_tasks: Arc::new(HashMap::new()),
         }
-    }
-
-    pub fn num_stages(&self) -> u64 {
-        self.stages.len() as u64
     }
 
     fn next_task_id(&mut self) -> u64 {
@@ -99,9 +82,9 @@ impl QueryGraph {
     }
 
     // Returns whether the query is done, waiting for tasks, or has tasks ready
-    async fn get_query_status(&self) -> QueryQueueStatus {
+    async fn get_queue_status(&self) -> QueryQueueStatus {
         // If the query is done
-        if self.done {
+        if self.status == QueryStatus::Done {
             return QueryQueueStatus::Done;
         }
         // If the query's queue has no available tasks
@@ -116,10 +99,6 @@ impl QueryGraph {
         self.task_queue.next_task().await;
     }
 
-    pub fn num_running(&self) -> u64 {
-        self.running_tasks.len() as u64
-    }
-
     pub async fn update_stage_status(
         &mut self,
         stage_id: u64,
@@ -131,7 +110,7 @@ impl QueryGraph {
                 // If transition NotStarted -> Running, simply update status
                 (StageStatus::NotStarted, StageStatus::Running(_)) => {
                     self.stages.get_mut(stage_id as usize).unwrap().status = status;
-                    return Ok(self.get_query_status().await);
+                    return Ok(self.get_queue_status().await);
                 }
                 // If transition Running -> Finished, remove this stage as an input from all of its outputs
                 (StageStatus::Running(_a), StageStatus::Finished(_b)) => {
@@ -144,9 +123,9 @@ impl QueryGraph {
 
                     // If this stage has no outputs, this query is done
                     if outputs.is_empty() {
-                        self.done = true;
+                        self.status = QueryStatus::Done;
                         // No more to do
-                        return Ok(self.get_query_status().await);
+                        return Ok(self.get_queue_status().await);
                     }
 
                     // Remove this stage from each output stage's input stage
@@ -168,7 +147,7 @@ impl QueryGraph {
                             self.task_queue.add_tasks(vec![new_output_task]);
                         }
                     }
-                    return Ok(self.get_query_status().await);
+                    return Ok(self.get_queue_status().await);
                 }
                 _ => Err("Mismatched stage statuses."),
             }

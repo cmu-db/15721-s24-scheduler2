@@ -1,6 +1,5 @@
-use crate::query_graph::{QueryGraph, StageStatus};
+use crate::query_graph::QueryGraph;
 use crate::server::composable_database::QueryStatus;
-use crate::task::Task;
 use crate::SchedulerError;
 use datafusion_proto::bytes::physical_plan_to_bytes;
 use std::collections::HashMap;
@@ -33,25 +32,6 @@ impl QueryTable {
         let t = self.table.read().await;
         todo!()
     }
-
-    // pub async fn update_stage_status(
-    //     &self,
-    //     query_id: u64,
-    //     stage_id: u64,
-    //     status: StageStatus,
-    // ) -> Result<(), &'static str> {
-    //     let t = self.table.read().await;
-    //     if let Some(graph) = t.get(&query_id) {
-    //         graph
-    //             .write()
-    //             .await
-    //             .update_stage_status(stage_id, status)
-    //             .await?;
-    //         Ok(())
-    //     } else {
-    //         Err("Graph not found.")
-    //     }
-    // }
 
     pub async fn get_plan_bytes(
         &self,

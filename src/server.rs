@@ -64,18 +64,6 @@ impl SchedulerService {
         self.query_id_counter.fetch_add(1, Ordering::SeqCst)
     }
 
-    // async fn update_task_state(&self, query_id: u64, task_id: u64) {
-    //     // Update the status of the stage in the query graph.
-    //     self.query_table
-    //         .update_stage_status(query_id, task_id, StageStatus::Finished(0))
-    //         .await
-    //         .expect("Graph not found.");
-
-    //     // If new tasks are available, add them to the queue
-    //     // let frontier = self.query_table.get_frontier(query_id).await;
-    //     // self.task_queue.add_tasks(frontier).await;
-    // }
-
     async fn next_task(&self) -> Result<(TaskId, Vec<u8>), SchedulerError> {
         let task_id = self.task_queue.next_task().await;
         let stage = self
@@ -109,7 +97,6 @@ impl SchedulerApi for SchedulerService {
         let qid = self.next_query_id();
         let query = QueryGraph::new(qid, plan);
         let graph = self.query_table.add_query(query).await;
-        self.task_queue.add_tasks(leaves).await;
 
         let response = ScheduleQueryRet { query_id: qid };
         Ok(Response::new(response))
@@ -199,25 +186,20 @@ impl SchedulerApi for SchedulerService {
         }
 
         if let Some(task_id) = task {
-            if task_id.task_id != HANDSHAKE_TASK_ID
-                && task_id.query_id != HANDSHAKE_QUERY_ID
-                && task_id.stage_id != HANDSHAKE_STAGE_ID
-            {
-                self.update_task_state(task_id.query_id, task_id.task_id)
-                    .await;
-            }
+            // if task_id.task_id != HANDSHAKE_TASK_ID
+            //     && task_id.query_id != HANDSHAKE_QUERY_ID
+            //     && task_id.stage_id != HANDSHAKE_STAGE_ID
+            // {
+            //     self.update_task_state(task_id.query_id, task_id.task_id)
+            //         .await;
+            // }
         }
 
         // TODO: change task to taskId in self.next_task
-        if let Ok((task, bytes)) = self.next_task().await {
-
+        if let Ok((task_id, bytes)) = self.next_task().await {
             let response = NotifyTaskStateRet {
                 has_new_task: true,
-                task: Some(TaskId {
-                    query_id: task.task_id.query_id,
-                    stage_id: task.task_id.stage_id,
-                    task_id: task.task_id.task_id,
-                }),
+                task: Some(task_id),
                 physical_plan: bytes,
             };
             Ok(Response::new(response))
