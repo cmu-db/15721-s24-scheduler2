@@ -1,45 +1,33 @@
 use crate::task::Task;
 use std::collections::VecDeque;
-use tokio::sync::{Mutex, Notify};
 
 #[derive(Debug)]
 pub struct TaskQueue {
-    queue: Mutex<VecDeque<Task>>,
-    pub avail: Notify,
+    queue: VecDeque<Task>,
 }
 
 impl TaskQueue {
     pub fn new() -> Self {
         Self {
-            queue: Mutex::new(VecDeque::new()),
-            avail: Notify::new(),
+            queue: VecDeque::new(),
         }
     }
 
     pub async fn size(&self) -> usize {
-        self.queue.lock().await.len()
+        self.queue.len()
     }
 
+    // Add tasks to the queue.
     pub async fn add_tasks(&self, tasks: Vec<Task>) {
-        let task_count = tasks.len();
-
-        let mut queue = self.queue.lock().await;
-        queue.extend(tasks);
-
-        if task_count == 1 {
-            self.avail.notify_one();
-        } else {
-            self.avail.notify_waiters();
-        }
+        self.queue.extend(tasks);
     }
 
+    /* 
+     Get the next task from the queue.
+     Due to the structure of the outer queue, 
+     there queue should always be non-empty when called.
+    */
     pub async fn next_task(&self) -> Task {
-        let mut queue = self.queue.lock().await;
-        // while queue.is_empty() {
-        //     drop(queue); // Drop the lock before waiting
-        //     self.avail.notified().await;
-        //     queue = self.queue.lock().await; // Re-acquire the lock after being notified
-        // }
-        queue.pop_front().expect("Queue has no tasks.")
+        self.queue.pop_front().expect("Queue has no tasks.")
     }
 }

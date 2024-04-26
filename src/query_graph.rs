@@ -77,6 +77,7 @@ impl QueryGraph {
         }
     }
 
+    #[inline]
     fn next_task_id(&mut self) -> u64 {
         self.tid_counter.fetch_add(1, Ordering::SeqCst)
     }
@@ -95,6 +96,7 @@ impl QueryGraph {
         return QueryQueueStatus::Available;
     }
 
+    #[inline]
     pub async fn next_task(&mut self) -> Task {
         self.task_queue.next_task().await;
     }
