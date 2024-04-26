@@ -4,12 +4,12 @@ use crate::SchedulerError;
 use datafusion_proto::bytes::physical_plan_to_bytes;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 #[derive(Debug, Default)]
 pub struct QueryTable {
     // Maps query IDs to query graphs
-    pub table: RwLock<HashMap<u64, Arc<RwLock<QueryGraph>>>>,
+    pub table: RwLock<HashMap<u64, Arc<Mutex<QueryGraph>>>>,
 }
 
 impl QueryTable {
@@ -19,10 +19,10 @@ impl QueryTable {
         }
     }
 
-    pub async fn add_query(&self, graph: QueryGraph) -> Arc<RwLock<QueryGraph>> {
-        println!("scheduler: adding query graph: {:#?}", graph);
+    pub async fn add_query(&self, graph: QueryGraph) -> Arc<Mutex<QueryGraph>> {
+        // println!("scheduler: adding query graph: {:#?}", graph);
         let qid = graph.query_id;
-        let graph_lock = Arc::new(RwLock::new(graph));
+        let graph_lock = Arc::new(Mutex::new(graph));
         let mut t = self.table.write().await;
         (*t).insert(qid, Arc::clone(&graph_lock));
         graph_lock
@@ -40,7 +40,7 @@ impl QueryTable {
     ) -> Result<Vec<u8>, SchedulerError> {
         let t = self.table.read().await;
         if let Some(graph) = t.get(&query_id) {
-            let plan = Arc::clone(&graph.read().await.stages[stage_id as usize].plan);
+            let plan = Arc::clone(&graph.lock().await.stages[stage_id as usize].plan);
             Ok(physical_plan_to_bytes(plan)
                 .expect("Failed to serialize physical plan")
                 .to_vec())

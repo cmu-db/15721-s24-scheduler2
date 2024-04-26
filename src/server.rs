@@ -21,6 +21,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::{Duration, sleep};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
@@ -57,10 +58,13 @@ impl SchedulerService {
 
     // Get the next task from the queue.
     async fn next_task(&self, task_id: TaskId) -> Result<(TaskId, Vec<u8>), SchedulerError> {
-        let mut queue = self.queue.lock().await;
-        // Remove the current task from the queue.
-        queue.remove_task(task_id, StageStatus::Finished(0)).await;
+        {
+            let mut queue = self.queue.lock().await;
+            // Remove the current task from the queue.
+            queue.remove_task(task_id, StageStatus::Finished(0)).await;
+        }
         loop {
+            let mut queue = self.queue.lock().await;
             if let Some(new_task_id) = queue.next_task().await {
                 let stage = self
                     .query_table
@@ -69,6 +73,8 @@ impl SchedulerService {
                 return Ok((new_task_id, stage));
             }
             // TODO: add notify
+            drop(queue);
+            sleep(Duration::from_secs(1)).await;
         }
     }
 }
@@ -90,13 +96,13 @@ impl SchedulerApi for SchedulerService {
 
         let plan = physical_plan_from_bytes(bytes.as_slice(), &self.ctx)
             .expect("Failed to deserialize physical plan");
-        println!("schedule_query: received plan {:?}", plan);
+        // println!("schedule_query: received plan {:?}", plan);
 
         // Build a query graph, store in query table, enqueue new tasks.
         let qid = self.next_query_id();
         let query = QueryGraph::new(qid, plan).await;
         let graph = self.query_table.add_query(query).await;
-        // self.queue.lock().await.add_query(qid, graph).await;
+        self.queue.lock().await.add_query(qid, graph).await;
 
         let response = ScheduleQueryRet { query_id: qid };
         Ok(Response::new(response))
@@ -108,28 +114,6 @@ impl SchedulerApi for SchedulerService {
         request: Request<QueryJobStatusArgs>,
     ) -> Result<Response<QueryJobStatusRet>, Status> {
         let QueryJobStatusArgs { query_id } = request.into_inner();
-
-        // let query_status = self.query_table.get_query_status(query_id).await;
-        //
-        // if let QueryStatus::Done = query_status {
-        //     let stage_id = self.query_table.get_query(query_id).await.num_stages() - 1;
-        //     let final_result_opt = get_results(&TaskKey {
-        //         stage_id,
-        //         query_id,
-        //     })
-        //     .await;
-        //     let final_result = final_result_opt.expect("api.rs: query is done but no results in table");
-        //     print_batches(&final_result).unwrap();
-        // }
-        //
-        // if let QueryStatus::Done | QueryStatus::Failed = query_status {
-        //     self.query_table.remove_query(query_id).await;
-        // }
-        //
-        // Ok(Response::new(QueryJobStatusRet {
-        //     query_status: query_status.into(),
-        //     query_result: Vec::new(),
-        // }))
 
         let status = self.queue.lock().await.get_query_status(query_id).await;
         if status == QueryStatus::Done {
@@ -143,32 +127,6 @@ impl SchedulerApi for SchedulerService {
             query_status: status.into(),
             query_result: Vec::new(),
         }));
-        // let graph_opt_guard = self.query_table.table.read().await;
-        // let graph_opt = &graph_opt_guard.get(&query_id);
-        // if graph_opt.is_none() {
-        //     return Ok(Response::new(QueryJobStatusRet {
-        //         query_status: QueryStatus::NotFound.into(),
-        //         query_result: Vec::new(),
-        //     }));
-        // }
-
-        // let graph = graph_opt.unwrap().read().await;
-        // if graph.done {
-        //     let stage_id = 0;
-        //     let final_result_opt = get_results(&TaskKey { stage_id, query_id }).await;
-        //     let final_result =
-        //         final_result_opt.expect("api.rs: query is done but no results in table");
-        //     print_batches(&final_result).unwrap();
-        //     Ok(Response::new(QueryJobStatusRet {
-        //         query_status: QueryStatus::Done.into(),
-        //         query_result: Vec::new(),
-        //     }))
-        // } else {
-        //     Ok(Response::new(QueryJobStatusRet {
-        //         query_status: QueryStatus::InProgress.into(),
-        //         query_result: Vec::new(),
-        //     }))
-        // }
     }
 
     async fn abort_query(
@@ -258,7 +216,7 @@ mod tests {
                     );
                     continue;
                 }
-                println!("plan: {:?}", plan.clone());
+                // println!("plan: {:?}", plan.clone());
                 let plan_bytes: Vec<u8> = plan_f.unwrap();
                 println!("Serialized plan is {} bytes.", plan_bytes.len());
                 let query = ScheduleQueryArgs {
