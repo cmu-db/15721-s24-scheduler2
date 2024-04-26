@@ -12,13 +12,11 @@ mod server;
 mod task;
 mod task_queue;
 
-use crate::executor_client::ExecutorClient;
 use crate::frontend::JobInfo;
 use crate::integration_test::IntegrationTest;
 use crate::parser::ExecutionPlanParser;
 use crate::server::composable_database::QueryStatus::{Done, InProgress};
 use clap::{App, Arg, SubCommand};
-use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
 use futures::TryFutureExt;
 use prost::Message;

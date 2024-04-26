@@ -36,7 +36,7 @@ plt.gca().invert_yaxis()
 plt.xlabel('Time (seconds from first query submission)')
 plt.ylabel('Query ID')
 
-plt.title('Normalized Timeline of SQL Queries Execution')
+plt.title('Timeline of SQL Queries Execution')
 
 
 plt.tight_layout()
