@@ -3,7 +3,8 @@ pub mod composable_database {
 }
 
 use crate::intermediate_results::{get_results, TaskKey};
-use crate::project_config::load_catalog;
+use crate::mock_catalog::load_catalog;
+use crate::parser::ExecutionPlanParser;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
 use crate::queue::Queue;
@@ -125,6 +126,16 @@ impl SchedulerApi for SchedulerService {
             let final_result =
                 final_result_opt.expect("api.rs: query is done but no results in table");
             print_batches(&final_result).unwrap();
+
+            // ****************** BEGIN CHANGES FROM INTEGRATION TESTING ***************//
+            let final_result_bytes = ExecutionPlanParser::serialize_record_batches(final_result)
+                .expect("fail to serialize record batch");
+
+            return Ok(Response::new(QueryJobStatusRet {
+                query_status: QueryStatus::Done.into(),
+                query_result: final_result_bytes,
+            }))
+            // ****************** END CHANGES FROM INTEGRATION TESTING****************//
         }
         return Ok(Response::new(QueryJobStatusRet {
             query_status: status.into(),
@@ -147,9 +158,8 @@ impl SchedulerApi for SchedulerService {
         request: Request<NotifyTaskStateArgs>,
     ) -> Result<Response<NotifyTaskStateRet>, Status> {
         let NotifyTaskStateArgs {
-            task,      // TODO: We should use `None` to indicate the handshake task.
-            success,   // TODO: Switch to status enum.
-            result: _, // TODO: Remove this field from the proto, replace with pointer.
+            task,    // TODO: We should use `None` to indicate the handshake task.
+            success, // TODO: Switch to status enum.
         } = request.into_inner();
 
         if !success {
@@ -174,23 +184,23 @@ impl SchedulerApi for SchedulerService {
     }
 }
 
-#[tokio::main]
-async fn _main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "0.0.0.0:15721".parse().unwrap();
-
-    let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
-    let scheduler_service = SchedulerService::new(catalog_path).await;
-
-    let server = SchedulerApiServer::new(scheduler_service);
-    Server::builder().add_service(server).serve(addr).await?;
-
-    Ok(())
-}
+// #[tokio::main]
+// async fn _main() -> Result<(), Box<dyn std::error::Error>> {
+//     let addr = "0.0.0.0:15721".parse().unwrap();
+//
+//     let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
+//     let scheduler_service = SchedulerService::new(catalog_path).await;
+//
+//     let server = SchedulerApiServer::new(scheduler_service);
+//     Server::builder().add_service(server).serve(addr).await?;
+//
+//     Ok(())
+// }
 
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
-    use crate::parser::Parser;
+    use crate::parser::ExecutionPlanParser;
     use crate::server::composable_database::scheduler_api_server::SchedulerApi;
     use crate::server::composable_database::{
         AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
@@ -205,11 +215,11 @@ mod tests {
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
         let scheduler_service = Box::new(SchedulerService::new(catalog_path).await);
-        let parser = Parser::new(catalog_path).await;
+        let parser = ExecutionPlanParser::new(catalog_path).await;
         println!("test_scheduler: Testing file {}", test_file);
         if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
             for plan in &physical_plans {
-                let plan_f = parser.serialize_physical_plan(plan.clone()).await;
+                let plan_f = parser.serialize_physical_plan(plan.clone());
                 if plan_f.is_err() {
                     println!(
                         "test_scheduler: Unable to serialize plan in file {}.",

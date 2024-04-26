@@ -15,3 +15,5 @@ Cargo.lock
 
 **/.vscode
 .DS_Store
+
+**/*.parquet

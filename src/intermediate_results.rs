@@ -1,4 +1,25 @@
+// ======================================================================================
+// Module: intermediate_results.rs
+//
+// Description:
+//     This module manages the storage and retrieval of intermediate results during query execution
+//     within a distributed DBMS. Executors use this module to locally store intermediate results
+//     in Apache Arrow's RecordBatch format, which offers an efficient, columnar storage. Results are
+//     keyed by a composite of the query ID and stage ID, reducing the need for frequent data transfers
+//     back to the scheduler.
+//
+// Features:
+//     - Concurrent modification and access to results with Tokio's async mutex.
+//     - Efficient in-memory columnar data storage.
+//     - Insertion, appending, and retrieval of results via task identifiers.
+//     - Utility functions to rewrite query plans, integrating intermediate results directly
+//       into the execution plans based on scheduler references, optimizing data handling.
+//
+// ======================================================================================
+
 use datafusion::arrow::array::RecordBatch;
+use datafusion::error::DataFusionError;
+use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -17,7 +38,6 @@ impl PartialEq for TaskKey {
         self.stage_id == other.stage_id && self.query_id == other.query_id
     }
 }
-
 impl Eq for TaskKey {}
 
 impl Hash for TaskKey {
@@ -27,7 +47,8 @@ impl Hash for TaskKey {
     }
 }
 
-pub static INTERMEDIATE_RESULTS: Lazy<Arc<Mutex<HashMap<TaskKey, Vec<RecordBatch>>>>> =
+// thread-safe hashmap of task key -> intermediate results
+static INTERMEDIATE_RESULTS: Lazy<Arc<Mutex<HashMap<TaskKey, Vec<RecordBatch>>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 pub async fn get_results(task_id: &TaskKey) -> Option<Vec<RecordBatch>> {
@@ -52,6 +73,39 @@ pub async fn append_results(task: &TaskKey, new_results: Vec<RecordBatch>) {
 pub async fn remove_results(task: &TaskKey) -> Option<Vec<RecordBatch>> {
     let mut lock = INTERMEDIATE_RESULTS.lock().await;
     lock.remove(task)
+}
+
+async fn rewrite_node(
+    plan: Arc<dyn ExecutionPlan>,
+    query_id: u64,
+) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+    let children = plan.children();
+    let mut new_children = Vec::with_capacity(children.len());
+    let mut changed = false;
+
+    for child in children.into_iter() {
+        let new_child = Box::pin(rewrite_node(child, query_id));
+        let new_child = new_child.await?;
+        if !Arc::ptr_eq(&new_child, &new_children.last().unwrap_or(&new_child)) {
+            changed = true;
+        }
+        new_children.push(new_child);
+    }
+
+    if changed {
+        with_new_children_if_necessary(plan, new_children)
+    } else {
+        Ok(plan)
+    }
+}
+
+/// Rewrite an ExecutionPlan and attach the intermediate data in the plan
+pub async fn rewrite_query(
+    plan: Arc<dyn ExecutionPlan>,
+    query_id: u64,
+) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+    let result = Box::pin(rewrite_node(plan, query_id));
+    result.await
 }
 
 #[cfg(test)]

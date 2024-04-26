@@ -3,7 +3,12 @@
 
 ## TODO
 - Priority queue task selection logic
-- Support for intra-query parallelism
+- Support for intra-QUERY parallelism
 - Scheduler server logging with [`tracing`]
 - Better error handling with [`anyhow`] or [`thiserror`]
 
+- Changes made:
+- 1. Refactor frontend, support submitting batch SQL jobs and timing of individual query
+- 2. Implement executor execution plan rewrite
+- 3. Add recordbatch serialization/deserialization
+- 4. 

@@ -22,7 +22,7 @@ enum QueryStatus {
 message NotifyTaskStateArgs {
     TaskID task = 1;
     bool success = 2; // if the query succeeded
-    bytes result = 3; // bytes for the result
+//    string result_url = 3; // URL for the result
 }
 
 message NotifyTaskStateRet {

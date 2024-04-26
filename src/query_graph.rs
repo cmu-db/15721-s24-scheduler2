@@ -8,6 +8,8 @@ use datafusion::physical_plan::placeholder_row::PlaceholderRowExec;
 use datafusion::physical_plan::sorts::sort::SortExec;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::ops::DerefMut;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -239,6 +241,8 @@ impl GraphBuilder {
         plan: Arc<dyn ExecutionPlan>,
         pipeline: usize,
     ) -> Arc<dyn ExecutionPlan> {
+        return plan;
+
         if plan.children().is_empty() {
             return plan;
         }
