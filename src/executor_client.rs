@@ -1,6 +1,6 @@
 use crate::intermediate_results::{insert_results, rewrite_query, TaskKey};
-use crate::mock_executor::MockExecutor;
 use crate::mock_catalog::load_catalog;
+use crate::mock_executor::MockExecutor;
 use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
 use crate::server::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, TaskId};
 use datafusion::execution::context::SessionContext;

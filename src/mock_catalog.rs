@@ -6,7 +6,7 @@ use datafusion::datasource::listing::{
 };
 use datafusion::datasource::TableProvider;
 use datafusion::error::DataFusionError;
-use datafusion::prelude::{SessionContext};
+use datafusion::prelude::SessionContext;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::Arc;

@@ -4,8 +4,8 @@ pub mod composable_database {
 }
 
 use crate::intermediate_results::{get_results, TaskKey};
-use crate::parser::ExecutionPlanParser;
 use crate::mock_catalog::load_catalog;
+use crate::parser::ExecutionPlanParser;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
 use crate::task::Task;

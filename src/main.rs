@@ -2,18 +2,18 @@ mod executor_client;
 mod frontend;
 pub mod integration_test;
 pub mod intermediate_results;
+pub mod mock_catalog;
 mod mock_executor;
 mod mock_optimizer;
 pub mod parser;
-pub mod mock_catalog;
 mod query_graph;
 mod query_table;
 mod server;
 mod task;
 mod task_queue;
 
-use std::collections::HashMap;
 use crate::executor_client::ExecutorClient;
+use crate::frontend::JobInfo;
 use crate::integration_test::IntegrationTest;
 use crate::parser::ExecutionPlanParser;
 use crate::server::composable_database::QueryStatus::{Done, InProgress};
@@ -22,12 +22,12 @@ use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
 use futures::TryFutureExt;
 use prost::Message;
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use crate::frontend::JobInfo;
 
 pub enum SchedulerError {
     Error(String),
@@ -262,23 +262,29 @@ const TPCH_FILES: &[&str] = &[
 ];
 
 pub async fn benchmark_mode() {
-
-    const JOB_SUMMARY_OUTPUT_PATH: &str =  concat!(env!("CARGO_MANIFEST_DIR"), "/job_summary.json");
+    const JOB_SUMMARY_OUTPUT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/job_summary.json");
 
     let job_map = file_mode(TPCH_FILES.to_vec(), true).await;
 
-    write_jobs_to_json(job_map.values().cloned().collect(), Path::new(JOB_SUMMARY_OUTPUT_PATH)).await.unwrap_or_else(
-        |err| {
-            panic!("Fail to write job summary: {}", err);
-        }
-    );
+    write_jobs_to_json(
+        job_map.values().cloned().collect(),
+        Path::new(JOB_SUMMARY_OUTPUT_PATH),
+    )
+    .await
+    .unwrap_or_else(|err| {
+        panic!("Fail to write job summary: {}", err);
+    });
 }
 
-
-async fn write_jobs_to_json(jobs: Vec<JobInfo>, path: &Path) -> datafusion::common::Result<(), serde_json::Error> {
+async fn write_jobs_to_json(
+    jobs: Vec<JobInfo>,
+    path: &Path,
+) -> datafusion::common::Result<(), serde_json::Error> {
     let json_string = serde_json::to_string_pretty(&jobs)?;
     let mut file = File::create(path).await.expect("Unable to create file");
-    file.write_all(json_string.as_bytes()).await.expect("Unable to write data to file");
+    file.write_all(json_string.as_bytes())
+        .await
+        .expect("Unable to write data to file");
     Ok(())
 }
 
@@ -286,7 +292,6 @@ async fn write_jobs_to_json(jobs: Vec<JobInfo>, path: &Path) -> datafusion::comm
 mod tests {
     use crate::parser::ExecutionPlanParser;
     use crate::{file_mode, run_single_query, start_system, CATALOG_PATH, TPCH_FILES};
-
 
     #[tokio::test]
     async fn test_file_mode() {

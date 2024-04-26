@@ -1,8 +1,8 @@
 use crate::executor_client::ExecutorClient;
 use crate::frontend::MockFrontend;
-use crate::parser::ExecutionPlanParser;
 use crate::mock_catalog::Config;
 use crate::mock_catalog::{load_catalog, read_config};
+use crate::parser::ExecutionPlanParser;
 use crate::server::composable_database::scheduler_api_server::SchedulerApiServer;
 use crate::server::composable_database::TaskId;
 use crate::server::SchedulerService;

@@ -1,21 +1,21 @@
 use crate::server::composable_database::{QueryInfo, ScheduleQueryArgs};
+use chrono::{DateTime, Utc};
 use datafusion::arrow::array::RecordBatch;
-use datafusion::arrow::util::pretty::{pretty_format_batches};
+use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::common::DataFusionError;
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
-use chrono::{DateTime, Utc};
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 use tonic::transport::Channel;
 
 use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
 
+use crate::mock_catalog::load_catalog;
 use crate::mock_optimizer::Optimizer;
 use crate::parser::ExecutionPlanParser;
-use crate::mock_catalog::load_catalog;
 use crate::server::composable_database::QueryJobStatusArgs;
 use crate::server::composable_database::QueryStatus;
 use crate::server::composable_database::QueryStatus::InProgress;
@@ -62,9 +62,6 @@ impl fmt::Display for JobInfo {
         )
     }
 }
-
-
-
 
 pub struct MockFrontend {
     optimizer: Optimizer,
