@@ -291,7 +291,7 @@ mod tests {
         }
         println!(
             "test_scheduler: queued {} tasks.",
-            scheduler_service.queue.lock().await.size().await
+            scheduler_service.queue.lock().await.size()
         );
     }
 }

@@ -108,7 +108,7 @@ impl Queue {
     }
 
     #[cfg(test)]
-    pub async fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.queue.len()
     }
 
@@ -180,10 +180,23 @@ impl Queue {
 
 #[cfg(test)]
 mod tests {
+    use rand::Rng;
     use tokio::sync::Mutex;
 
-    use crate::{parser::Parser, query_graph::{QueryGraph, StageStatus}, queue::{QueryKey, Queue}, server::composable_database::TaskId};
-    use std::{sync::Arc, time::SystemTime};
+    use crate::{
+        parser::Parser,
+        query_graph::{QueryGraph, StageStatus},
+        queue::{QueryKey, Queue},
+        server::composable_database::TaskId,
+    };
+    use std::{
+        cmp::min,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        },
+        time::SystemTime,
+    };
 
     #[tokio::test]
     async fn test_query_key_cmp() {
@@ -210,16 +223,18 @@ mod tests {
             let mut qid = 0;
             // Add a bunch of queries
             for plan in &physical_plans {
-              let graph = QueryGraph::new(qid, Arc::clone(plan)).await;
-              queue.add_query(qid, Arc::new(Mutex::new(graph))).await;
-              qid += 1;
+                let graph = QueryGraph::new(qid, Arc::clone(plan)).await;
+                queue.add_query(qid, Arc::new(Mutex::new(graph))).await;
+                qid += 1;
             }
             let mut tasks: Vec<TaskId> = Vec::new();
             for _ in 0..qid {
-              tasks.push(queue.next_task().await.expect("No tasks left in queue."));
+                tasks.push(queue.next_task().await.expect("No tasks left in queue."));
             }
             for _ in 0..qid {
-              queue.remove_task(tasks.pop().unwrap(), StageStatus::Finished(0)).await;
+                queue
+                    .remove_task(tasks.pop().unwrap(), StageStatus::Finished(0))
+                    .await;
             }
         }
     }
@@ -228,33 +243,63 @@ mod tests {
     async fn test_queue_conc() {
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
-        let mut queue = Arc::new(Mutex::new(Queue::new()));
+        let queue = Arc::new(Mutex::new(Queue::new()));
         let parser = Parser::new(catalog_path).await;
-        println!("test_scheduler: Testing file {}", test_file);
+        println!("test_queue_conc: Testing file {}", test_file);
         if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
-            let mut qid = 0;
+            println!("Got {} plans.", physical_plans.len());
+            let nplans = min(physical_plans.len(), 400);
+            let plans = physical_plans[..nplans].to_vec();
+            let qid: Arc<Mutex<AtomicU64>> = Arc::new(Mutex::new(AtomicU64::new(0)));
+
             // Add a bunch of queries
-            let queue_clone = Arc::clone(&queue);
-            let create_plans = tokio::spawn(async move {
-              for plan in &physical_plans {
-                let graph = QueryGraph::new(qid, Arc::clone(plan)).await;
-                queue_clone.lock().await.add_query(qid, Arc::new(Mutex::new(graph))).await;
-                qid += 1;
-              }
-            });
-            let mut jobs = vec![create_plans];
-            
-            for _ in 0..qid {
-              let queue_clone = Arc::clone(&queue);
-              jobs.push(tokio::spawn(async move {
-                let task = queue_clone.lock().await.next_task().await.expect("No tasks left in queue.");
-                queue_clone.lock().await.remove_task(task, StageStatus::Finished(0)).await;
-              }));
+            let mut jobs = Vec::new();
+            for plan in plans {
+                let queue_clone = Arc::clone(&queue);
+                let qid_clone = Arc::clone(&qid);
+                // Spawn threads that each enqueue a job
+                jobs.push(tokio::spawn(async move {
+                    let query_id = qid_clone.lock().await.fetch_add(1, Ordering::SeqCst);
+                    let graph = QueryGraph::new(query_id, Arc::clone(&plan)).await;
+                    queue_clone
+                        .lock()
+                        .await
+                        .add_query(query_id, Arc::new(Mutex::new(graph)))
+                        .await;
+                }));
             }
 
-            for job in jobs {
-              let _ = tokio::join!(job);
+            // spawn as many tasks as there are queries.
+            // WARNING: may need more as pipelines are added.
+            for _ in 0..nplans {
+                let queue_clone = Arc::clone(&queue);
+                jobs.push(tokio::spawn(async move {
+                    // Get a plan, looping until one is available
+                    loop {
+                        let task_opt = queue_clone.lock().await.next_task().await;
+                        if let Some(task) = task_opt {
+                            queue_clone
+                                .lock()
+                                .await
+                                .remove_task(task, StageStatus::Finished(0))
+                                .await;
+                            return;
+                        }
+                        let time = rand::thread_rng().gen_range(200..4000);
+                        tokio::time::sleep(tokio::time::Duration::from_millis(time)).await;
+                    }
+                }));
             }
+
+            println!("Waiting for {} jobs.", &jobs.len());
+            for job in jobs {
+                let _ = job.await.unwrap();
+            }
+            // println!("Queued {} queries.", qid.lock().await.load(Ordering::SeqCst));
+            // make sure no more tasks remain
+            assert!(Arc::clone(&queue).lock().await.next_task().await.is_none());
+            assert!(queue.lock().await.size() == 0);
+            println!("Finished {:?} tasks.", nplans);
         }
     }
 }
