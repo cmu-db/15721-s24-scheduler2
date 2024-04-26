@@ -1,7 +1,8 @@
 mod executor;
+mod frontend;
 pub mod integration_test;
 pub mod intermediate_results;
-mod mock_frontend;
+mod mock_executor;
 mod mock_optimizer;
 pub mod parser;
 pub mod project_config;
@@ -21,9 +22,7 @@ use datafusion::error::DataFusionError;
 use futures::TryFutureExt;
 use prost::Message;
 use std::io::{self, Write};
-use std::path::PathBuf;
 use std::time::Duration;
-use tokio::time::Interval;
 
 pub enum SchedulerError {
     Error(String),
@@ -54,7 +53,7 @@ async fn main() {
         }
         Some(("file", file_matches)) => {
             if let Some(file_path) = file_matches.value_of("FILE") {
-                file_mode(vec![file_path]).await;
+                file_mode(vec![file_path], false).await;
             } else {
                 eprintln!("File path not provided.");
             }
@@ -146,46 +145,18 @@ async fn interactive_mode() {
     }
 }
 
-async fn generate_reference_results(file_path: &str) -> Vec<RecordBatch> {
-    let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
-    let reference_executor = Executor::new(CATALOG_PATH, -1).await;
-    let sql_statements = parser
-        .read_sql_from_file(&file_path)
-        .await
-        .unwrap_or_else(|err| {
-            panic!("Unable to parse file {}: {:?}", file_path, err);
-        });
-
-    // Caches the correct results for each sql query
-    let mut results: Vec<RecordBatch> = Vec::new();
-
-    // Execute each SQL statement
-    for sql in sql_statements {
-        let execution_result = reference_executor.execute_sql(&sql).await;
-
-        // Check for errors in execution
-        let record_batches = execution_result.unwrap_or_else(|err| {
-            panic!("Error executing SQL '{}': {:?}", sql, err);
-        });
-
-        // Ensure there's exactly one RecordBatch
-        if record_batches.len() == 1 {
-            results.push(record_batches[0].clone());
-        } else {
-            panic!(
-                "The SQL statement '{}' should only contain one RecordBatch, found {}",
-                sql,
-                record_batches.len()
-            );
-        }
-    }
-
-    results
-}
-
-pub async fn file_mode(file_paths: Vec<&str>) {
+pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) {
     let tester = start_system().await;
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+
+    let mut reference_solutions = Vec::new();
+    for file_path in &file_paths {
+        // Generate reference solution first
+        let reference_solution = tester.generate_reference_results(*file_path).await;
+        reference_solutions.extend(reference_solution);
+    }
+
+    let mut query_ids = Vec::new();
 
     // for each file selected...
     for file_path in file_paths {
@@ -209,6 +180,7 @@ pub async fn file_mode(file_paths: Vec<&str>) {
             match tester.frontend.lock().await.submit_job(&sql).await {
                 Ok(query_id) => {
                     println!("Submitted query id: {}, query: {}", query_id, sql);
+                    query_ids.push(query_id);
                 }
                 Err(e) => {
                     panic!("Error in submitting query: {}: {}", sql, e);
@@ -216,6 +188,8 @@ pub async fn file_mode(file_paths: Vec<&str>) {
             }
         }
     }
+
+    assert_eq!(query_ids.len(), reference_solutions.len());
 
     // Wait until all jobs completed
     loop {
@@ -229,6 +203,24 @@ pub async fn file_mode(file_paths: Vec<&str>) {
     let jobs_map = tester.frontend.lock().await.get_all_jobs();
     for (job_id, job_info) in jobs_map.iter() {
         println!("Query ID: {}, Info: {}", job_id, job_info);
+    }
+
+    if verify_correctness {
+        for (i, query_id) in query_ids.iter().enumerate() {
+            let job_info = jobs_map
+                .get(&query_id)
+                .expect("query not in job map")
+                .clone();
+            assert_eq!(job_info.status, Done);
+            let query_results = job_info.result.expect("empty job info");
+            let are_equal = tester
+                .results_eq(&query_results, &reference_solutions[i])
+                .await
+                .expect("fail to compare results");
+            if !are_equal {
+                panic!("file_mode: comparison failed on query id {}", query_id);
+            }
+        }
     }
 }
 
@@ -269,6 +261,6 @@ mod tests {
             "./test_sql/22.sql",
         ];
 
-        file_mode(files_to_run).await;
+        file_mode(files_to_run, true).await;
     }
 }

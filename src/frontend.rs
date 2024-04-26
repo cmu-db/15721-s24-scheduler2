@@ -132,7 +132,7 @@ impl MockFrontend {
             }),
         });
 
-        let mut client = self.scheduler_api_client.as_mut().unwrap();
+        let client = self.scheduler_api_client.as_mut().unwrap();
         match client.schedule_query(schedule_query_request).await {
             Ok(response) => {
                 let query_id = response.into_inner().query_id;

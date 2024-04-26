@@ -85,7 +85,6 @@ impl Executor {
                 .get_next_task(NotifyTaskStateArgs {
                     task: cur_task.task.clone(),
                     success: execution_success,
-                    result_url: "".to_string(),
                 })
                 .await;
         }
@@ -107,7 +106,6 @@ impl Executor {
                 task_id: HANDSHAKE_TASK_ID,
             }),
             success: true,
-            result_url: "".to_string(),
         });
 
         match client.notify_task_state(handshake_req).await {
@@ -164,26 +162,26 @@ impl Executor {
         Ok(results)
     }
 
-    #[allow(dead_code)]
-    pub async fn execute_sql(&self, query: &str) -> Result<Vec<RecordBatch>, DataFusionError> {
-        // NOTE: More direct way to execute SQL, using below to ensure same code paths are taken.
-        // self.ctx
-        //     .sql(query)
-        //     .await
-        //     .expect("Failed to parse SQL statement")
-        //     .collect()
-        //     .await
-
-        let physical_plan = self
-            .ctx
-            .sql(query)
-            .await
-            .expect("Failed to parse SQL statement")
-            .create_physical_plan()
-            .await
-            .expect("Failed to create physical plan");
-        self.execute(physical_plan).await
-    }
+    // #[allow(dead_code)]
+    // pub async fn execute_sql(&self, query: &str) -> Result<Vec<RecordBatch>, DataFusionError> {
+    //     // NOTE: More direct way to execute SQL, using below to ensure same code paths are taken.
+    //     // self.ctx
+    //     //     .sql(query)
+    //     //     .await
+    //     //     .expect("Failed to parse SQL statement")
+    //     //     .collect()
+    //     //     .await
+    //
+    //     let physical_plan = self
+    //         .ctx
+    //         .sql(query)
+    //         .await
+    //         .expect("Failed to parse SQL statement")
+    //         .create_physical_plan()
+    //         .await
+    //         .expect("Failed to create physical plan");
+    //     self.execute(physical_plan).await
+    // }
 }
 
 #[cfg(test)]
@@ -201,42 +199,42 @@ mod tests {
         assert!(!result.unwrap().is_empty());
     }
 
-    #[tokio::test]
-    async fn test_tpc_h_16() {
-        let executor = Executor::new(TEST_DATA_PATH, 0).await;
-        let query = r"SELECT
-    p_brand,
-    p_type,
-    p_size,
-    count(DISTINCT ps_suppkey) AS supplier_cnt
-FROM
-    partsupp,
-    part
-WHERE
-    p_partkey = ps_partkey
-    AND p_brand <> 'Brand#45'
-    AND p_type NOT LIKE 'MEDIUM POLISHED%'
-    AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
-    AND ps_suppkey NOT IN (
-        SELECT
-            s_suppkey
-        FROM
-            supplier
-        WHERE
-            s_comment LIKE '%Customer%Complaints%')
-GROUP BY
-    p_brand,
-    p_type,
-    p_size
-ORDER BY
-    supplier_cnt DESC,
-    p_brand,
-    p_type,
-    p_size;
-";
-        let result = executor.execute_sql(query).await;
-        println!("length of result is {}", result.unwrap().len());
-        // assert!(result.is_ok());
-        // assert!(!result.unwrap().is_empty());
-    }
+    //     #[tokio::test]
+    //     async fn test_tpc_h_16() {
+    //         let executor = Executor::new(TEST_DATA_PATH, 0).await;
+    //         let query = r"SELECT
+    //     p_brand,
+    //     p_type,
+    //     p_size,
+    //     count(DISTINCT ps_suppkey) AS supplier_cnt
+    // FROM
+    //     partsupp,
+    //     part
+    // WHERE
+    //     p_partkey = ps_partkey
+    //     AND p_brand <> 'Brand#45'
+    //     AND p_type NOT LIKE 'MEDIUM POLISHED%'
+    //     AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
+    //     AND ps_suppkey NOT IN (
+    //         SELECT
+    //             s_suppkey
+    //         FROM
+    //             supplier
+    //         WHERE
+    //             s_comment LIKE '%Customer%Complaints%')
+    // GROUP BY
+    //     p_brand,
+    //     p_type,
+    //     p_size
+    // ORDER BY
+    //     supplier_cnt DESC,
+    //     p_brand,
+    //     p_type,
+    //     p_size;
+    // ";
+    //         let result = executor.execute_sql(query).await;
+    //         println!("length of result is {}", result.unwrap().len());
+    //         // assert!(result.is_ok());
+    //         // assert!(!result.unwrap().is_empty());
+    //     }
 }

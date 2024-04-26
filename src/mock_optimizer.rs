@@ -1,3 +1,19 @@
+// ======================================================================================
+// Module: mock_optimizer.rs
+//
+// Description:
+//     This module implements a mock optimizer that converts a DataFusion LogicalPlan into an
+//     ExecutionPlan.
+//
+//     This optimizer serves as a placeholder. To integrate a custom optimizer (optd), simply
+//     replace the implementations of `new` and `optimize` with your own logic.
+//
+// Example:
+//     let optimizer = Optimizer::new("path/to/catalog").await;
+//     let execution_plan = optimizer.optimize(&logical_plan).await;
+//
+// ======================================================================================
+
 use crate::project_config::load_catalog;
 use datafusion::error::DataFusionError;
 use datafusion::execution::context::{SessionContext, SessionState};

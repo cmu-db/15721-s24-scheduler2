@@ -1,5 +1,6 @@
 use crate::executor::Executor;
-use crate::mock_frontend::MockFrontend;
+use crate::frontend::MockFrontend;
+use crate::parser::ExecutionPlanParser;
 use crate::project_config::Config;
 use crate::project_config::{load_catalog, read_config};
 use crate::server::composable_database::scheduler_api_server::SchedulerApiServer;
@@ -199,6 +200,38 @@ impl IntegrationTest {
         }
 
         Ok(true)
+    }
+
+    pub async fn generate_reference_results(&self, file_path: &str) -> Vec<Vec<RecordBatch>> {
+        let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+        let reference_executor = Executor::new(CATALOG_PATH, -1).await;
+        let sql_statements = parser
+            .read_sql_from_file(&file_path)
+            .await
+            .unwrap_or_else(|err| {
+                panic!("Unable to parse file {}: {:?}", file_path, err);
+            });
+
+        let mut results: Vec<Vec<RecordBatch>> = Vec::new();
+
+        // Execute each SQL statement
+        for sql in sql_statements {
+            let execution_result = self
+                .ctx
+                .sql(&sql)
+                .await
+                .expect("invalid sql file")
+                .collect()
+                .await;
+
+            // Check for errors in execution
+            let record_batches = execution_result.unwrap_or_else(|err| {
+                panic!("Error executing SQL '{}': {:?}", sql, err);
+            });
+            results.push(record_batches);
+        }
+
+        results
     }
 }
 

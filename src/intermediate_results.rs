@@ -1,5 +1,23 @@
+// ======================================================================================
+// Module: intermediate_results.rs
+//
+// Description:
+//     This module manages the storage and retrieval of intermediate results during query execution
+//     within a distributed DBMS. Executors use this module to locally store intermediate results
+//     in Apache Arrow's RecordBatch format, which offers an efficient, columnar storage. Results are
+//     keyed by a composite of the query ID and stage ID, reducing the need for frequent data transfers
+//     back to the scheduler.
+//
+// Features:
+//     - Concurrent modification and access to results with Tokio's async mutex.
+//     - Efficient in-memory columnar data storage.
+//     - Insertion, appending, and retrieval of results via task identifiers.
+//     - Utility functions to rewrite query plans, integrating intermediate results directly
+//       into the execution plans based on scheduler references, optimizing data handling.
+//
+// ======================================================================================
+
 use datafusion::arrow::array::RecordBatch;
-use datafusion::common::tree_node::Transformed;
 use datafusion::error::DataFusionError;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use once_cell::sync::Lazy;
@@ -20,7 +38,6 @@ impl PartialEq for TaskKey {
         self.stage_id == other.stage_id && self.query_id == other.query_id
     }
 }
-
 impl Eq for TaskKey {}
 
 impl Hash for TaskKey {
@@ -30,7 +47,8 @@ impl Hash for TaskKey {
     }
 }
 
-pub static INTERMEDIATE_RESULTS: Lazy<Arc<Mutex<HashMap<TaskKey, Vec<RecordBatch>>>>> =
+// thread-safe hashmap of task key -> intermediate results
+static INTERMEDIATE_RESULTS: Lazy<Arc<Mutex<HashMap<TaskKey, Vec<RecordBatch>>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 pub async fn get_results(task_id: &TaskKey) -> Option<Vec<RecordBatch>> {
@@ -82,6 +100,7 @@ async fn rewrite_node(
     }
 }
 
+/// Rewrite an ExecutionPlan and attach the intermediate data in the plan
 pub async fn rewrite_query(
     plan: Arc<dyn ExecutionPlan>,
     query_id: u64,

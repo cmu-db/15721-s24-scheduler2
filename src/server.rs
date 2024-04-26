@@ -191,9 +191,8 @@ impl SchedulerApi for SchedulerService {
         request: Request<NotifyTaskStateArgs>,
     ) -> Result<Response<NotifyTaskStateRet>, Status> {
         let NotifyTaskStateArgs {
-            task,          // TODO: We should use `None` to indicate the handshake task.
-            success,       // TODO: Switch to status enum.
-            result_url: _, // TODO: Remove this field from the proto, replace with pointer.
+            task,    // TODO: We should use `None` to indicate the handshake task.
+            success, // TODO: Switch to status enum.
         } = request.into_inner();
 
         if !success {
