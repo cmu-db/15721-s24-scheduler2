@@ -1,4 +1,4 @@
-use crate::executor::Executor;
+use crate::executor_client::ExecutorClient;
 use crate::frontend::MockFrontend;
 use crate::parser::ExecutionPlanParser;
 use crate::project_config::Config;
@@ -113,7 +113,7 @@ impl IntegrationTest {
         // Start executor clients
         for executor in &self.config.executors {
             // Clone the scheduler_addr for each executor client
-            let mut mock_executor = Executor::new(CATALOG_PATH, executor.id).await;
+            let mut mock_executor = ExecutorClient::new(CATALOG_PATH, executor.id).await;
             let scheduler_addr_copy = scheduler_addr.clone();
             tokio::spawn(async move {
                 mock_executor.connect(&scheduler_addr_copy).await;
@@ -204,7 +204,7 @@ impl IntegrationTest {
 
     pub async fn generate_reference_results(&self, file_path: &str) -> Vec<Vec<RecordBatch>> {
         let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
-        let reference_executor = Executor::new(CATALOG_PATH, -1).await;
+        let reference_executor = ExecutorClient::new(CATALOG_PATH, -1).await;
         let sql_statements = parser
             .read_sql_from_file(&file_path)
             .await
@@ -237,7 +237,7 @@ impl IntegrationTest {
 
 #[cfg(test)]
 mod tests {
-    use crate::executor::Executor;
+    use crate::executor_client::ExecutorClient;
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
     use crate::server::composable_database::QueryStatus::InProgress;
@@ -360,8 +360,8 @@ mod tests {
             .expect("fail to read query 2");
         assert_eq!(1, sql_2_vec.len());
 
-        let executor1 = Executor::new(catalog_path, 0).await;
-        let executor2 = Executor::new(catalog_path, 1).await;
+        let executor1 = ExecutorClient::new(catalog_path, 0).await;
+        let executor2 = ExecutorClient::new(catalog_path, 1).await;
 
         // Executors 1 and 2 execute TPC Q1
         let res1 = executor1

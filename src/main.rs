@@ -1,4 +1,4 @@
-mod executor;
+mod executor_client;
 mod frontend;
 pub mod integration_test;
 pub mod intermediate_results;
@@ -12,7 +12,7 @@ mod server;
 mod task;
 mod task_queue;
 
-use crate::executor::Executor;
+use crate::executor_client::ExecutorClient;
 use crate::integration_test::IntegrationTest;
 use crate::parser::ExecutionPlanParser;
 use crate::server::composable_database::QueryStatus::{Done, InProgress};
