@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 #[derive(Debug, Default)]
 pub struct QueryTable {
     // Maps query IDs to query graphs
-    pub table: RwLock<HashMap<u64, RwLock<QueryGraph>>>,
+    pub table: RwLock<HashMap<u64, Arc<RwLock<QueryGraph>>>>,
 }
 
 impl QueryTable {
@@ -20,26 +20,13 @@ impl QueryTable {
         }
     }
 
-    pub async fn get_frontier(&self, query_id: u64) -> Vec<Task> {
-        let frontier = self
-            .table
-            .write()
-            .await
-            .get(&query_id)
-            .unwrap()
-            .read()
-            .await
-            .get_frontier()
-            .await;
-        frontier
-    }
-
-    pub async fn add_query(&self, graph: QueryGraph) -> Vec<Task> {
+    pub async fn add_query(&self, graph: QueryGraph) -> Arc<RwLock<QueryGraph>> {
         println!("scheduler: adding query graph: {:#?}", graph);
-        let frontier = graph.get_frontier().await;
+        let qid = graph.query_id;
+        let graph_lock = Arc::new(RwLock::new(graph));
         let mut t = self.table.write().await;
-        (*t).insert(graph.query_id, RwLock::new(graph));
-        frontier
+        (*t).insert(qid, Arc::clone(&graph_lock));
+        graph_lock
     }
 
     pub async fn get_query_status(&self, query_id: u64) -> QueryStatus {
@@ -47,24 +34,24 @@ impl QueryTable {
         todo!()
     }
 
-    pub async fn update_stage_status(
-        &self,
-        query_id: u64,
-        stage_id: u64,
-        status: StageStatus,
-    ) -> Result<(), &'static str> {
-        let t = self.table.read().await;
-        if let Some(graph) = t.get(&query_id) {
-            graph
-                .write()
-                .await
-                .update_stage_status(stage_id, status)
-                .await?;
-            Ok(())
-        } else {
-            Err("Graph not found.")
-        }
-    }
+    // pub async fn update_stage_status(
+    //     &self,
+    //     query_id: u64,
+    //     stage_id: u64,
+    //     status: StageStatus,
+    // ) -> Result<(), &'static str> {
+    //     let t = self.table.read().await;
+    //     if let Some(graph) = t.get(&query_id) {
+    //         graph
+    //             .write()
+    //             .await
+    //             .update_stage_status(stage_id, status)
+    //             .await?;
+    //         Ok(())
+    //     } else {
+    //         Err("Graph not found.")
+    //     }
+    // }
 
     pub async fn get_plan_bytes(
         &self,

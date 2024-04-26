@@ -7,8 +7,8 @@ use crate::intermediate_results::{get_results, TaskKey};
 use crate::project_config::load_catalog;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
+use crate::queue::Queue;
 use crate::task::Task;
-use crate::task_queue::TaskQueue;
 use crate::SchedulerError;
 use composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
 use composable_database::{
@@ -22,6 +22,7 @@ use datafusion_proto::bytes::physical_plan_from_bytes;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Once};
+use tokio::sync::Mutex;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
@@ -34,7 +35,7 @@ const HANDSHAKE_STAGE_ID: u64 = u64::MAX;
 
 pub struct SchedulerService {
     query_table: Arc<QueryTable>,
-    task_queue: Arc<TaskQueue>,
+    queue: Arc<Mutex<Queue>>,
     ctx: Arc<SessionContext>, // If we support changing the catalog at runtime, this should be a RwLock.
     query_id_counter: AtomicU64,
 }
@@ -43,8 +44,8 @@ impl fmt::Debug for SchedulerService {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "SchedulerService {{ query_table: {:?}, task_queue: {:?} }}",
-            self.query_table, self.task_queue,
+            "SchedulerService {{ query_table: {:?}, queue: {:?} }}",
+            self.query_table, self.queue,
         )
     }
 }
@@ -53,7 +54,7 @@ impl SchedulerService {
     pub async fn new(catalog_path: &str) -> Self {
         Self {
             query_table: Arc::new(QueryTable::new().await),
-            task_queue: Arc::new(TaskQueue::new()),
+            queue: Arc::new(Queue::new()),
             ctx: load_catalog(catalog_path).await,
             query_id_counter: AtomicU64::new(0),
         }
@@ -63,25 +64,25 @@ impl SchedulerService {
         self.query_id_counter.fetch_add(1, Ordering::SeqCst)
     }
 
-    async fn update_task_state(&self, query_id: u64, task_id: u64) {
-        // Update the status of the stage in the query graph.
-        self.query_table
-            .update_stage_status(query_id, task_id, StageStatus::Finished(0))
-            .await
-            .expect("Graph not found.");
+    // async fn update_task_state(&self, query_id: u64, task_id: u64) {
+    //     // Update the status of the stage in the query graph.
+    //     self.query_table
+    //         .update_stage_status(query_id, task_id, StageStatus::Finished(0))
+    //         .await
+    //         .expect("Graph not found.");
 
-        // If new tasks are available, add them to the queue
-        let frontier = self.query_table.get_frontier(query_id).await;
-        self.task_queue.add_tasks(frontier).await;
-    }
+    //     // If new tasks are available, add them to the queue
+    //     // let frontier = self.query_table.get_frontier(query_id).await;
+    //     // self.task_queue.add_tasks(frontier).await;
+    // }
 
-    async fn next_task(&self) -> Result<(Task, Vec<u8>), SchedulerError> {
-        let task = self.task_queue.next_task().await;
+    async fn next_task(&self) -> Result<(TaskId, Vec<u8>), SchedulerError> {
+        let task_id = self.task_queue.next_task().await;
         let stage = self
             .query_table
-            .get_plan_bytes(task.task_id.query_id, task.task_id.stage_id)
+            .get_plan_bytes(task_id.query_id, task_id.stage_id)
             .await?;
-        Ok((task, stage))
+        Ok((task_id, stage))
     }
 }
 
@@ -107,7 +108,7 @@ impl SchedulerApi for SchedulerService {
         // Build a query graph, store in query table, enqueue new tasks.
         let qid = self.next_query_id();
         let query = QueryGraph::new(qid, plan);
-        let leaves = self.query_table.add_query(query).await;
+        let graph = self.query_table.add_query(query).await;
         self.task_queue.add_tasks(leaves).await;
 
         let response = ScheduleQueryRet { query_id: qid };
@@ -207,15 +208,8 @@ impl SchedulerApi for SchedulerService {
             }
         }
 
+        // TODO: change task to taskId in self.next_task
         if let Ok((task, bytes)) = self.next_task().await {
-            self.query_table
-                .update_stage_status(
-                    task.task_id.query_id,
-                    task.task_id.stage_id,
-                    StageStatus::Running(0),
-                )
-                .await
-                .expect("Error updating stage status");
 
             let response = NotifyTaskStateRet {
                 has_new_task: true,

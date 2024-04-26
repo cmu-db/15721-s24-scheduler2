@@ -27,6 +27,13 @@ pub enum StageStatus {
     Finished(u64), // More detailed datatype to describe location(s) of ALL output data.
 }
 
+// Status of a query with respect to the task queue.
+pub enum QueryQueueStatus {
+    Available, // Query has available tasks.
+    Waiting,   // Query has no available tasks.
+    Done,      // Query has finished all tasks.
+}
+
 #[derive(Clone, Debug)]
 pub struct QueryStage {
     pub plan: Arc<dyn ExecutionPlan>,
@@ -91,8 +98,22 @@ impl QueryGraph {
         self.tid_counter.fetch_add(1, Ordering::SeqCst)
     }
 
-    pub async fn next_task(&self) -> Task {
-        self.task_queue.next_task().await
+    // Returns whether the query is done, waiting for tasks, or has tasks ready
+    async fn get_query_status(&self) -> QueryQueueStatus {
+        // If the query is done
+        if self.done {
+            return QueryQueueStatus::Done;
+        }
+        // If the query's queue has no available tasks
+        if self.task_queue.size().await == 0 {
+            return QueryQueueStatus::Waiting;
+        }
+        // If the query has available tasks
+        return QueryQueueStatus::Available;
+    }
+
+    pub async fn next_task(&mut self) -> Task {
+        self.task_queue.next_task().await;
     }
 
     pub fn num_running(&self) -> u64 {
@@ -103,48 +124,51 @@ impl QueryGraph {
         &mut self,
         stage_id: u64,
         status: StageStatus,
-    ) -> Result<(), &'static str> {
+    ) -> Result<QueryQueueStatus, &'static str> {
         if self.stages.get(stage_id as usize).is_some() {
+            // Compare current status against new status
             match (&self.stages.get(stage_id as usize).unwrap().status, &status) {
-                // TODO: handle input/output stuff
+                // If transition NotStarted -> Running, simply update status
                 (StageStatus::NotStarted, StageStatus::Running(_)) => {
                     self.stages.get_mut(stage_id as usize).unwrap().status = status;
-                    Ok(())
+                    return Ok(self.get_query_status().await);
                 }
+                // If transition Running -> Finished, remove this stage as an input from all of its outputs
                 (StageStatus::Running(_a), StageStatus::Finished(_b)) => {
+                    // Get list of outputs
                     let outputs = {
                         let stage = self.stages.get_mut(stage_id as usize).unwrap();
                         stage.status = status;
                         stage.outputs.clone()
                     };
 
+                    // If this stage has no outputs, this query is done
                     if outputs.is_empty() {
                         self.done = true;
+                        // No more to do
+                        return Ok(self.get_query_status().await);
                     }
-                    // stage.status = status;
+
                     // Remove this stage from each output stage's input stage
                     for output_stage_id in &outputs {
-                        if let Some(output_stage) = self.stages.get_mut(*output_stage_id as usize) {
-                            // output_stage.inputs.remove(&stage_id);
+                        let output_stage = self.stages.get_mut(*output_stage_id as usize).unwrap();
 
-                            // Add output stage to queue if its input size is zero
-                            if output_stage.inputs.len() == 0 {
-                                output_stage.status = StageStatus::Running(0); // TODO: "ready stage status?"
-                                let new_output_task = Task {
-                                    task_id: TaskId {
-                                        query_id: self.query_id,
-                                        task_id: *output_stage_id,
-                                        stage_id: *output_stage_id,
-                                    },
-                                    status: TaskStatus::Ready,
-                                };
-                                self.task_queue.add_tasks(vec![new_output_task]);
-                            }
-                        } else {
-                            return Err("Output stage not found.");
+                        // Add output stage to queue if it has no inputs
+                        if output_stage.inputs.len() == 0 {
+                            // Set output stage's status to "running"
+                            output_stage.status = StageStatus::Running(0); // TODO: "ready stage status?"
+                            let new_output_task = Task {
+                                task_id: TaskId {
+                                    query_id: self.query_id,
+                                    task_id: *output_stage_id,
+                                    stage_id: *output_stage_id,
+                                },
+                                status: TaskStatus::Ready,
+                            };
+                            self.task_queue.add_tasks(vec![new_output_task]);
                         }
                     }
-                    Ok(())
+                    return Ok(self.get_query_status().await);
                 }
                 _ => Err("Mismatched stage statuses."),
             }

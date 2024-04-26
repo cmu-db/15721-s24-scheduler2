@@ -35,11 +35,11 @@ impl TaskQueue {
 
     pub async fn next_task(&self) -> Task {
         let mut queue = self.queue.lock().await;
-        while queue.is_empty() {
-            drop(queue); // Drop the lock before waiting
-            self.avail.notified().await;
-            queue = self.queue.lock().await; // Re-acquire the lock after being notified
-        }
-        queue.pop_front().unwrap()
+        // while queue.is_empty() {
+        //     drop(queue); // Drop the lock before waiting
+        //     self.avail.notified().await;
+        //     queue = self.queue.lock().await; // Re-acquire the lock after being notified
+        // }
+        queue.pop_front().expect("Queue has no tasks.")
     }
 }
