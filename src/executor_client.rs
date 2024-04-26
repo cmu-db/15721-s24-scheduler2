@@ -8,10 +8,6 @@ use datafusion::physical_plan::ExecutionPlan;
 use datafusion_proto::bytes::physical_plan_from_bytes;
 use tonic::transport::Channel;
 
-const HANDSHAKE_QUERY_ID: u64 = u64::MAX;
-const HANDSHAKE_TASK_ID: u64 = u64::MAX;
-const HANDSHAKE_STAGE_ID: u64 = u64::MAX;
-
 pub struct ExecutorClient {
     id: i32,
     ctx: SessionContext,
@@ -95,11 +91,7 @@ impl ExecutorClient {
 
         // Send initial request with handshake task ID
         let handshake_req = tonic::Request::new(NotifyTaskStateArgs {
-            task: Some(TaskId {
-                query_id: HANDSHAKE_QUERY_ID,
-                stage_id: HANDSHAKE_STAGE_ID,
-                task_id: HANDSHAKE_TASK_ID,
-            }),
+            task: None,
             success: true,
         });
 
