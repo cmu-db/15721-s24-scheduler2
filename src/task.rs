@@ -18,11 +18,14 @@ pub struct Task {
     pub(crate) status: TaskStatus, // TODO: unused?
 }
 
-const HANDSHAKE_QUERY_ID: u64 = u64::MAX;
-const HANDSHAKE_TASK_ID: u64 = u64::MAX;
-const HANDSHAKE_STAGE_ID: u64 = u64::MAX;
-const HANDSHAKE_TASK: TaskId = TaskId {
-    query_id: HANDSHAKE_QUERY_ID,
-    task_id: HANDSHAKE_TASK_ID,
-    stage_id: HANDSHAKE_STAGE_ID,
+const HANDSHAKE_TASK_ID: TaskId = TaskId {
+    query_id: u64::MAX,
+    task_id: u64::MAX,
+    stage_id: u64::MAX,
 };
+
+impl TaskId {
+    pub fn is_handshake(&self) -> bool {
+        return self.eq(&HANDSHAKE_TASK_ID);
+    }
+}
