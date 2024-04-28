@@ -1,3 +1,35 @@
+//! # Executor Client
+//!
+//! This module implements the gRPC client functionality for executors. It is responsible for
+//! handling the lifecycle of task execution from the initial connection to the scheduler to
+//! task completion and reporting.
+//!
+//! ## Overview
+//!
+//! The `ExecutorClient` establishes a connection with the scheduler through a handshake message
+//! and continuously handles the cycle of receiving tasks, executing them, and reporting back
+//! the results. The client makes gRPC calls to receive new tasks from the scheduler and
+//! reports the outcomes of executed tasks.
+//!
+//! Upon receiving a task, it delegates the execution to the `MockExecutor`. The actual execution
+//! logic is encapsulated within the `MockExecutor`, which can be replaced or modified by changing
+//! the implementation in `mock_executor.rs` to fit different execution models or strategies.
+//!
+//! ## Usage
+//!
+//! - Instantiate `ExecutorClient` with a catalog path and an identifier.
+//! - Connect to the scheduler specifying its address.
+//! - Begin task processing which involves:
+//!   - Receiving a task plan.
+//!   - Rewriting the query plan if necessary.
+//!   - Executing the plan using the executor.
+//!   - Reporting execution results back to the scheduler.
+//!
+//! ## Modifications
+//!
+//! To adapt the client to different execution models or to integrate a custom executor,
+//! refer to `mock_executor.rs` and implement the required changes there.
+
 use crate::intermediate_results::{insert_results, rewrite_query, TaskKey};
 use crate::mock_catalog::load_catalog;
 use crate::mock_executor::MockExecutor;
@@ -15,7 +47,6 @@ pub struct ExecutorClient {
     executor: MockExecutor,
 }
 
-// TODO: Clean up gRPC calling code.
 impl ExecutorClient {
     pub async fn new(catalog_path: &str, id: i32) -> Self {
         let ctx = load_catalog(catalog_path).await;

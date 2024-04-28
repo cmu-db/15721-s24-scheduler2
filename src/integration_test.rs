@@ -4,52 +4,15 @@ use crate::mock_catalog::Config;
 use crate::mock_catalog::{load_catalog, read_config};
 use crate::parser::ExecutionPlanParser;
 use crate::server::composable_database::scheduler_api_server::SchedulerApiServer;
-use crate::server::composable_database::TaskId;
 use crate::server::SchedulerService;
 use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
 use datafusion::logical_expr::{col, Expr};
 use datafusion::prelude::SessionContext;
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Server;
-
-/**
-This gRPC facilitates communication between executors and the scheduler:
-rpc NotifyTaskState(NotifyTaskStateArgs) returns (NotifyTaskStateRet);
-
-Executor to scheduler message:
-message NotifyTaskStateArgs {
-    TaskID task = 1; // Task identifier
-    bool success = 2; // Indicates if the task was executed successfully
-    bytes result = 3; // Result data as bytes
-}
-- Notifies the scheduler of the task's execution status using the associated TaskID and transmits the result data.
-
-Scheduler to executor message:
-message NotifyTaskStateRet {
-    bool has_new_task = 1; // Indicates the presence of a new task
-    TaskID task = 2; // New task identifier
-    bytes physical_plan = 3; // Task execution plan
-}
-- Enables the scheduler to assign new tasks to the executor.
-
-Establishing connection:
-During integration tests, executors utilize NotifyTaskStateArgs to establish initial communication with the scheduler. The initial message contains the HANDSHAKE_TASK_ID. Upon receipt, the scheduler begins assigning tasks using NotifyTaskStateRet messages.
- */
-
-lazy_static! {
-    static ref HANDSHAKE_QUERY_ID: u64 = -1i64 as u64;
-    static ref HANDSHAKE_TASK_ID: u64 = -1i64 as u64;
-    static ref HANDSHAKE_STAGE_ID: u64 = -1i64 as u64;
-    static ref HANDSHAKE_TASK: TaskId = TaskId {
-        query_id: *HANDSHAKE_QUERY_ID,
-        stage_id: *HANDSHAKE_STAGE_ID,
-        task_id: *HANDSHAKE_TASK_ID,
-    };
-}
 
 pub struct IntegrationTest {
     catalog_path: String,
@@ -58,12 +21,6 @@ pub struct IntegrationTest {
     config: Config,
     pub frontend: Arc<Mutex<MockFrontend>>,
 }
-
-/**
-This integration test uses hardcoded addresses for executors and the scheduler,
-specified in a config file located in the project root directory. In production
-systems, these addresses would typically be retrieved from a catalog. This section
-is responsible for parsing the config file.*/
 
 const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
 const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");

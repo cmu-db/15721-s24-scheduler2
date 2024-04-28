@@ -1,3 +1,36 @@
+//! # Mock Frontend for Scheduler Testing
+//!
+//! This module implements the frontend component to test the scheduler end-to-end. It
+//! serves as the interface between the user's query input and the backend scheduler.
+//!
+//! ## Overview
+//!
+//! The `MockFrontend` class is responsible for:
+//! - Establishing and maintaining a connection with the scheduler.
+//! - Receiving SQL queries and processing them through an optimizer.
+//! - Submitting these physical plans to the scheduler for execution.
+//! - Periodically polling the scheduler for status updates on the submitted queries.
+//! - Storing status updates, results, and other metadata in a local state for retrieval and management.
+//!
+//! ## Key Components
+//! - **SchedulerApiClient**: Communicates with the scheduler to submit tasks and fetch their status.
+//! - **Job Management**: Tracks the progress and results of submitted queries using a hashmap, handling statuses like InProgress, Done, and Failed.
+//!
+//! ## Usage
+//!
+//! - Instantiate a `MockFrontend` with a catalog path.
+//! - Connect to the scheduler using its address.
+//! - Submit SQL queries which are processed and sent to the scheduler.
+//! - Regularly call the internal polling function to update the status and results of the queries.
+//!
+//!
+//! ## Modifications
+//!
+//! - Adjust mock_optimizer.rs for changes in query planning and execution.
+//! - Modify the `SchedulerApiClient` for changes in communication protocols or scheduler functionality.
+//!
+//! The frontend is designed to be modular, allowing for easy updates to individual components as the system evolves.
+
 use crate::server::composable_database::{QueryInfo, ScheduleQueryArgs};
 use chrono::{DateTime, Utc};
 use datafusion::arrow::array::RecordBatch;
