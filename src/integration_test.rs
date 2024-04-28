@@ -8,7 +8,7 @@ use crate::server::SchedulerService;
 use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
 use datafusion::logical_expr::{col, Expr};
-use datafusion::prelude::SessionContext;
+use datafusion::prelude::{concat, SessionContext};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -24,6 +24,7 @@ pub struct IntegrationTest {
 
 const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
 const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
+const LOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executor_logs");
 
 impl IntegrationTest {
     // Given the paths to the catalog (containing all db files) and a path to the config file,
@@ -68,7 +69,8 @@ impl IntegrationTest {
         // Start executor clients
         for executor in &self.config.executors {
             // Clone the scheduler_addr for each executor client
-            let mut mock_executor = ExecutorClient::new(CATALOG_PATH, executor.id).await;
+            let mut mock_executor =
+                ExecutorClient::new(CATALOG_PATH, Some(LOG_PATH.to_string()), executor.id).await;
             let scheduler_addr_copy = scheduler_addr.clone();
             tokio::spawn(async move {
                 mock_executor.connect(&scheduler_addr_copy).await;

@@ -30,14 +30,20 @@
 //! To adapt the client to different execution models or to integrate a custom executor,
 //! refer to `mock_executor.rs` and implement the required changes there.
 
+use crate::frontend::JobInfo;
 use crate::intermediate_results::{insert_results, rewrite_query, TaskKey};
 use crate::mock_catalog::load_catalog;
 use crate::mock_executor::MockExecutor;
 use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
-use crate::server::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, TaskId};
+use crate::server::composable_database::QueryStatus::InProgress;
+use crate::server::composable_database::{
+    NotifyTaskStateArgs, NotifyTaskStateRet, QueryStatus, TaskId,
+};
+use chrono::Utc;
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion_proto::bytes::physical_plan_from_bytes;
+use std::path::Path;
 use tonic::transport::Channel;
 
 pub struct ExecutorClient {
@@ -45,16 +51,18 @@ pub struct ExecutorClient {
     ctx: SessionContext,
     scheduler: Option<SchedulerApiClient<Channel>>, // api client for the scheduler
     executor: MockExecutor,
+    log_path: Option<String>,
 }
 
 impl ExecutorClient {
-    pub async fn new(catalog_path: &str, id: i32) -> Self {
+    pub async fn new(catalog_path: &str, log_path: Option<String>, id: i32) -> Self {
         let ctx = load_catalog(catalog_path).await;
         Self {
             id,
             ctx: (*ctx).clone(),
             scheduler: None,
             executor: MockExecutor::new(catalog_path).await,
+            log_path,
         }
     }
 
@@ -86,8 +94,31 @@ impl ExecutorClient {
                 .await
                 .expect("fail to rewrite query");
 
+            let mut cur_job = JobInfo {
+                query_id: cur_task_inner.query_id,
+                result: None,
+                status: InProgress,
+                sql_string: "".to_string(),
+                submitted_at: Utc::now(),
+                finished_at: None,
+            };
+
             let execution_result = self.executor.execute(plan).await;
             let execution_success = execution_result.is_ok();
+
+            cur_job.finished_at = Some(Utc::now());
+
+            cur_job.status = if execution_success {
+                QueryStatus::Done
+            } else {
+                QueryStatus::Failed
+            };
+
+            if let Some(ref log_path) = self.log_path {
+                crate::profiling::append_job_to_json_file(&cur_job, Path::new(log_path))
+                    .await
+                    .expect("Failed to log job info");
+            }
 
             if execution_success {
                 let result = execution_result.unwrap();

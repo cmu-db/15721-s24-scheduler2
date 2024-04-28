@@ -53,6 +53,7 @@ pub mod mock_catalog;
 mod mock_executor;
 mod mock_optimizer;
 pub mod parser;
+pub mod profiling;
 mod query_graph;
 mod query_table;
 mod queue;
@@ -60,21 +61,19 @@ mod server;
 mod task;
 mod task_queue;
 
-use crate::executor_client::ExecutorClient;
 use crate::frontend::JobInfo;
 use crate::integration_test::IntegrationTest;
 use crate::parser::ExecutionPlanParser;
 use crate::server::composable_database::QueryStatus::{Done, InProgress};
 use clap::{App, Arg, SubCommand};
-use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
+use datafusion::prelude::concat;
 use futures::TryFutureExt;
 use prost::Message;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::Duration;
-use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
 pub enum SchedulerError {
@@ -128,6 +127,7 @@ async fn main() {
 
 const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
 const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
+const LOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executor_logs");
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 // creates server, executors, and the frontend
@@ -314,7 +314,7 @@ pub async fn benchmark_mode() {
 
     let job_map = file_mode(TPCH_FILES.to_vec(), true).await;
 
-    write_jobs_to_json(
+    profiling::write_jobs_to_json(
         job_map.values().cloned().collect(),
         Path::new(JOB_SUMMARY_OUTPUT_PATH),
     )
@@ -322,18 +322,6 @@ pub async fn benchmark_mode() {
     .unwrap_or_else(|err| {
         panic!("Fail to write job summary: {}", err);
     });
-}
-
-async fn write_jobs_to_json(
-    jobs: Vec<JobInfo>,
-    path: &Path,
-) -> datafusion::common::Result<(), serde_json::Error> {
-    let json_string = serde_json::to_string_pretty(&jobs)?;
-    let mut file = File::create(path).await.expect("Unable to create file");
-    file.write_all(json_string.as_bytes())
-        .await
-        .expect("Unable to write data to file");
-    Ok(())
 }
 
 #[cfg(test)]
