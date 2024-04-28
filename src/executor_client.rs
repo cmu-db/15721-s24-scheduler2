@@ -44,6 +44,7 @@ use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion_proto::bytes::physical_plan_from_bytes;
 use std::path::Path;
+use datafusion::prelude::concat;
 use tonic::transport::Channel;
 
 pub struct ExecutorClient {
@@ -57,12 +58,18 @@ pub struct ExecutorClient {
 impl ExecutorClient {
     pub async fn new(catalog_path: &str, log_path: Option<String>, id: i32) -> Self {
         let ctx = load_catalog(catalog_path).await;
+
+        let log_file_path = match log_path {
+            None => None,
+            Some(path_str) => Some(format!("{}/{}.json", path_str.trim_end_matches('/'), id))
+        };
+
         Self {
             id,
             ctx: (*ctx).clone(),
             scheduler: None,
             executor: MockExecutor::new(catalog_path).await,
-            log_path,
+            log_path: log_file_path
         }
     }
 
