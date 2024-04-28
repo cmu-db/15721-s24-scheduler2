@@ -5,10 +5,9 @@ use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::common::DataFusionError;
 use std::collections::HashMap;
 use std::fmt;
-use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::{self, Duration};
+use tokio::time::Duration;
 use tonic::transport::Channel;
 
 use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
@@ -23,8 +22,6 @@ use datafusion::error::Result;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::SessionContext;
 use serde::{Deserialize, Serialize};
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct JobInfo {

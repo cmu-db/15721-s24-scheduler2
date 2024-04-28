@@ -39,6 +39,7 @@ mod tests {
     use crate::task::TaskStatus;
     use std::sync::Arc;
     use tokio::runtime::Runtime;
+    use tokio::sync::Mutex;
 
     fn create_task(task_id: u64) -> Task {
         Task {
@@ -64,8 +65,8 @@ mod tests {
     fn test_add_and_size() {
         let runtime = Runtime::new().unwrap();
         runtime.block_on(async {
-            let queue = TaskQueue::new();
-            assert!(queue.add_tasks(vec![create_task(1)]).await);
+            let mut queue = TaskQueue::new();
+            queue.add_tasks(vec![create_task(1)]).await;
             assert_eq!(queue.size().await, 1);
         });
     }
@@ -74,13 +75,19 @@ mod tests {
     fn test_next_task() {
         let runtime = Runtime::new().unwrap();
         runtime.block_on(async {
-            let queue = Arc::new(TaskQueue::new());
-            queue.add_tasks(vec![create_task(1), create_task(2)]).await;
+            let queue = Arc::new(Mutex::new(TaskQueue::new()));
+            {
+                let mut queue_lock = queue.lock().await;
+                queue_lock
+                    .add_tasks(vec![create_task(1), create_task(2)])
+                    .await;
+            }
 
             let queue_clone = queue.clone();
             let handle = tokio::spawn(async move {
+                let mut queue_lock = queue_clone.lock().await;
                 assert_eq!(
-                    queue_clone.next_task().await.task_id,
+                    queue_lock.next_task().await.task_id,
                     TaskId {
                         query_id: 1,
                         task_id: 1,
@@ -88,7 +95,7 @@ mod tests {
                     }
                 );
                 assert_eq!(
-                    queue_clone.next_task().await.task_id,
+                    queue_lock.next_task().await.task_id,
                     TaskId {
                         query_id: 2,
                         task_id: 2,

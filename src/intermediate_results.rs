@@ -111,6 +111,8 @@ pub async fn rewrite_query(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::ExecutionPlanParser;
+    use crate::CATALOG_PATH;
     use datafusion::arrow::array::{Array, Int32Array};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use datafusion::arrow::record_batch::RecordBatch;
@@ -170,5 +172,19 @@ mod tests {
 
         let fetched_results_after_removal = get_results(&task_key).await;
         assert!(fetched_results_after_removal.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_rewrite_note() {
+        let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+        let plans = parser
+            .get_execution_plan_from_file("./test_sql/1.sql")
+            .await
+            .expect("fail to get plan from file");
+        for plan in plans {
+            rewrite_query(plan.clone(), 1)
+                .await
+                .expect("fail to rewrite query");
+        }
     }
 }

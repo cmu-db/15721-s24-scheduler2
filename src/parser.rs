@@ -1,20 +1,19 @@
 use crate::mock_catalog::load_catalog;
-use datafusion::arrow::array::{RecordBatch, RecordBatchReader};
-use datafusion::arrow::ipc::reader::FileReader;
-use datafusion::arrow::ipc::writer::FileWriter;
-use datafusion::error::{DataFusionError, Result};
-use datafusion::execution::context::SessionContext;
-use datafusion::physical_plan::ExecutionPlan;
-use datafusion::physical_planner::PhysicalPlanner;
+use datafusion::{
+    arrow::{
+        array::{RecordBatch, RecordBatchReader},
+        ipc::{reader::FileReader, writer::FileWriter},
+    },
+    error::{DataFusionError, Result},
+    execution::context::SessionContext,
+    physical_plan::ExecutionPlan,
+    physical_planner::PhysicalPlanner,
+};
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use futures::TryFutureExt;
-use sqlparser::dialect::GenericDialect;
-use sqlparser::parser::Parser;
-use std::fmt;
-use std::io::Cursor;
-use std::sync::Arc;
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
+use sqlparser::{dialect::GenericDialect, parser::Parser};
+use std::{fmt, io::Cursor, sync::Arc};
+use tokio::{fs::File, io::AsyncReadExt};
 
 #[derive(Default)]
 pub struct ExecutionPlanParser {
@@ -138,58 +137,43 @@ mod tests {
 
     const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
 
-    fn custom_runtime() -> tokio::runtime::Runtime {
-        Builder::new_multi_thread()
-            .worker_threads(4)
-            .thread_name("my-custom-name")
-            .thread_stack_size(5 * 1024 * 1024)
-            .enable_all()
-            .build()
-            .unwrap()
-    }
+    #[tokio::test]
+    async fn test_serialize_deserialize_physical_plan() {
+        // Define the base path for the catalog and test SQL files
+        let tests_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql");
 
-    #[test]
-    fn test_serialize_deserialize_physical_plan() {
-        let runtime = custom_runtime();
+        // Create an ExecutionPlanParser instance
+        let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
-        runtime.block_on(async {
-            // Define the base path for the catalog and test SQL files
-            let tests_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql");
+        let paths = std::fs::read_dir(tests_path).unwrap();
 
-            // Create an ExecutionPlanParser instance
-            let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+        for path in paths {
+            let path = path.unwrap().path();
+            // Check if the file is a .sql file
+            if path.extension().and_then(std::ffi::OsStr::to_str) == Some("sql") {
+                let test_file = path.to_str().unwrap();
+                eprintln!("Testing file {}", test_file);
+                let res = parser.get_execution_plan_from_file(test_file).await;
+                assert!(res.is_ok());
 
-            let paths = std::fs::read_dir(tests_path).unwrap();
+                let plans = res.unwrap();
+                for plan in plans {
+                    let serialization_result = parser.serialize_physical_plan(plan.clone());
+                    assert!(serialization_result.is_ok());
 
-            for path in paths {
-                let path = path.unwrap().path();
-                // Check if the file is a .sql file
-                if path.extension().and_then(std::ffi::OsStr::to_str) == Some("sql") {
-                    let test_file = path.to_str().unwrap();
-                    eprintln!("Testing file {}", test_file);
-                    let res = parser.get_execution_plan_from_file(test_file).await;
-                    assert!(res.is_ok());
+                    let original_plan =
+                        parser.deserialize_physical_plan(serialization_result.unwrap());
+                    assert!(original_plan.is_ok());
 
-                    let plans = res.unwrap();
-                    for plan in plans {
-                        let serialization_result = parser.serialize_physical_plan(plan.clone());
-                        assert!(serialization_result.is_ok());
-
-                        let original_plan =
-                            parser.deserialize_physical_plan(serialization_result.unwrap());
-                        assert!(original_plan.is_ok());
-
-                        let plan_formatted =
-                            format!("{}", displayable(plan.as_ref()).indent(false));
-                        let original_plan_formatted = format!(
-                            "{}",
-                            displayable(original_plan.expect("").as_ref()).indent(false)
-                        );
-                        assert_eq!(plan_formatted, original_plan_formatted);
-                    }
+                    let plan_formatted = format!("{}", displayable(plan.as_ref()).indent(false));
+                    let original_plan_formatted = format!(
+                        "{}",
+                        displayable(original_plan.expect("").as_ref()).indent(false)
+                    );
+                    assert_eq!(plan_formatted, original_plan_formatted);
                 }
             }
-        });
+        }
     }
 
     #[tokio::test]
@@ -201,7 +185,7 @@ mod tests {
             .await
             .expect("fail to read test select statement");
         assert_eq!(1, sql_vec.len());
-        const CORRECT_SQL: &str = r"SELECT * FROM mock_executor_test_table";
+        const CORRECT_SQL: &str = r"SELECT * FROM customer";
         assert_eq!(
             CORRECT_SQL,
             sql_vec.get(0).expect("fail to get test select statement")
@@ -211,6 +195,7 @@ mod tests {
     #[tokio::test]
     async fn read_sql_from_file_multiple_statement() {
         let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+        println!("{:?}", parser);
         let test_file = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/test_sql",
@@ -221,7 +206,7 @@ mod tests {
             .await
             .expect("fail to read test select statement");
         assert_eq!(2, sql_vec.len());
-        const CORRECT_SQL_1: &str = r"SELECT * FROM mock_executor_test_table";
+        const CORRECT_SQL_1: &str = r"SELECT * FROM customer";
         assert_eq!(
             CORRECT_SQL_1,
             sql_vec.get(0).expect("fail to get test select statement")

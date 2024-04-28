@@ -183,8 +183,8 @@ mod tests {
     use rand::Rng;
     use tokio::sync::Mutex;
 
+    use crate::parser::ExecutionPlanParser;
     use crate::{
-        parser::Parser,
         query_graph::{QueryGraph, StageStatus},
         queue::{QueryKey, Queue},
         server::composable_database::TaskId,
@@ -217,7 +217,7 @@ mod tests {
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
         let mut queue = Box::new(Queue::new());
-        let parser = Parser::new(catalog_path).await;
+        let parser = ExecutionPlanParser::new(catalog_path).await;
         println!("test_scheduler: Testing file {}", test_file);
         if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
             let mut qid = 0;
@@ -244,7 +244,7 @@ mod tests {
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
         let queue = Arc::new(Mutex::new(Queue::new()));
-        let parser = Parser::new(catalog_path).await;
+        let parser = ExecutionPlanParser::new(catalog_path).await;
         println!("test_queue_conc: Testing file {}", test_file);
         if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
             println!("Got {} plans.", physical_plans.len());
