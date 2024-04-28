@@ -1,3 +1,28 @@
+//! # Execution Plan Parser
+//!
+//! This module provides the core functionalities for parsing, serializing, and deserializing execution plans
+//! based on DataFusion and Apache Arrow. It is designed to manage the lifecycle of ExecutionPlans
+//! through serialization for distributed execution.
+//!
+//! ## Features
+//!
+//! - **Plan Serialization and Deserialization**: Facilitates the serialization of physical execution plans to bytes
+//!   and deserialization from bytes, enabling distributed processing and storage.
+//! - **Execution Result Serialization and Deserialization: Serializes/deserializes RecordBatches
+//! (output format for executors) for sending results across components
+//!
+//! ## Example
+//!
+//! Here's how you might use the `ExecutionPlanParser` to process a SQL file and serialize the resulting execution plan:
+//!
+//! ```rust
+//! let parser = ExecutionPlanParser::new("path/to/catalog").await;
+//! let sql_statements = parser.read_sql_from_file("path/to/sqlfile.sql").await.unwrap();
+//! let plans = parser.get_execution_plan_from_file("path/to/another_sqlfile.sql").await.unwrap();
+//! let serialized_plan = parser.serialize_physical_plan(plans[0].clone()).unwrap();
+//! let deserialized_plan = parser.deserialize_physical_plan(serialized_plan).unwrap();
+//! ```
+
 use crate::mock_catalog::load_catalog;
 use datafusion::{
     arrow::{
