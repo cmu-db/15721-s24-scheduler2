@@ -1,3 +1,50 @@
+//! # Scheduler Test Command Line Interface
+//!
+//! This module provides a command line interface for performing end-to-end integration testing.
+//! The interface facilitates testing the system's scheduler, frontend, and
+//! executor components through interactive user inputs, automated benchmarks, and execution from SQL files.
+//!
+//! ## Testing Modes
+//!
+//! - **Interactive Mode**: Allows users to manually enter SQL queries interactively. This mode is useful for
+//!   ad-hoc testing and debugging, where users can input queries and immediately see results and system behavior.
+//!
+//! - **File Mode**: Executes a series of SQL commands from a specified file. This mode is intended for automated
+//!   testing or regression tests.
+//!
+//! - **Benchmark Mode**: Runs a predefined set of TPC-H benchmark queries to measure the performance and efficiency
+//!   of the system. This mode is crucial for performance testing and helps in understanding the scalability and
+//!   throughput of the system under heavy loads.
+//!
+//! ## Usage
+//!
+//! The command line tool can be invoked with different subcommands corresponding to each testing mode:
+//!
+//! ```bash
+//! cargo run -- interactive                # Interactive mode
+//! cargo run -- file <path-to-sql-file>    # File mode with path to the SQL logic test file
+//! cargo run -- benchmark                  # Benchmark mode using TPC-H queries
+//! ```
+//!
+//! ## Architecture
+//!
+//! This CLI interacts with the system's components as follows:
+//!
+//! - **Scheduler**: Responsible for managing task execution across distributed executors.
+//! - **Frontend**: Handles SQL parsing, query planning, and submission to the scheduler.
+//! - **Executors**: Perform the actual execution of queries as directed by the scheduler.
+//!
+//! Each mode initializes these components and manages their interactions through asynchronous tasks
+//!
+//! ## Configuration
+//!
+//! - **Catalog and Config Paths**: Paths for the data catalog and system configurations are set via constants
+//!   and can be adjusted according to the deployment environment. The number and IP addresses of
+//!   executors can be configured in executors.toml.
+//!
+//! - **Polling Interval**: The frequency of status checks in ongoing tasks is configurable
+//!
+
 mod executor_client;
 mod frontend;
 pub mod integration_test;
