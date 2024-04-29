@@ -21,7 +21,7 @@ pub enum StageStatus {
 }
 
 // Status of a query with respect to the task queue.
-#[derive(Clone, Debug, PartialEq)] 
+#[derive(Clone, Debug, PartialEq)]
 pub enum QueryQueueStatus {
     Available, // Query has available tasks.
     Waiting,   // Query has no available tasks.

@@ -104,6 +104,7 @@ impl Queue {
         self.queue.len()
     }
 
+    // TODO(makototomokiyo): make sure stride actually works
     pub async fn add_query(&mut self, qid: u64, graph: Arc<Mutex<QueryGraph>>) {
         let key = QueryKey {
             // running: 0,
@@ -160,7 +161,6 @@ impl Queue {
         }
     }
 
-    // TODO: if the query is done, remove it at this point
     pub async fn get_query_status(&mut self, qid: u64) -> QueryStatus {
         if let Some(query_entry) = self.query_map.get(&qid) {
             let status = query_entry.1.lock().await.status;
