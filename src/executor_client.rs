@@ -45,13 +45,15 @@ use datafusion::physical_plan::ExecutionPlan;
 use datafusion_proto::bytes::physical_plan_from_bytes;
 use std::path::Path;
 use tonic::transport::Channel;
+use tokio::fs::remove_file;
+use std::path::PathBuf;
 
 pub struct ExecutorClient {
     id: i32,
     ctx: SessionContext,
     scheduler: Option<SchedulerApiClient<Channel>>, // api client for the scheduler
     executor: MockExecutor,
-    log_path: Option<String>,
+    log_directory_path: Option<String>,
 }
 
 impl ExecutorClient {
@@ -60,7 +62,16 @@ impl ExecutorClient {
 
         let log_file_path = match log_path {
             None => None,
-            Some(path_str) => Some(format!("{}/{}.json", path_str.trim_end_matches('/'), id)),
+            Some(path_str) => {
+                let full_log_path = format!("{}/{}.json", path_str.trim_end_matches('/'), id);
+                let full_path = PathBuf::from(full_log_path.clone());
+                if full_path.exists() {
+                    if let Err(e) = remove_file(&full_path).await {
+                        panic!("Executor {}: failed to remove existing file: {}", id, e);
+                    }
+                }
+                Some(full_log_path)
+            }
         };
 
         Self {
@@ -68,7 +79,7 @@ impl ExecutorClient {
             ctx: (*ctx).clone(),
             scheduler: None,
             executor: MockExecutor::new(catalog_path).await,
-            log_path: log_file_path,
+            log_directory_path: log_file_path,
         }
     }
 
@@ -120,11 +131,11 @@ impl ExecutorClient {
                 QueryStatus::Failed
             };
 
-            // if let Some(ref log_path) = self.log_path {
-            //     crate::profiling::append_job_to_json_file(&cur_job, Path::new(log_path))
-            //         .await
-            //         .expect("Failed to log job info");
-            // }
+            if let Some(ref log_path) = self.log_directory_path {
+                crate::profiling::append_job_to_json_file(&cur_job, Path::new(log_path))
+                    .await
+                    .expect("Failed to log job info");
+            }
 
             if execution_success {
                 let result = execution_result.unwrap();
