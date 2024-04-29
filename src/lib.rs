@@ -24,4 +24,3 @@ pub enum SchedulerError {
     Error(String),
     DfError(DataFusionError),
 }
-

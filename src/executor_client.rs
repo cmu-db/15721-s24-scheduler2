@@ -30,15 +30,13 @@
 //! To adapt the client to different execution models or to integrate a custom executor,
 //! refer to `mock_executor.rs` and implement the required changes there.
 
+use crate::composable_database::scheduler_api_client::SchedulerApiClient;
+use crate::composable_database::QueryStatus::InProgress;
+use crate::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, QueryStatus, TaskId};
 use crate::frontend::JobInfo;
 use crate::intermediate_results::{insert_results, rewrite_query, TaskKey};
 use crate::mock_catalog::load_catalog;
 use crate::mock_executor::MockExecutor;
-use crate::composable_database::scheduler_api_client::SchedulerApiClient;
-use crate::composable_database::QueryStatus::InProgress;
-use crate::composable_database::{
-    NotifyTaskStateArgs, NotifyTaskStateRet, QueryStatus, TaskId,
-};
 use chrono::Utc;
 use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::ExecutionPlan;

@@ -45,20 +45,20 @@
 //! - **Polling Interval**: The frequency of status checks in ongoing tasks is configurable
 //!
 
-use scheduler2::frontend::JobInfo;
-use scheduler2::integration_test::IntegrationTest;
-use scheduler2::parser::ExecutionPlanParser;
-use scheduler2::composable_database::QueryStatus::{Done, InProgress};
-use scheduler2::profiling;
-use scheduler2::SchedulerError;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
 use futures::TryFutureExt;
 use prost::Message;
+use scheduler2::composable_database::QueryStatus::{Done, InProgress};
+use scheduler2::frontend::JobInfo;
+use scheduler2::integration_test::IntegrationTest;
+use scheduler2::parser::ExecutionPlanParser;
+use scheduler2::profiling;
+use scheduler2::SchedulerError;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
@@ -197,6 +197,7 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
     let mut query_ids = Vec::new();
 
     // for each file selected...
+    let start = SystemTime::now();
     for file_path in file_paths {
         println!("Executing tests from file: {:?}", file_path);
 
@@ -236,12 +237,14 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
             break;
         }
     }
+    let time = SystemTime::now().duration_since(start).unwrap();
+    println!("Execution time: {:?}ms", time.as_millis());
 
     // Collect and print all job results
     let jobs_map = tester.frontend.lock().await.get_all_jobs();
-    for (job_id, job_info) in jobs_map.iter() {
-        println!("Query ID: {}, Info: {}", job_id, job_info);
-    }
+    // for (job_id, job_info) in jobs_map.iter() {
+    //     println!("Query ID: {}, Info: {}", job_id, job_info);
+    // }
 
     if verify_correctness {
         for (i, query_id) in query_ids.iter().enumerate() {
@@ -330,4 +333,3 @@ mod tests {
         }
     }
 }
-

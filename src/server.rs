@@ -1,3 +1,9 @@
+use crate::composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
+use crate::composable_database::{
+    AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
+    QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
+    TaskId,
+};
 use crate::intermediate_results::{get_results, TaskKey};
 use crate::mock_catalog::load_catalog;
 use crate::parser::ExecutionPlanParser;
@@ -5,19 +11,13 @@ use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
 use crate::queue::Queue;
 use crate::SchedulerError;
-use crate::composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
-use crate::composable_database::{
-    AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
-    QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
-    TaskId,
-};
 use datafusion::arrow::util::pretty::print_batches;
 use datafusion::execution::context::SessionContext;
 use datafusion_proto::bytes::physical_plan_from_bytes;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 use tokio::time::{sleep, Duration};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
@@ -27,6 +27,7 @@ pub struct SchedulerService {
     queue: Arc<Mutex<Queue>>,
     ctx: Arc<SessionContext>, // If we support changing the catalog at runtime, this should be a RwLock.
     query_id_counter: AtomicU64,
+    avail: Arc<Notify>,
 }
 
 impl fmt::Debug for SchedulerService {
@@ -41,11 +42,13 @@ impl fmt::Debug for SchedulerService {
 
 impl SchedulerService {
     pub async fn new(catalog_path: &str) -> Self {
+        let avail = Arc::new(Notify::new());
         Self {
             query_table: Arc::new(QueryTable::new().await),
-            queue: Arc::new(Mutex::new(Queue::new())),
+            queue: Arc::new(Mutex::new(Queue::new(Arc::clone(&avail)))),
             ctx: load_catalog(catalog_path).await,
             query_id_counter: AtomicU64::new(0),
+            avail,
         }
     }
 
@@ -72,9 +75,8 @@ impl SchedulerService {
                     .await?;
                 return Ok((new_task_id, stage));
             }
-            // TODO: add notify
             drop(queue);
-            sleep(Duration::from_secs(1)).await;
+            self.avail.notified().await;
         }
     }
 }
@@ -121,7 +123,7 @@ impl SchedulerApi for SchedulerService {
             let final_result_opt = get_results(&TaskKey { stage_id, query_id }).await;
             let final_result =
                 final_result_opt.expect("api.rs: query is done but no results in table");
-            print_batches(&final_result).unwrap();
+            // print_batches(&final_result).unwrap();
 
             // ****************** BEGIN CHANGES FROM INTEGRATION TESTING ***************//
             let final_result_bytes = ExecutionPlanParser::serialize_record_batches(final_result)
@@ -196,13 +198,13 @@ impl SchedulerApi for SchedulerService {
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
-    use crate::parser::ExecutionPlanParser;
     use crate::composable_database::scheduler_api_server::SchedulerApi;
     use crate::composable_database::{
         AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
         QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
         TaskId,
     };
+    use crate::parser::ExecutionPlanParser;
     use crate::server::SchedulerService;
     use tonic::Request;
 

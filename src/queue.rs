@@ -1,5 +1,5 @@
-use crate::query_graph::{QueryGraph, QueryQueueStatus, StageStatus};
 use crate::composable_database::{QueryStatus, TaskId};
+use crate::query_graph::{QueryGraph, QueryQueueStatus, StageStatus};
 use crate::task::{
     Task,
     TaskStatus::{self, *},
@@ -8,7 +8,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 
 // Must implement here since generated TaskId does not derive Hash.
 impl Hash for TaskId {
@@ -43,15 +43,19 @@ pub struct Queue {
     query_map: HashMap<u64, (Arc<Mutex<QueryKey>>, Arc<Mutex<QueryGraph>>)>,
     // List of currently running tasks.
     running_task_map: HashMap<TaskId, Task>,
+    // Notify primitive that signals when new tasks are ready.
+    avail: Arc<Notify>,
 }
 
+// Notify variable is shared with scheduler service to control task dispatch.
 impl Queue {
-    pub fn new() -> Self {
+    pub fn new(avail: Arc<Notify>) -> Self {
         Self {
             queue: BTreeSet::new(),
             start_ts: SystemTime::now(),
             query_map: HashMap::new(),
             running_task_map: HashMap::new(),
+            avail,
         }
     }
 
@@ -70,6 +74,7 @@ impl Queue {
         // TODO: only do this if the query key was changed?
         let _ = self.queue.remove(&key);
 
+        // If graph has more tasks available, re-insert query and notify
         if graph
             .lock()
             .await
@@ -79,6 +84,7 @@ impl Queue {
             == QueryQueueStatus::Available
         {
             self.queue.insert(key);
+            self.avail.notify_waiters();
         }
     }
 
@@ -114,6 +120,7 @@ impl Queue {
         self.query_map
             .insert(qid, (Arc::new(Mutex::new(key)), Arc::clone(&graph)));
         self.queue.insert(key);
+        self.avail.notify_waiters();
     }
 
     /*
@@ -183,9 +190,9 @@ mod tests {
 
     use crate::parser::ExecutionPlanParser;
     use crate::{
+        composable_database::TaskId,
         query_graph::{QueryGraph, StageStatus},
         queue::{QueryKey, Queue},
-        composable_database::TaskId,
     };
     use std::{
         cmp::min,

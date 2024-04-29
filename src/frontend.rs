@@ -45,12 +45,12 @@ use tonic::transport::Channel;
 
 use crate::composable_database::scheduler_api_client::SchedulerApiClient;
 
-use crate::mock_catalog::load_catalog;
-use crate::mock_optimizer::Optimizer;
-use crate::parser::ExecutionPlanParser;
 use crate::composable_database::QueryJobStatusArgs;
 use crate::composable_database::QueryStatus;
 use crate::composable_database::QueryStatus::InProgress;
+use crate::mock_catalog::load_catalog;
+use crate::mock_optimizer::Optimizer;
+use crate::parser::ExecutionPlanParser;
 use datafusion::error::Result;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::SessionContext;
