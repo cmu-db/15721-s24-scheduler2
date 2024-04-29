@@ -131,7 +131,7 @@ impl SchedulerApi for SchedulerService {
         // }
         //
         // if let QueryStatus::Done | QueryStatus::Failed = query_status {
-        //     self.query_table.remove_query(query_id).await;
+        //     self.query_table.delete_query(query_id).await;
         // }
         //
         // Ok(Response::new(QueryJobStatusRet {

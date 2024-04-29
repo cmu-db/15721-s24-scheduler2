@@ -40,8 +40,13 @@ impl QueryTable {
         frontier
     }
 
-    pub async fn get_query_status(&self, query_id: u64) -> QueryStatus {
-        todo!()
+    pub async fn get_query_status(&self, query_id: u64) -> Option<QueryStatus> {
+        if let Some(query) = self.table.get(&query_id) {
+            let status = query.read().await.get_query_status();
+            Some(status)
+        } else {
+            None
+        }
     }
 
     pub async fn update_stage_status(

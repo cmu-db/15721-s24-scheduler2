@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::composable_database::TaskId;
+use crate::composable_database::{QueryStatus, TaskId};
 use crate::query_graph::StageStatus::NotStarted;
 use crate::task::TaskStatus::Ready;
 use crate::task::{Task, TaskStatus};
@@ -24,6 +24,10 @@ pub enum StageStatus {
     // Runnable,
     Running(u64),
     Finished(u64), // More detailed datatype to describe location(s) of ALL output data.
+}
+
+pub enum Status {
+
 }
 
 #[derive(Clone, Debug)]
@@ -82,6 +86,10 @@ impl QueryGraph {
 
     fn next_task_id(&self) -> u64 {
         self.tid_counter.fetch_add(1, Ordering::SeqCst)
+    }
+
+    pub fn get_query_status(&self) -> QueryStatus {
+        todo!()
     }
 
     // Atomically clear frontier vector and return old frontier.
