@@ -3,6 +3,7 @@ use datafusion::common::Result;
 use serde_json;
 use std::io::SeekFrom;
 use std::path::Path;
+use tokio::fs;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
 
@@ -16,6 +17,12 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
 /// # Returns
 /// A `Result<(), serde_json::Error>` indicating success or failure.
 pub async fn append_job_to_json_file(job: &JobInfo, path: &Path) -> Result<(), serde_json::Error> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .expect("Unable to create directory");
+    }
+
     let mut file = OpenOptions::new()
         .create(true)
         .read(true)
@@ -48,7 +55,6 @@ pub async fn append_job_to_json_file(job: &JobInfo, path: &Path) -> Result<(), s
             .await
             .expect("Unable to write data to file");
     } else {
-        // Move the cursor back to overwrite the last "]" character
         buf_writer
             .seek(SeekFrom::End(-1))
             .await
@@ -70,10 +76,8 @@ pub async fn append_job_to_json_file(job: &JobInfo, path: &Path) -> Result<(), s
             .expect("Unable to write data to file");
     }
 
-    // Flush and sync the buffer to ensure all data is written to disk
     buf_writer.flush().await.expect("Failed to flush data");
     file.sync_all().await.expect("Failed to sync file");
-
     Ok(())
 }
 
