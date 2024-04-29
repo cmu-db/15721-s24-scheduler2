@@ -186,7 +186,7 @@ impl Queue {
 #[cfg(test)]
 mod tests {
     use rand::Rng;
-    use tokio::sync::Mutex;
+    use tokio::sync::{Mutex, Notify};
 
     use crate::parser::ExecutionPlanParser;
     use crate::{
@@ -221,7 +221,7 @@ mod tests {
     async fn test_queue() {
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
-        let mut queue = Box::new(Queue::new());
+        let mut queue = Box::new(Queue::new(Arc::new(Notify::new())));
         let parser = ExecutionPlanParser::new(catalog_path).await;
         println!("test_scheduler: Testing file {}", test_file);
         if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
@@ -248,7 +248,7 @@ mod tests {
     async fn test_queue_conc() {
         let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
-        let queue = Arc::new(Mutex::new(Queue::new()));
+        let queue = Arc::new(Mutex::new(Queue::new(Arc::new(Notify::new()))));
         let parser = ExecutionPlanParser::new(catalog_path).await;
         println!("test_queue_conc: Testing file {}", test_file);
         if let Ok(physical_plans) = parser.get_execution_plan_from_file(&test_file).await {
