@@ -1,3 +1,22 @@
+//! # Mock Catalog
+//!
+//! This module provides the implementation of a mock catalog of a DBMS. It is designed to
+//! support the loading and registration of table schemas derived from the TPC-H benchmark.
+//! This can be later replaced with logic for actual catalogs and storage layers.
+//!
+//! ## Features
+//! - **Config Management**: Parses system configurations from TOML files.
+//! - **Catalog Loading**: Dynamically loads and registers table schemas from `.tbl` files located
+//!   in a specified directory.
+//!
+//! ## Usage
+//! The module interfaces with the DataFusion query engine to provide context and table providers for
+//! SQL operations on mock data. It is utilized primarily in test scenarios or when setting up new
+//! instances of the database without requiring connection to a live database.
+//!
+//! ## Important Notes
+//! - Ensure that the TOML configuration files and `.tbl` data files under "./test_data" exist
+
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaBuilder};
 use datafusion::datasource::file_format::csv::CsvFormat;
 use datafusion::datasource::file_format::FileFormat;

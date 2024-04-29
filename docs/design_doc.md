@@ -62,25 +62,60 @@ Individual components within the scheduler will be unit tested using Rust’s te
 
 The end-to-end testing framework is composed of three primary components: the mock frontend, the mock catalog, and the mock executors.
 
-### 1. Mock Frontend
-This component accepts input in two forms:
-- **Interactive Mode**: Processes SQL commands from the user console and displays the results interactively.
-- **File Mode**: Reads commands from a .slt (sqllogictest) file, executes them, and verifies their correctness.
-The mock frontend also features a gRPC client that sends queries to the scheduler.
+### 1. Frontend
+The `MockFrontend` class is responsible for:
+ - Establishing and maintaining a connection with the scheduler.
+- Receiving SQL queries and processing them through an optimizer.
+- Submitting these physical plans to the scheduler for execution.
+- Periodically polling the scheduler for status updates on the submitted queries.
+- Storing status updates, results, and other metadata in a local state for retrieval and management.
 
-### 2. Mock Executors
+Key components of the frontend are:
+- **SchedulerApiClient**: Communicates with the scheduler to submit tasks and fetch their status.
+- **Job Management**: Tracks the progress and results of submitted queries using a hashmap, handling statuses like InProgress, Done, and Failed.
+
+The front end has three modes of operation:
+- **Interactive Mode**: Allows users to manually enter SQL queries interactively. This mode is useful for
+   ad-hoc testing and debugging, where users can input queries and immediately see results and system behavior.
+
+ - **File Mode**: Executes a series of SQL commands from a specified file. This mode is intended for automated
+  testing or regression tests.
+
+- **Benchmark Mode**: Runs the entire set of 22 TPC-H benchmark queries to measure the performance and efficiency
+  of the system. This mode is crucial for performance testing and helps in understanding the scalability and
+  throughput of the system under heavy loads.
+
+### 1. Mock Optimizer
+It uses the default optimizer from Apache Arrow Datafusion.
+
+### 2. Executor Client
+The `ExecutorClient` establishes a connection with the scheduler through a handshake message
+and continuously handles the cycle of receiving tasks, executing them, and reporting back
+the results. The client makes gRPC calls to receive new tasks from the scheduler and
+reports the outcomes of executed tasks. Upon receiving a task, it delegates the execution to the `MockExecutor`. The actual execution
+logic is encapsulated within the `MockExecutor`, which can be replaced or modified by changing
+the implementation in `mock_executor.rs` to fit different execution models or strategies.
+
+### 3. Mock Executors
 These consist of DataFusion executors and gRPC clients that execute tasks, receiving instructions from and reporting results back to the scheduler.
 
-### 3. Mock Catalog
-It holds information about CSV files and is configured via a TOML file, which specifies executor details like IP addresses, ports, and NUMA regions.
-
+### 4. Mock Catalog
+- **Config Management**: Parses system configurations from TOML files.
+- **Catalog Loading**: Dynamically loads and registers table schemas from `.tbl` files located on the local disk.
+  
 ### Performance Benchmarking
-The framework also aims to benchmark the scheduler's performance by measuring the time taken to compute the final Arrow results, using DataFusion as the executor. To achieve more detailed performance metrics, multiple executors will be simulated using EC2 instances.
+To assess the scheduler's capacity to handle complex OLAP queries and maintain high throughput, we intend to use the integration test framework to simultaneously submit all 22 TPC-H queries across a cluster of executors. We will collect the following metrics:
+
+- **Execution Time for Each Query**: Measure the duration from submission to completion for each query.
+- **Busy-Idle Time Ratio for Each Executor**: Record periods of activity and inactivity for each executor throughout the test.
+
+Additionally, we plan to develop data visualization tools in Python to present the results more effectively.
 
 ![E2E Testing Architecture](e2e_testing_arch.png)
 
-### CI/CD
-We aim to build a pipeline with GitHub Actions that will allow us to continuously run our end-to-end correctness tests before merging PRs to establish a correct implementation early, and maintain that as we add more advanced functionality to our scheduler.
+## Future Composability with Other Components
+The mock optimizer and executor can be directly replaced with alternative implementations without necessitating any additional changes to the system. While the catalog, cache, and storage layers are not directly integrated into the testing system, we plan to encapsulate most of the logic within the mock catalog to simplify future integration.
+
 
 # Trade-offs and Potential Problems
 
