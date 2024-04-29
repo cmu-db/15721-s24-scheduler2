@@ -169,6 +169,63 @@ impl QueryGraph {
     }
 }
 
+// pub fn update_stage_status(
+//     &mut self,
+//     stage_id: u64,
+//     status: StageStatus,
+// ) -> Result<(), &'static str> {
+//     if let Some(stage) = self.stages.get_mut(stage_id as usize) {
+//         match (&stage.status, &status) {
+//             // TODO: handle input/output stuff
+//             (StageStatus::NotStarted, StageStatus::Running(_)) => {
+//                 stage.status = status;
+//                 Ok(())
+//             }
+//             (StageStatus::Running(_a), StageStatus::Finished(_b)) => {
+//                 stage.status = status;
+//                 let outputs = stage.outputs.clone();
+//
+//                 if outputs.is_empty() {
+//                     self.done = true;
+//                 }
+//                 // stage.status = status;
+//                 // Remove this stage from each output stage's input stage
+//                 for output_stage_id in &outputs {
+//                     if let Some(output_stage) = self.stages.get_mut(*output_stage_id as usize) {
+//                         // output_stage.inputs.remove(&stage_id);
+//
+//                         // Add output stage to frontier if its input size is zero
+//                         if output_stage.inputs.len() == 0 {
+//                             output_stage.status = StageStatus::Running(0); // TODO: "ready stage status?"
+//                             let new_output_task = Task {
+//                                 task_id: TaskId {
+//                                     query_id: self.query_id,
+//                                     task_id: *output_stage_id,
+//                                     stage_id: *output_stage_id,
+//                                 },
+//                                 status: TaskStatus::Ready,
+//                             };
+//                             self.frontier.push(new_output_task);
+//                         }
+//                     } else {
+//                         return Err("Output stage not found.");
+//                     }
+//                 }
+//                 Ok(())
+//             }
+//
+//             s => {
+//                 let msg = format!("Mismatched stage statuses. Got: {:?}", s.clone()).leak();
+//                 Err(msg)
+//             }
+//         }
+//     } else {
+//         Err("Task not found.")
+//     }
+// }
+
+
+
 #[derive(Clone, Debug)]
 struct Pipeline {
     plan: Option<Arc<dyn ExecutionPlan>>,

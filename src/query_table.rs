@@ -16,6 +16,7 @@ impl QueryTable {
     pub async fn new() -> Self {
         Self {
             table: RwLock::new(HashMap::new()),
+            // table: DashMap<u64, RwLock<QueryGraph>>,
         }
     }
 
