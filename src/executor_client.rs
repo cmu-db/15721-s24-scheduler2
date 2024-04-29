@@ -121,11 +121,11 @@ impl ExecutorClient {
                 QueryStatus::Failed
             };
 
-            if let Some(ref log_path) = self.log_path {
-                crate::profiling::append_job_to_json_file(&cur_job, Path::new(log_path))
-                    .await
-                    .expect("Failed to log job info");
-            }
+            // if let Some(ref log_path) = self.log_path {
+            //     crate::profiling::append_job_to_json_file(&cur_job, Path::new(log_path))
+            //         .await
+            //         .expect("Failed to log job info");
+            // }
 
             if execution_success {
                 let result = execution_result.unwrap();

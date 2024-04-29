@@ -8,8 +8,6 @@ use datafusion::physical_plan::placeholder_row::PlaceholderRowExec;
 use datafusion::physical_plan::sorts::sort::SortExec;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::ops::DerefMut;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -23,6 +21,7 @@ pub enum StageStatus {
 }
 
 // Status of a query with respect to the task queue.
+#[derive(Clone, Debug, PartialEq)] 
 pub enum QueryQueueStatus {
     Available, // Query has available tasks.
     Waiting,   // Query has no available tasks.
@@ -42,7 +41,6 @@ pub struct QueryGraph {
     pub status: QueryStatus,
     tid_counter: AtomicU64, // TODO: add mutex to stages and make elements pointers to avoid copying
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
-    plan: Arc<dyn ExecutionPlan>, // Potentially can be thrown away at this point.
     task_queue: TaskQueue,  // Ready tasks in this graph
 }
 
@@ -67,7 +65,6 @@ impl QueryGraph {
         Self {
             query_id,
             status: QueryStatus::InProgress,
-            plan: plan.clone(),
             tid_counter,
             stages: vec![QueryStage {
                 plan: plan.clone(),

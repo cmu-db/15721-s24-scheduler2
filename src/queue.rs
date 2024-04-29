@@ -70,24 +70,16 @@ impl Queue {
         // TODO: only do this if the query key was changed?
         let _ = self.queue.remove(&key);
 
-        match graph
+        if graph
             .lock()
             .await
             .update_stage_status(finished_stage_id, finished_stage_status)
             .await
             .unwrap()
+            == QueryQueueStatus::Available
         {
-            // If query still has available tasks, re-insert with updated priority
-            QueryQueueStatus::Available => {
-                self.queue.insert(key);
-            }
-            // If query is unavailable, do not re-insert
-            QueryQueueStatus::Waiting => {}
-            // If query is done, do not re-insert and remove from query map
-            QueryQueueStatus::Done => {
-                self.query_map.remove(&key.qid).expect("Query not found.");
-            }
-        };
+            self.queue.insert(key);
+        }
     }
 
     // Mark this task as running.
@@ -169,9 +161,15 @@ impl Queue {
     }
 
     // TODO: if the query is done, remove it at this point
-    pub async fn get_query_status(&self, qid: u64) -> QueryStatus {
+    pub async fn get_query_status(&mut self, qid: u64) -> QueryStatus {
         if let Some(query_entry) = self.query_map.get(&qid) {
-            return query_entry.1.lock().await.status;
+            let status = query_entry.1.lock().await.status;
+            let key = *query_entry.0.lock().await;
+            // If query is done, return DONE and delete from table
+            if status == QueryStatus::Done {
+                self.query_map.remove(&key.qid).expect("Query not found.");
+            }
+            return status;
         } else {
             return QueryStatus::NotFound;
         }
