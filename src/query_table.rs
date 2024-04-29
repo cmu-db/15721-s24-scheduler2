@@ -1,5 +1,5 @@
 use crate::query_graph::QueryGraph;
-use crate::server::composable_database::QueryStatus;
+use crate::composable_database::QueryStatus;
 use crate::SchedulerError;
 use datafusion_proto::bytes::physical_plan_to_bytes;
 use std::collections::HashMap;

@@ -1,4 +1,4 @@
-use crate::server::composable_database::{QueryStatus, TaskId};
+use crate::composable_database::{QueryStatus, TaskId};
 use crate::task::{Task, TaskStatus};
 use crate::task_queue::TaskQueue;
 use datafusion::arrow::datatypes::Schema;

@@ -1,5 +1,5 @@
 use crate::query_graph::{QueryGraph, QueryQueueStatus, StageStatus};
-use crate::server::composable_database::{QueryStatus, TaskId};
+use crate::composable_database::{QueryStatus, TaskId};
 use crate::task::{
     Task,
     TaskStatus::{self, *},
@@ -185,7 +185,7 @@ mod tests {
     use crate::{
         query_graph::{QueryGraph, StageStatus},
         queue::{QueryKey, Queue},
-        server::composable_database::TaskId,
+        composable_database::TaskId,
     };
     use std::{
         cmp::min,

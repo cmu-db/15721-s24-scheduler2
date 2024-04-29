@@ -31,7 +31,7 @@
 //!
 //! The frontend is designed to be modular, allowing for easy updates to individual components as the system evolves.
 
-use crate::server::composable_database::{QueryInfo, ScheduleQueryArgs};
+use crate::composable_database::{QueryInfo, ScheduleQueryArgs};
 use chrono::{DateTime, Utc};
 use datafusion::arrow::array::RecordBatch;
 use datafusion::arrow::util::pretty::pretty_format_batches;
@@ -43,14 +43,14 @@ use tokio::sync::Mutex;
 use tokio::time::Duration;
 use tonic::transport::Channel;
 
-use crate::server::composable_database::scheduler_api_client::SchedulerApiClient;
+use crate::composable_database::scheduler_api_client::SchedulerApiClient;
 
 use crate::mock_catalog::load_catalog;
 use crate::mock_optimizer::Optimizer;
 use crate::parser::ExecutionPlanParser;
-use crate::server::composable_database::QueryJobStatusArgs;
-use crate::server::composable_database::QueryStatus;
-use crate::server::composable_database::QueryStatus::InProgress;
+use crate::composable_database::QueryJobStatusArgs;
+use crate::composable_database::QueryStatus;
+use crate::composable_database::QueryStatus::InProgress;
 use datafusion::error::Result;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::SessionContext;

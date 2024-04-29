@@ -1,7 +1,3 @@
-pub mod composable_database {
-    tonic::include_proto!("composable_database");
-}
-
 use crate::intermediate_results::{get_results, TaskKey};
 use crate::mock_catalog::load_catalog;
 use crate::parser::ExecutionPlanParser;
@@ -9,8 +5,8 @@ use crate::query_graph::{QueryGraph, StageStatus};
 use crate::query_table::QueryTable;
 use crate::queue::Queue;
 use crate::SchedulerError;
-use composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
-use composable_database::{
+use crate::composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
+use crate::composable_database::{
     AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
     QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
     TaskId,
@@ -201,8 +197,8 @@ impl SchedulerApi for SchedulerService {
 #[allow(unused_imports)]
 mod tests {
     use crate::parser::ExecutionPlanParser;
-    use crate::server::composable_database::scheduler_api_server::SchedulerApi;
-    use crate::server::composable_database::{
+    use crate::composable_database::scheduler_api_server::SchedulerApi;
+    use crate::composable_database::{
         AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
         QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
         TaskId,

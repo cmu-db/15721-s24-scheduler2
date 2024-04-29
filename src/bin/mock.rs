@@ -45,29 +45,14 @@
 //! - **Polling Interval**: The frequency of status checks in ongoing tasks is configurable
 //!
 
-mod executor_client;
-mod frontend;
-pub mod integration_test;
-pub mod intermediate_results;
-pub mod mock_catalog;
-mod mock_executor;
-mod mock_optimizer;
-pub mod parser;
-pub mod profiling;
-mod query_graph;
-mod query_table;
-mod queue;
-mod server;
-mod task;
-mod task_queue;
-
-use crate::frontend::JobInfo;
-use crate::integration_test::IntegrationTest;
-use crate::parser::ExecutionPlanParser;
-use crate::server::composable_database::QueryStatus::{Done, InProgress};
+use scheduler2::frontend::JobInfo;
+use scheduler2::integration_test::IntegrationTest;
+use scheduler2::parser::ExecutionPlanParser;
+use scheduler2::composable_database::QueryStatus::{Done, InProgress};
+use scheduler2::profiling;
+use scheduler2::SchedulerError;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
-use datafusion::prelude::concat;
 use futures::TryFutureExt;
 use prost::Message;
 use std::collections::HashMap;
@@ -75,11 +60,6 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
-
-pub enum SchedulerError {
-    Error(String),
-    DfError(DataFusionError),
-}
 
 #[tokio::main]
 async fn main() {
@@ -350,3 +330,4 @@ mod tests {
         }
     }
 }
+

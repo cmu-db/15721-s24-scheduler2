@@ -3,7 +3,7 @@ use crate::frontend::MockFrontend;
 use crate::mock_catalog::Config;
 use crate::mock_catalog::{load_catalog, read_config};
 use crate::parser::ExecutionPlanParser;
-use crate::server::composable_database::scheduler_api_server::SchedulerApiServer;
+use crate::composable_database::scheduler_api_server::SchedulerApiServer;
 use crate::server::SchedulerService;
 use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;

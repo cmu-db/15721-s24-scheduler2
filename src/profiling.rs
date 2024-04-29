@@ -108,7 +108,7 @@ pub async fn write_jobs_to_json(jobs: Vec<JobInfo>, path: &Path) -> Result<(), s
 mod tests {
     use crate::frontend::JobInfo;
     use crate::profiling::{append_job_to_json_file, write_jobs_to_json};
-    use crate::server::composable_database::QueryStatus;
+    use crate::composable_database::QueryStatus;
     use chrono::{TimeZone, Utc};
     use std::path::Path;
     use tokio::fs;
