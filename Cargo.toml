@@ -33,3 +33,7 @@ chrono = {version = "0.4.38", features = ["serde"]}
 
 [build-dependencies]
 tonic-build = "0.11"
+
+[features]
+stages = []
+intraoperator = ["stages"]

@@ -46,8 +46,13 @@ pub struct QueryGraph {
 
 impl QueryGraph {
     pub async fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
-        let mut builder = GraphBuilder::new();
-        let stages = builder.build(plan.clone());
+        
+        // Build stages.
+        // To run this configuration, use 'cargo build --features stages'.
+        #[cfg(feature="stages")] {
+            let mut builder = GraphBuilder::new();
+            let stages = builder.build(plan.clone());
+        }
 
         let tid_counter = AtomicU64::new(0);
         let id = tid_counter.fetch_add(1, Ordering::SeqCst);
