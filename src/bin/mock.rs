@@ -45,25 +45,29 @@
 //! - **Polling Interval**: The frequency of status checks in ongoing tasks is configurable
 //!
 
-use scheduler2::frontend::JobInfo;
-use scheduler2::integration_test::IntegrationTest;
-use scheduler2::parser::ExecutionPlanParser;
-use scheduler2::composable_database::QueryStatus::{Done, InProgress};
-use scheduler2::profiling;
-use scheduler2::SchedulerError;
+use chrono::Utc;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
+use datafusion::variable::VarType::System;
 use futures::TryFutureExt;
 use prost::Message;
+use scheduler2::composable_database::QueryStatus::{Done, InProgress};
+use scheduler2::composable_database::{QueryInfo, ScheduleQueryArgs};
+use scheduler2::frontend::JobInfo;
+use scheduler2::integration_test::IntegrationTest;
+use scheduler2::mock_executor;
+use scheduler2::mock_executor::MockExecutor;
+use scheduler2::parser::ExecutionPlanParser;
+use scheduler2::profiling;
+use scheduler2::SchedulerError;
 use std::collections::HashMap;
-use std::io::{self, Write};
+use std::fs::File;
+use std::io::{self, BufWriter, Write};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
-use chrono::Utc;
 use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tonic::Request;
-use scheduler2::composable_database::{QueryInfo, ScheduleQueryArgs};
 
 #[tokio::main]
 async fn main() {
@@ -72,6 +76,10 @@ async fn main() {
         .about("Command line tool for DBMS end-to-end testing")
         .subcommand(SubCommand::with_name("interactive").about("Enter interactive SQL mode"))
         .subcommand(SubCommand::with_name("benchmark").about("Enter TPC-H benchmark mode"))
+        .subcommand(
+            SubCommand::with_name("baseline")
+                .about("Get baseline performance for each TPCH query on the machine"),
+        )
         .subcommand(
             SubCommand::with_name("file")
                 .about("Execute SQL logic tests from a file")
@@ -99,6 +107,11 @@ async fn main() {
         Some(("benchmark", _)) => {
             benchmark_mode().await;
         }
+
+        Some(("baseline", _)) => {
+            baseline_mode().await;
+        }
+
         None => {
             panic!("Usage: cargo run interactive or cargo run file <path-to-sqllogictest>");
         }
@@ -211,7 +224,13 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
 
         // Prepare requests for all sql queries
         for sql in sql_statements {
-            let request_pair = tester.frontend.lock().await.sql_to_job_request(&sql).await.expect("fail to create request for sql");
+            let request_pair = tester
+                .frontend
+                .lock()
+                .await
+                .sql_to_job_request(&sql)
+                .await
+                .expect("fail to create request for sql");
             request_pairs.push(request_pair);
         }
     }
@@ -230,7 +249,10 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
         match frontend.submit_request(request_pair).await {
             Ok(query_id) => {
                 let elapsed = start_time.elapsed(); // Calculate time elapsed since the request start
-                println!("Submitted query id: {}, query: {}, took {:?} to submit", query_id, sql_query, elapsed);
+                println!(
+                    "Submitted query id: {}, query: {}, took {:?} to submit",
+                    query_id, sql_query, elapsed
+                );
                 query_ids.push(query_id);
             }
             Err(e) => {
@@ -245,7 +267,7 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
         last_time = Instant::now(); // Reset the timer for the next iteration
     }
 
-// Optionally, you might want to print out the total time elapsed after the loop
+    // Optionally, you might want to print out the total time elapsed after the loop
     println!("Total operations time: {:?}", last_time.elapsed());
 
     drop(frontend);
@@ -316,6 +338,55 @@ const TPCH_FILES: &[&str] = &[
     "./test_sql/22.sql",
 ];
 
+pub async fn baseline_mode() {
+    // Initialize executor and parser with the catalog path
+    let executor = MockExecutor::new(CATALOG_PATH).await;
+    let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+
+    // Create a CSV file called baseline_execution_times.csv
+    let file = File::create("baseline_execution_times.csv")
+        .await
+        .expect("failed to create file");
+    let mut writer = BufWriter::new(file);
+    writeln!(writer, "tpch_query_id,execution_time_ms")
+        .await
+        .expect("failed to write headers");
+
+    let mut tpch_query_id = 1;
+    for file_path in TPCH_FILES {
+        // Parse the SQL execution plan from the file
+        let sql_plan = parser
+            .get_execution_plan_from_file(file_path)
+            .await
+            .expect("fail to get physical plan");
+
+        assert_eq!(1, sql_plan.len());
+
+        // Record the start time
+        let start = time::Instant::now();
+
+        // Execute the query
+        executor
+            .execute(sql_plan[0].clone())
+            .await
+            .expect("fail to execute query");
+
+        // Record the end time and compute the difference
+        let duration = time::Instant::now().duration_since(start);
+        let duration_ms = duration.as_millis(); // converting duration to milliseconds
+
+        // Write the results to the CSV file
+        writeln!(writer, "{},{}", tpch_query_id, duration_ms)
+            .await
+            .expect("failed to write data");
+
+        tpch_query_id += 1;
+    }
+
+    // Ensure all data is flushed to the file
+    writer.flush().await.expect("failed to flush data");
+}
+
 pub async fn benchmark_mode() {
     const JOB_SUMMARY_OUTPUT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/job_summary.json");
 
@@ -325,16 +396,16 @@ pub async fn benchmark_mode() {
         job_map.values().cloned().collect(),
         Path::new(JOB_SUMMARY_OUTPUT_PATH),
     )
-        .await
-        .unwrap_or_else(|err| {
-            panic!("Fail to write job summary: {}", err);
-        });
+    .await
+    .unwrap_or_else(|err| {
+        panic!("Fail to write job summary: {}", err);
+    });
 }
 
 #[cfg(test)]
 mod tests {
-    use scheduler2::parser::ExecutionPlanParser;
     use crate::{file_mode, run_single_query, start_system, CATALOG_PATH, TPCH_FILES};
+    use scheduler2::parser::ExecutionPlanParser;
 
     #[tokio::test]
     async fn test_file_mode() {

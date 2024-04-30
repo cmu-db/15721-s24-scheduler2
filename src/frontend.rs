@@ -148,7 +148,10 @@ impl MockFrontend {
     }
 
     // create a gRPC job request that can be sent to the scheduler
-    pub async fn sql_to_job_request(&mut self, sql_string: &str) -> Result<(String, Request<ScheduleQueryArgs>), DataFusionError> {
+    pub async fn sql_to_job_request(
+        &mut self,
+        sql_string: &str,
+    ) -> Result<(String, Request<ScheduleQueryArgs>), DataFusionError> {
         let logical_plan = self.sql_to_logical_plan(sql_string).await?;
         let physical_plan = self.optimizer.optimize(&logical_plan).await?;
         let plan_bytes = self
@@ -167,7 +170,10 @@ impl MockFrontend {
         Ok((sql_string.to_string(), request))
     }
 
-    pub async fn submit_request(&mut self, request_pair: (String, Request<ScheduleQueryArgs>)) -> Result<u64, DataFusionError> {
+    pub async fn submit_request(
+        &mut self,
+        request_pair: (String, Request<ScheduleQueryArgs>),
+    ) -> Result<u64, DataFusionError> {
         assert!(self.scheduler_api_client.is_some());
         let client = self.scheduler_api_client.as_mut().unwrap();
         match client.schedule_query(request_pair.1).await {
@@ -195,7 +201,6 @@ impl MockFrontend {
                 Err(DataFusionError::Internal(e.to_string()))
             }
         }
-
     }
 
     // submit a new query to the scheduler, returns the query id for this query
