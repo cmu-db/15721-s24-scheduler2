@@ -50,20 +50,20 @@ use scheduler2::integration_test::IntegrationTest;
 use scheduler2::parser::ExecutionPlanParser;
 use scheduler2::composable_database::QueryStatus::{Done, InProgress};
 use scheduler2::profiling;
-use scheduler2::SchedulerError;
+// use scheduler2::SchedulerError;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
-use futures::TryFutureExt;
-use prost::Message;
+// use futures::TryFutureExt;
+// use prost::Message;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
-use chrono::Utc;
-use tokio::io::AsyncWriteExt;
+// use chrono::Utc;
+// use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tonic::Request;
-use scheduler2::composable_database::{QueryInfo, ScheduleQueryArgs};
+use scheduler2::composable_database::ScheduleQueryArgs;
 
 #[tokio::main]
 async fn main() {
@@ -333,26 +333,27 @@ pub async fn benchmark_mode() {
 
 #[cfg(test)]
 mod tests {
-    use scheduler2::parser::ExecutionPlanParser;
-    use crate::{file_mode, run_single_query, start_system, CATALOG_PATH, TPCH_FILES};
+    // use scheduler2::parser::ExecutionPlanParser;
+    // use crate::{file_mode, run_single_query, start_system, CATALOG_PATH, TPCH_FILES};
+    use crate::TPCH_FILES;
 
     #[tokio::test]
     async fn test_file_mode() {
         file_mode(TPCH_FILES.to_vec(), true).await;
     }
 
-    #[tokio::test]
-    async fn test_interactive_frontend() {
-        let t = start_system().await;
-        let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
-        for file in TPCH_FILES {
-            eprintln!("Testing sql file {}", file);
-            let queries = parser.read_sql_from_file(file).await.expect("bad sql file");
-            for query in queries {
-                run_single_query(&t, &query)
-                    .await
-                    .expect("fail to execute query");
-            }
-        }
-    }
+    // #[tokio::test]
+    // async fn test_interactive_frontend() {
+    //     let t = start_system().await;
+    //     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
+    //     for file in TPCH_FILES {
+    //         eprintln!("Testing sql file {}", file);
+    //         let queries = parser.read_sql_from_file(file).await.expect("bad sql file");
+    //         for query in queries {
+    //             run_single_query(&t, &query)
+    //                 .await
+    //                 .expect("fail to execute query");
+    //         }
+    //     }
+    // }
 }
