@@ -61,6 +61,7 @@ use std::path::Path;
 use std::time::{Duration, SystemTime};
 use chrono::Utc;
 use tokio::io::AsyncWriteExt;
+use tokio::time::Instant;
 use tonic::Request;
 use scheduler2::composable_database::{QueryInfo, ScheduleQueryArgs};
 
@@ -214,21 +215,40 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
             request_pairs.push(request_pair);
         }
     }
+    let mut frontend = tester.frontend.lock().await;
 
     let mut query_ids = Vec::new();
-    for request_pair in request_pairs {
+    let mut last_time = Instant::now(); // Initialize the timer using tokio::time
 
+    for request_pair in request_pairs {
         let sql_query = request_pair.0.clone();
-        match tester.frontend.lock().await.submit_request(request_pair).await {
+        println!("Submitted 1 request!");
+
+        // Record the time just before the request is submitted
+        let start_time = Instant::now();
+
+        match frontend.submit_request(request_pair).await {
             Ok(query_id) => {
-                println!("Submitted query id: {}, query: {}", query_id, sql_query);
+                let elapsed = start_time.elapsed(); // Calculate time elapsed since the request start
+                println!("Submitted query id: {}, query: {}, took {:?} to submit", query_id, sql_query, elapsed);
                 query_ids.push(query_id);
             }
             Err(e) => {
-                panic!("Error in submitting query: {}: {}", sql_query, e);
+                // Log error without stopping the execution
+                eprintln!("Error in submitting query: {}: {}", sql_query, e);
             }
         }
+
+        // Calculate the time elapsed from the last request submission
+        let time_since_last = last_time.elapsed();
+        println!("Time since last submission: {:?}", time_since_last);
+        last_time = Instant::now(); // Reset the timer for the next iteration
     }
+
+// Optionally, you might want to print out the total time elapsed after the loop
+    println!("Total operations time: {:?}", last_time.elapsed());
+
+    drop(frontend);
 
     assert_eq!(query_ids.len(), reference_solutions.len());
 
