@@ -348,7 +348,6 @@ pub async fn baseline_mode() {
         .expect("failed to create file");
     let mut writer = BufWriter::new(file);
     writeln!(writer, "tpch_query_id,execution_time_ms")
-        .await
         .expect("failed to write headers");
 
     let mut tpch_query_id = 1;
@@ -362,7 +361,7 @@ pub async fn baseline_mode() {
         assert_eq!(1, sql_plan.len());
 
         // Record the start time
-        let start = time::Instant::now();
+        let start = Instant::now();
 
         // Execute the query
         executor
@@ -371,19 +370,18 @@ pub async fn baseline_mode() {
             .expect("fail to execute query");
 
         // Record the end time and compute the difference
-        let duration = time::Instant::now().duration_since(start);
+        let duration = Instant::now().duration_since(start);
         let duration_ms = duration.as_millis(); // converting duration to milliseconds
 
         // Write the results to the CSV file
         writeln!(writer, "{},{}", tpch_query_id, duration_ms)
-            .await
             .expect("failed to write data");
 
         tpch_query_id += 1;
     }
 
     // Ensure all data is flushed to the file
-    writer.flush().await.expect("failed to flush data");
+    writer.flush().expect("failed to flush data");
 }
 
 pub async fn benchmark_mode() {
