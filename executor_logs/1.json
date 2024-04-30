@@ -1,0 +1,51 @@
+[{
+  "query_id": 1,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:45.821805740Z",
+  "finished_at": "2024-04-30T03:55:46.434261558Z"
+},{
+  "query_id": 3,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:46.438711986Z",
+  "finished_at": "2024-04-30T03:55:47.112150397Z"
+},{
+  "query_id": 5,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:47.115617235Z",
+  "finished_at": "2024-04-30T03:55:47.367355423Z"
+},{
+  "query_id": 6,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:47.538883196Z",
+  "finished_at": "2024-04-30T03:55:48.319159263Z"
+},{
+  "query_id": 8,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:48.450160938Z",
+  "finished_at": "2024-04-30T03:55:49.032698081Z"
+},{
+  "query_id": 10,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:49.036899649Z",
+  "finished_at": "2024-04-30T03:55:49.529662183Z"
+},{
+  "query_id": 12,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:49.544960042Z",
+  "finished_at": "2024-04-30T03:55:50.072128Z"
+},{
+  "query_id": 14,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:50.284577500Z",
+  "finished_at": "2024-04-30T03:55:50.837724769Z"
+},{
+  "query_id": 16,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:50.841938259Z",
+  "finished_at": "2024-04-30T03:55:52.158719210Z"
+},{
+  "query_id": 19,
+  "sql_string": "",
+  "submitted_at": "2024-04-30T03:55:52.165388476Z",
+  "finished_at": "2024-04-30T03:55:53.409971744Z"
+}]

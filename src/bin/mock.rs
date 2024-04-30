@@ -192,12 +192,8 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
 
     println!("Generating reference solutions...");
     let mut reference_solutions = Vec::new();
-    for file_path in &file_paths {
-        // Generate reference solution first
-        let reference_solution = tester.generate_reference_results(*file_path).await;
-        reference_solutions.extend(reference_solution);
-    }
-        let mut request_pairs: Vec<(String, Request<ScheduleQueryArgs>)> = Vec::new();
+    let mut request_pairs: Vec<(String, Request<ScheduleQueryArgs>)> = Vec::new();
+
     for file_path in &file_paths {
         // Generate reference solution first
         let reference_solution = tester.generate_reference_results(*file_path).await;
@@ -211,64 +207,24 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
                 panic!("Unable to parse file {}: {:?}", file_path, err);
             });
 
-
-
-        let physical_plan = tester.frontend.lock().await.optimizer.optimize(&logical_plan).await?;
-        let plan_bytes = self
-            .parser
-            .serialize_physical_plan(physical_plan.clone())
-            .expect("MockFrontend: fail to parse physical plan");
-
-        let schedule_query_request = tonic::Request::new(ScheduleQueryArgs {
-            physical_plan: plan_bytes,
-            metadata: Some(QueryInfo {
-                priority: 0,
-                cost: 0,
-            }),
-        });
-
-        // Batch submit all queries
+        // Prepare requests for all sql queries
         for sql in sql_statements {
-            match tester.frontend.lock().await.submit_job(&sql).await {
-                Ok(query_id) => {
-                    println!("Submitted query id: {}, query: {}", query_id, sql);
-                    query_ids.push(query_id);
-                }
-                Err(e) => {
-                    panic!("Error in submitting query: {}: {}", sql, e);
-                }
-            }
+           let request_pair = tester.frontend.lock().await.sql_to_job_request(&sql).await.expect("fail to create request for sql");
+            request_pairs.push(request_pair);
         }
-
-
-
-
     }
-
 
     let mut query_ids = Vec::new();
-    // for each file selected...
-    for file_path in file_paths {
-        println!("Executing tests from file: {:?}", file_path);
+    for request_pair in request_pairs {
 
-        // Read SQL statements from file
-        let sql_statements = parser
-            .read_sql_from_file(&file_path)
-            .await
-            .unwrap_or_else(|err| {
-                panic!("Unable to parse file {}: {:?}", file_path, err);
-            });
-
-        // Batch submit all queries
-        for sql in sql_statements {
-            match tester.frontend.lock().await.submit_job(&sql).await {
-                Ok(query_id) => {
-                    println!("Submitted query id: {}, query: {}", query_id, sql);
-                    query_ids.push(query_id);
-                }
-                Err(e) => {
-                    panic!("Error in submitting query: {}: {}", sql, e);
-                }
+        let sql_query = request_pair.0.clone();
+        match tester.frontend.lock().await.submit_request(request_pair).await {
+            Ok(query_id) => {
+                println!("Submitted query id: {}, query: {}", query_id, sql_query);
+                query_ids.push(query_id);
+            }
+            Err(e) => {
+                panic!("Error in submitting query: {}: {}", sql_query, e);
             }
         }
     }
@@ -353,7 +309,7 @@ pub async fn benchmark_mode() {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::ExecutionPlanParser;
+    use scheduler2::parser::ExecutionPlanParser;
     use crate::{file_mode, run_single_query, start_system, CATALOG_PATH, TPCH_FILES};
 
     #[tokio::test]
