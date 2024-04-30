@@ -128,6 +128,7 @@ impl Queue {
     This function forwards task info to the task's query graph,
     updating it if necessary.
     */
+    // TODO: handle aborted queries
     pub async fn remove_task(&mut self, task_id: TaskId, finished_stage_status: StageStatus) {
         // Remove the task from the running map.
         let task = self.running_task_map.remove(&task_id).unwrap();
@@ -181,6 +182,13 @@ impl Queue {
             return QueryStatus::NotFound;
         }
     }
+
+    pub async fn abort_query(&mut self, qid: u64) {
+        if let Some(query_entry) = self.query_map.get(&qid) {
+            query_entry.1.lock().await.abort();
+            self.query_map.remove(&qid);
+        }   
+    }
 }
 
 #[cfg(test)]
@@ -233,8 +241,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_queue() {
-        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
-        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
+        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql/expr.slt");
+        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/");
         let mut queue = Box::new(Queue::new(Arc::new(Notify::new())));
         let parser = ExecutionPlanParser::new(catalog_path).await;
         println!("test_scheduler: Testing file {}", test_file);
@@ -255,6 +263,8 @@ mod tests {
                     .remove_task(tasks.pop().unwrap(), StageStatus::Finished(0))
                     .await;
             }
+        } else {
+            panic!("Plan was not parsed.");
         }
     }
 

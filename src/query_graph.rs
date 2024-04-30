@@ -163,6 +163,10 @@ impl QueryGraph {
             Err("Task not found.")
         }
     }
+
+    pub fn abort(&mut self) {
+        self.status = QueryStatus::Failed;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -272,5 +276,52 @@ impl GraphBuilder {
         with_new_children_if_necessary(plan, children)
             .unwrap()
             .into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ExecutionPlanParser;
+
+    fn verify_stages(stages: Vec<QueryStage>) {
+        for i in 0..stages.len() {
+            let stage_idx = i as u64;
+            let stage = &stages[i];
+            let outputs = stage.outputs.clone();
+            let inputs = stage.inputs.clone();
+            // Check outputs
+            for output in outputs {
+                assert_ne!(stage_idx, output); // cycle
+                let output_stage = &stages[output as usize];
+                // make sure that inputs/outputs agree
+                assert!(output_stage.inputs.contains(&stage_idx));
+            }
+            // Check inputs
+            for input in inputs {
+                assert_ne!(stage_idx, input); // cycle
+                let input_stage = &stages[input as usize];
+                // make sure that inputs/outputs agree
+                assert!(input_stage.outputs.contains(&stage_idx));
+            }
+        }
+        println!("Plan parsed into {} stages... ok.", stages.len());
+    }
+
+    #[tokio::test]
+    async fn test_builder() {
+        // Test that inputs/outputs match
+        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql/7.sql");
+        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/");
+        let parser = ExecutionPlanParser::new(catalog_path).await;
+        println!("test_scheduler: Testing file {}", test_file);
+        let physical_plans = parser.get_execution_plan_from_file(&test_file).await.expect("Could not get execution plan from file.");
+        // Add a bunch of queries
+        println!("Read {} query plans.", physical_plans.len());
+        for plan in &physical_plans {
+            let mut builder = GraphBuilder::new();
+            let stages = builder.build(plan.clone());
+            verify_stages(stages);
+        }
     }
 }
