@@ -59,7 +59,10 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::Duration;
+use chrono::Utc;
 use tokio::io::AsyncWriteExt;
+use tonic::Request;
+use scheduler2::composable_database::{QueryInfo, ScheduleQueryArgs};
 
 #[tokio::main]
 async fn main() {
@@ -187,15 +190,63 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
     let tester = start_system().await;
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
+    println!("Generating reference solutions...");
     let mut reference_solutions = Vec::new();
     for file_path in &file_paths {
         // Generate reference solution first
         let reference_solution = tester.generate_reference_results(*file_path).await;
         reference_solutions.extend(reference_solution);
     }
+        let mut request_pairs: Vec<(String, Request<ScheduleQueryArgs>)> = Vec::new();
+    for file_path in &file_paths {
+        // Generate reference solution first
+        let reference_solution = tester.generate_reference_results(*file_path).await;
+        reference_solutions.extend(reference_solution);
+
+        // Read SQL statements from file
+        let sql_statements = parser
+            .read_sql_from_file(&file_path)
+            .await
+            .unwrap_or_else(|err| {
+                panic!("Unable to parse file {}: {:?}", file_path, err);
+            });
+
+
+
+        let physical_plan = tester.frontend.lock().await.optimizer.optimize(&logical_plan).await?;
+        let plan_bytes = self
+            .parser
+            .serialize_physical_plan(physical_plan.clone())
+            .expect("MockFrontend: fail to parse physical plan");
+
+        let schedule_query_request = tonic::Request::new(ScheduleQueryArgs {
+            physical_plan: plan_bytes,
+            metadata: Some(QueryInfo {
+                priority: 0,
+                cost: 0,
+            }),
+        });
+
+        // Batch submit all queries
+        for sql in sql_statements {
+            match tester.frontend.lock().await.submit_job(&sql).await {
+                Ok(query_id) => {
+                    println!("Submitted query id: {}, query: {}", query_id, sql);
+                    query_ids.push(query_id);
+                }
+                Err(e) => {
+                    panic!("Error in submitting query: {}: {}", sql, e);
+                }
+            }
+        }
+
+
+
+
+    }
+
 
     let mut query_ids = Vec::new();
-
     // for each file selected...
     for file_path in file_paths {
         println!("Executing tests from file: {:?}", file_path);
@@ -207,11 +258,6 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
             .unwrap_or_else(|err| {
                 panic!("Unable to parse file {}: {:?}", file_path, err);
             });
-
-        println!(
-            "Generating reference result sets from file: {:?}",
-            file_path
-        );
 
         // Batch submit all queries
         for sql in sql_statements {
