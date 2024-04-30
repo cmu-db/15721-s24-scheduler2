@@ -64,7 +64,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
-use std::time::{Duration, SystemTime};
 use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tonic::Request;
@@ -345,7 +344,6 @@ pub async fn baseline_mode() {
 
     // Create a CSV file called baseline_execution_times.csv
     let file = File::create("baseline_execution_times.csv")
-        .await
         .expect("failed to create file");
     let mut writer = BufWriter::new(file);
     writeln!(writer, "tpch_query_id,execution_time_ms")
