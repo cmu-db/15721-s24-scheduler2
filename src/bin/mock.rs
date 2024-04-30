@@ -45,21 +45,24 @@
 //! - **Polling Interval**: The frequency of status checks in ongoing tasks is configurable
 //!
 
+use scheduler2::frontend::JobInfo;
+use scheduler2::integration_test::IntegrationTest;
+use scheduler2::parser::ExecutionPlanParser;
+use scheduler2::composable_database::QueryStatus::{Done, InProgress};
+use scheduler2::profiling;
+use scheduler2::SchedulerError;
 use clap::{App, Arg, SubCommand};
 use datafusion::error::DataFusionError;
 use futures::TryFutureExt;
 use prost::Message;
-use scheduler2::composable_database::QueryStatus::{Done, InProgress};
-use scheduler2::frontend::JobInfo;
-use scheduler2::integration_test::IntegrationTest;
-use scheduler2::parser::ExecutionPlanParser;
-use scheduler2::profiling;
-use scheduler2::SchedulerError;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
+use chrono::Utc;
 use tokio::io::AsyncWriteExt;
+use tonic::Request;
+use scheduler2::composable_database::{QueryInfo, ScheduleQueryArgs};
 
 #[tokio::main]
 async fn main() {
@@ -187,19 +190,15 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
     let tester = start_system().await;
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
+    println!("Generating reference solutions...");
     let mut reference_solutions = Vec::new();
+    let mut request_pairs: Vec<(String, Request<ScheduleQueryArgs>)> = Vec::new();
+
+    let start = SystemTime::now();
     for file_path in &file_paths {
         // Generate reference solution first
         let reference_solution = tester.generate_reference_results(*file_path).await;
         reference_solutions.extend(reference_solution);
-    }
-
-    let mut query_ids = Vec::new();
-
-    // for each file selected...
-    let start = SystemTime::now();
-    for file_path in file_paths {
-        println!("Executing tests from file: {:?}", file_path);
 
         // Read SQL statements from file
         let sql_statements = parser
@@ -209,21 +208,24 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
                 panic!("Unable to parse file {}: {:?}", file_path, err);
             });
 
-        println!(
-            "Generating reference result sets from file: {:?}",
-            file_path
-        );
-
-        // Batch submit all queries
+        // Prepare requests for all sql queries
         for sql in sql_statements {
-            match tester.frontend.lock().await.submit_job(&sql).await {
-                Ok(query_id) => {
-                    println!("Submitted query id: {}, query: {}", query_id, sql);
-                    query_ids.push(query_id);
-                }
-                Err(e) => {
-                    panic!("Error in submitting query: {}: {}", sql, e);
-                }
+            let request_pair = tester.frontend.lock().await.sql_to_job_request(&sql).await.expect("fail to create request for sql");
+            request_pairs.push(request_pair);
+        }
+    }
+
+    let mut query_ids = Vec::new();
+    for request_pair in request_pairs {
+
+        let sql_query = request_pair.0.clone();
+        match tester.frontend.lock().await.submit_request(request_pair).await {
+            Ok(query_id) => {
+                println!("Submitted query id: {}, query: {}", query_id, sql_query);
+                query_ids.push(query_id);
+            }
+            Err(e) => {
+                panic!("Error in submitting query: {}: {}", sql_query, e);
             }
         }
     }
@@ -237,6 +239,7 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
             break;
         }
     }
+
     let time = SystemTime::now().duration_since(start).unwrap();
     println!("Execution time: {:?}ms", time.as_millis());
 
@@ -302,15 +305,15 @@ pub async fn benchmark_mode() {
         job_map.values().cloned().collect(),
         Path::new(JOB_SUMMARY_OUTPUT_PATH),
     )
-    .await
-    .unwrap_or_else(|err| {
-        panic!("Fail to write job summary: {}", err);
-    });
+        .await
+        .unwrap_or_else(|err| {
+            panic!("Fail to write job summary: {}", err);
+        });
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::ExecutionPlanParser;
+    use scheduler2::parser::ExecutionPlanParser;
     use crate::{file_mode, run_single_query, start_system, CATALOG_PATH, TPCH_FILES};
 
     #[tokio::test]

@@ -55,6 +55,7 @@ use datafusion::error::Result;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::SessionContext;
 use serde::{Deserialize, Serialize};
+use tonic::Request;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct JobInfo {
@@ -77,7 +78,6 @@ impl fmt::Display for JobInfo {
 
         let result_summary = if let Some(ref batch) = self.result {
             match pretty_format_batches(batch) {
-                // Assuming you can clone or have a reference
                 Ok(formatted_batches) => formatted_batches.to_string(),
                 Err(e) => format!("Error formatting results: {}", e),
             }
@@ -94,7 +94,7 @@ impl fmt::Display for JobInfo {
 }
 
 pub struct MockFrontend {
-    optimizer: Optimizer,
+    pub optimizer: Optimizer,
     ctx: SessionContext,
     parser: ExecutionPlanParser,
 
@@ -109,7 +109,7 @@ pub struct MockFrontend {
 
 impl MockFrontend {
     pub(crate) async fn run_polling_task(shared_frontend: Arc<Mutex<MockFrontend>>) {
-        let polling_period_ms = 1000;
+        let polling_period_ms = 100;
         let mut interval = tokio::time::interval(Duration::from_millis(polling_period_ms));
         loop {
             interval.tick().await;
@@ -145,6 +145,57 @@ impl MockFrontend {
     // creates a logical plan for the sql string
     pub async fn sql_to_logical_plan(&self, sql_string: &str) -> Result<LogicalPlan> {
         self.ctx.state().create_logical_plan(sql_string).await
+    }
+
+    // create a gRPC job request that can be sent to the scheduler
+    pub async fn sql_to_job_request(&mut self, sql_string: &str) -> Result<(String, Request<ScheduleQueryArgs>), DataFusionError> {
+        let logical_plan = self.sql_to_logical_plan(sql_string).await?;
+        let physical_plan = self.optimizer.optimize(&logical_plan).await?;
+        let plan_bytes = self
+            .parser
+            .serialize_physical_plan(physical_plan.clone())
+            .expect("MockFrontend: fail to parse physical plan");
+
+        let request = Request::new(ScheduleQueryArgs {
+            physical_plan: plan_bytes,
+            metadata: Some(QueryInfo {
+                priority: 0,
+                cost: 0,
+            }),
+        });
+
+        Ok((sql_string.to_string(), request))
+    }
+
+    pub async fn submit_request(&mut self, request_pair: (String, Request<ScheduleQueryArgs>)) -> Result<u64, DataFusionError> {
+        assert!(self.scheduler_api_client.is_some());
+        let client = self.scheduler_api_client.as_mut().unwrap();
+        match client.schedule_query(request_pair.1).await {
+            Ok(response) => {
+                let query_id = response.into_inner().query_id;
+                let existing_value = self.jobs.insert(
+                    query_id,
+                    JobInfo {
+                        query_id,
+                        submitted_at: Utc::now(),
+                        sql_string: request_pair.0,
+                        result: None,
+                        finished_at: None,
+                        status: InProgress,
+                    },
+                );
+                // The new query cannot already be in the hashmap of jobs
+                assert!(existing_value.is_none());
+                self.num_running_jobs += 1;
+                Ok(query_id)
+            }
+
+            Err(e) => {
+                eprintln!("fail to scheduler query {}: {:?}", request_pair.0, e);
+                Err(DataFusionError::Internal(e.to_string()))
+            }
+        }
+
     }
 
     // submit a new query to the scheduler, returns the query id for this query
