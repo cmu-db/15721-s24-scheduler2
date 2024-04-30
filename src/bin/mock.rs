@@ -45,10 +45,10 @@
 //! - **Polling Interval**: The frequency of status checks in ongoing tasks is configurable
 //!
 
+use scheduler2::composable_database::QueryStatus::{Done, InProgress};
 use scheduler2::frontend::JobInfo;
 use scheduler2::integration_test::IntegrationTest;
 use scheduler2::parser::ExecutionPlanParser;
-use scheduler2::composable_database::QueryStatus::{Done, InProgress};
 use scheduler2::profiling;
 // use scheduler2::SchedulerError;
 use clap::{App, Arg, SubCommand};
@@ -61,9 +61,9 @@ use std::path::Path;
 use std::time::{Duration, SystemTime};
 // use chrono::Utc;
 // use tokio::io::AsyncWriteExt;
+use scheduler2::composable_database::ScheduleQueryArgs;
 use tokio::time::Instant;
 use tonic::Request;
-use scheduler2::composable_database::ScheduleQueryArgs;
 
 #[tokio::main]
 async fn main() {
@@ -211,7 +211,13 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
 
         // Prepare requests for all sql queries
         for sql in sql_statements {
-            let request_pair = tester.frontend.lock().await.sql_to_job_request(&sql).await.expect("fail to create request for sql");
+            let request_pair = tester
+                .frontend
+                .lock()
+                .await
+                .sql_to_job_request(&sql)
+                .await
+                .expect("fail to create request for sql");
             request_pairs.push(request_pair);
         }
     }
@@ -230,7 +236,10 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
         match frontend.submit_request(request_pair).await {
             Ok(query_id) => {
                 let elapsed = start_time.elapsed(); // Calculate time elapsed since the request start
-                println!("Submitted query id: {}, query: {}, took {:?} to submit", query_id, sql_query, elapsed);
+                println!(
+                    "Submitted query id: {}, query: {}, took {:?} to submit",
+                    query_id, sql_query, elapsed
+                );
                 query_ids.push(query_id);
             }
             Err(e) => {
@@ -245,7 +254,7 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
         last_time = Instant::now(); // Reset the timer for the next iteration
     }
 
-// Optionally, you might want to print out the total time elapsed after the loop
+    // Optionally, you might want to print out the total time elapsed after the loop
     println!("Total operations time: {:?}", last_time.elapsed());
 
     drop(frontend);
@@ -325,10 +334,10 @@ pub async fn benchmark_mode() {
         job_map.values().cloned().collect(),
         Path::new(JOB_SUMMARY_OUTPUT_PATH),
     )
-        .await
-        .unwrap_or_else(|err| {
-            panic!("Fail to write job summary: {}", err);
-        });
+    .await
+    .unwrap_or_else(|err| {
+        panic!("Fail to write job summary: {}", err);
+    });
 }
 
 #[cfg(test)]
