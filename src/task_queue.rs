@@ -35,7 +35,7 @@ impl TaskQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::composable_database::TaskId;
+    use crate::composable_database::TaskId;
     use crate::task::TaskStatus;
     use std::sync::Arc;
     use tokio::runtime::Runtime;

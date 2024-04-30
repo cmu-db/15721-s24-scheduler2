@@ -112,8 +112,8 @@ pub async fn rewrite_query(
 mod tests {
     use super::*;
     use crate::parser::ExecutionPlanParser;
-    use crate::CATALOG_PATH;
-    use datafusion::arrow::array::{Array, Int32Array};
+    use crate::integration_test::CATALOG_PATH;
+    use datafusion::arrow::array::Int32Array;
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use datafusion::arrow::record_batch::RecordBatch;
 

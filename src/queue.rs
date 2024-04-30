@@ -187,6 +187,8 @@ impl Queue {
 mod tests {
     use rand::Rng;
     use tokio::sync::{Mutex, Notify};
+    use tokio::time::sleep;
+    use std::time::Duration;
 
     use crate::parser::ExecutionPlanParser;
     use crate::{
@@ -203,18 +205,30 @@ mod tests {
         time::SystemTime,
     };
 
+    // Test that query keys compare properly.
     #[tokio::test]
     async fn test_query_key_cmp() {
         let then = SystemTime::now();
+        let now1 = SystemTime::now().duration_since(then).unwrap();
+        sleep(Duration::from_secs(1)).await;
+        let now2 = SystemTime::now().duration_since(then).unwrap();
+
         let key1 = QueryKey {
-            ft: SystemTime::now().duration_since(then).unwrap(),
-            qid: 0,
+            ft: now1.clone(),
+            qid: 1,
         };
         let key2 = QueryKey {
-            ft: SystemTime::now().duration_since(then).unwrap(),
+            ft: now2,
             qid: 0,
         };
+        let key3 = QueryKey {
+            ft: now1,
+            qid: 0,
+        };
+        // Make sure durations are compared first
         assert!(key1 < key2);
+        // Then qids
+        assert!(key3 < key1);
     }
 
     #[tokio::test]

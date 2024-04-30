@@ -345,6 +345,7 @@ mod tests {
     // use scheduler2::parser::ExecutionPlanParser;
     // use crate::{file_mode, run_single_query, start_system, CATALOG_PATH, TPCH_FILES};
     use crate::TPCH_FILES;
+    use crate::file_mode;
 
     #[tokio::test]
     async fn test_file_mode() {

@@ -23,7 +23,7 @@ pub struct IntegrationTest {
 }
 
 const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
-const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
+pub const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
 const LOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executor_logs");
 
 impl IntegrationTest {
@@ -195,7 +195,8 @@ impl IntegrationTest {
 mod tests {
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
-    use crate::CATALOG_PATH;
+    // use crate::CATALOG_PATH;
+    use super::*;
     use datafusion::arrow::array::{Int32Array, RecordBatch};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use std::path::PathBuf;
