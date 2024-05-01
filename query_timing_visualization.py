@@ -26,17 +26,17 @@ df_complete['finished_at'] = (df_complete['finished_at'] - min_submitted_at).dt.
 plt.figure(figsize=(14, 8))
 for i, row in df_complete.iterrows():
     # Draw a line segment from normalized submitted_at to finished_at for each query
-    plt.plot([row['submitted_at'], row['finished_at']], [i, i], marker='o', label=f'Query {row["query_id"]}' if i == 0 else "")
+    plt.plot([row['submitted_at'], row['finished_at']], [i, i], marker='o', label=f'Query {row["query_id"]}' if i == 0 else "", linewidth=2.5, markersize=5)
 
-plt.yticks(range(len(df_complete)), [f'Query {id}' for id in df_complete['query_id']])
+plt.yticks(range(len(df_complete)), [f'Query {id + 1}' for id in df_complete['query_id']], fontsize=12)
 
 # Invert y-axis to display the first entry on top
 plt.gca().invert_yaxis()
 
-plt.xlabel('Time (seconds from first query submission)')
-plt.ylabel('Query ID')
+plt.xlabel('Time (seconds from first query submission)', fontsize=16)
+plt.ylabel('Query ID', fontsize=16)
 
-plt.title('Normalized Timeline of SQL Queries Execution')
+plt.title('Normalized Timeline of TPC-H Execution', fontsize=20)
 
 
 plt.tight_layout()
