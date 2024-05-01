@@ -1,8 +1,13 @@
+#![allow(dead_code)]
 use crate::composable_database::{QueryStatus, TaskId};
 use crate::task::{Task, TaskStatus};
 use crate::task_queue::TaskQueue;
 use datafusion::arrow::datatypes::Schema;
+use datafusion::common::JoinSide;
 use datafusion::physical_plan::aggregates::AggregateExec;
+use datafusion::physical_plan::joins::{
+    CrossJoinExec, HashJoinExec, NestedLoopJoinExec, SortMergeJoinExec, SymmetricHashJoinExec,
+};
 use datafusion::physical_plan::limit::GlobalLimitExec;
 use datafusion::physical_plan::placeholder_row::PlaceholderRowExec;
 use datafusion::physical_plan::sorts::sort::SortExec;
@@ -46,10 +51,10 @@ pub struct QueryGraph {
 
 impl QueryGraph {
     pub async fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
-        
         // Build stages.
         // To run this configuration, use 'cargo build --features stages'.
-        #[cfg(feature="stages")] {
+        #[cfg(feature = "stages")]
+        {
             let mut builder = GraphBuilder::new();
             let stages = builder.build(plan.clone());
         }
@@ -157,7 +162,10 @@ impl QueryGraph {
                     }
                     return Ok(self.get_queue_status().await);
                 }
-                _ => Err("Mismatched stage statuses."),
+                s => {
+                    let msg = format!("Mismatched stage statuses. Got: {:?}", s.clone()).leak();
+                    Err(msg)
+                }
             }
         } else {
             Err("Task not found.")
@@ -224,8 +232,6 @@ impl QueryGraph {
 //     }
 // }
 
-
-
 #[derive(Clone, Debug)]
 struct Pipeline {
     plan: Option<Arc<dyn ExecutionPlan>>,
@@ -245,6 +251,10 @@ impl Pipeline {
     fn set_plan(&mut self, plan: Arc<dyn ExecutionPlan>) {
         self.plan = Some(plan);
     }
+
+    // fn add_output(&mut self, output: u64) {
+    //     self.outputs.push(output)
+    // }
 }
 
 impl Into<QueryStage> for Pipeline {
@@ -304,32 +314,84 @@ impl GraphBuilder {
         plan: Arc<dyn ExecutionPlan>,
         pipeline: usize,
     ) -> Arc<dyn ExecutionPlan> {
-        return plan;
-
         if plan.children().is_empty() {
             return plan;
         }
 
         let mut children = vec![];
-        if plan.children().len() > 1
-            || plan.as_any().is::<GlobalLimitExec>()
-            || plan.as_any().is::<SortExec>()
-            || plan.as_any().is::<AggregateExec>()
-        {
-            for child in plan.children() {
-                let child_pipeline = self.add_pipeline(Some(pipeline));
-                let child_results = Self::pipeline_breaker(plan.schema(), child_pipeline);
-                children.push(child_results);
+        // if plan.as_any().is::<HashJoinExec>()
+        //     || plan.as_any().is::<SortMergeJoinExec>()
+        //     || plan.as_any().is::<NestedLoopJoinExec>()
+        //     || plan.as_any().is::<CrossJoinExec>()
+        //     || plan.as_any().is::<SymmetricHashJoinExec>()
+        if plan.children().len() == 2 {
+            let left = plan.children()[0].clone();
+            let right = plan.children()[1].clone();
 
-                let child_plan = self.parse_plan(child, child_pipeline);
-                self.pipelines[child_pipeline].set_plan(child_plan);
-            }
+            // Switch left and right for SortMergeJoinExec
+
+            // Left <-> Build Side
+            let child_pipeline = self.add_pipeline(Some(pipeline));
+
+            let left_plan = self.parse_plan(left, child_pipeline);
+            let left_results = Self::pipeline_breaker(left_plan.schema(), child_pipeline);
+            children.push(left_results);
+
+            self.pipelines[child_pipeline].set_plan(left_plan);
+
+            // Right <-> Probe Side
+            let right_plan = self.parse_plan(right, pipeline);
+            children.push(right_plan);
+        // } else if plan.as_any().is::<GlobalLimitExec>()
+        //     || plan.as_any().is::<SortExec>()
+        //     || plan.as_any().is::<AggregateExec>()
+        // {
+        //     let child = plan.children()[0].clone();
+        //     let child_pipeline = self.add_pipeline(Some(pipeline));
+        //
+        //     let child_plan = self.parse_plan(child, child_pipeline);
+        //     let child_results = Self::pipeline_breaker(plan.schema(), child_pipeline);
+        //     children.push(child_results);
+        //
+        //     self.pipelines[child_pipeline].set_plan(child_plan);
         } else {
-            for child in plan.children() {
-                let child_plan = self.parse_plan(child, pipeline);
+            if let [ref child] = plan.children()[..] {
+                let child_plan = self.parse_plan(child.clone(), pipeline);
                 children.push(child_plan);
             }
         }
+
+        // match plan.children()[..] {
+        //     [ref left, ref right] => {
+        //         // Left <-> Build Side
+        //         let child_pipeline = self.add_pipeline(Some(pipeline));
+        //         let child_results = Self::pipeline_breaker(plan.schema(), child_pipeline);
+        //         children.push(child_results);
+        //
+        //         let child_plan = self.parse_plan(left, child_pipeline);
+        //         self.pipelines[child_pipeline].set_plan(child_plan);
+        //
+        //         // Right <-> Probe Side
+        //         let main_plan = self.parse_plan(right, pipeline);
+        //         children.push(main_plan);
+        //     }
+        //     [ref child] => {
+        //         if true {
+        //             let child_pipeline = self.add_pipeline(Some(pipeline));
+        //             let child_results = Self::pipeline_breaker(plan.schema(), child_pipeline);
+        //             children.push(child_results);
+        //
+        //             let child_plan = self.parse_plan(child.clone(), child_pipeline);
+        //             self.pipelines[child_pipeline].set_plan(child_plan);
+        //         } else {
+        //             let child_plan = self.parse_plan(child.clone(), pipeline);
+        //             children.push(child_plan);
+        //         }
+        //     }
+        //     [] => (),
+        //     _ => unreachable!(),
+        // }
+
         with_new_children_if_necessary(plan, children)
             .unwrap()
             .into()
@@ -372,7 +434,10 @@ mod tests {
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/");
         let parser = ExecutionPlanParser::new(catalog_path).await;
         println!("test_scheduler: Testing file {}", test_file);
-        let physical_plans = parser.get_execution_plan_from_file(&test_file).await.expect("Could not get execution plan from file.");
+        let physical_plans = parser
+            .get_execution_plan_from_file(&test_file)
+            .await
+            .expect("Could not get execution plan from file.");
         // Add a bunch of queries
         println!("Read {} query plans.", physical_plans.len());
         for plan in &physical_plans {

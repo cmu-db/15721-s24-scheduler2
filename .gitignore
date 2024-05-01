@@ -21,3 +21,5 @@ test_data/
 
 # Test data files
 **/*.tbl
+
+executor_logs/*
