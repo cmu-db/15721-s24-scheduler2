@@ -1,0 +1,21 @@
+[{
+  "query_id": 4,
+  "sql_string": "",
+  "submitted_at": "2024-05-01T18:39:05.581744934Z",
+  "finished_at": "2024-05-01T18:39:06.692270080Z"
+},{
+  "query_id": 11,
+  "sql_string": "",
+  "submitted_at": "2024-05-01T18:39:06.757687531Z",
+  "finished_at": "2024-05-01T18:39:07.025266092Z"
+},{
+  "query_id": 14,
+  "sql_string": "",
+  "submitted_at": "2024-05-01T18:39:07.035600799Z",
+  "finished_at": "2024-05-01T18:39:07.770850561Z"
+},{
+  "query_id": 18,
+  "sql_string": "",
+  "submitted_at": "2024-05-01T18:39:07.799594295Z",
+  "finished_at": "2024-05-01T18:39:08.098918047Z"
+}]

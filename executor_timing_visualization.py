@@ -1,8 +1,7 @@
+import matplotlib.pyplot as plt
+import pandas as pd
 import os
 import json
-import pandas as pd
-import matplotlib.pyplot as plt
-
 
 def load_and_process_json_files(directory):
     data = []
@@ -22,10 +21,8 @@ def load_and_process_json_files(directory):
 
     return data, all_submitted_times
 
-
 # Directory containing the JSON files
 directory = "./executor_logs"
-
 jobs_data, all_submitted_times = load_and_process_json_files(directory)
 
 df_jobs = pd.DataFrame(jobs_data)
@@ -41,15 +38,16 @@ file_indices = df_jobs['file_index'].unique()
 for index in sorted(file_indices):
     df_subset = df_jobs[df_jobs['file_index'] == index]
     for i, row in df_subset.iterrows():
-        plt.plot([row['normalized_submitted'], row['normalized_finished']], [index, index], marker='o')
+        plt.plot([row['normalized_submitted'], row['normalized_finished']], [index, index],
+                 marker='o', linewidth=5, markersize=5)  # Thicker line and larger markers
 
-plt.yticks(sorted(file_indices), labels=[f"{index}" for index in sorted(file_indices)])
-
+plt.yticks(sorted(file_indices), labels=[f"Executor {index}" for index in sorted(file_indices)], fontsize=12)
 plt.gca().invert_yaxis()
 
-plt.xlabel('Time (seconds from first query submission)')
-plt.ylabel('File Index')
+plt.xlabel('Time (seconds from first query submission)', fontsize=14)
+plt.ylabel('Executor ID', fontsize=14)
+plt.title('Normalized Timeline of Executor Busy/Idle Times', fontsize=18)
+plt.grid(True)  # Add gridlines
 
-plt.title('Normalized Timeline of Job Events Execution')
 plt.tight_layout()
 plt.show()

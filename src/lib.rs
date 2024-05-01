@@ -3,7 +3,7 @@ pub mod frontend;
 pub mod integration_test;
 pub mod intermediate_results;
 pub mod mock_catalog;
-mod mock_executor;
+pub mod mock_executor;
 mod mock_optimizer;
 pub mod parser;
 pub mod profiling;

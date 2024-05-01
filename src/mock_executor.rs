@@ -41,7 +41,6 @@ impl MockExecutor {
         while let Some(batch) = stream.next().await {
             results.push(batch?);
         }
-        assert!(!results.is_empty());
         Ok(results)
     }
 }

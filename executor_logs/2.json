@@ -1,56 +1,21 @@
 [{
-  "query_id": 0,
-  "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:40.982378431Z",
-  "finished_at": "2024-04-30T04:05:41.359080251Z"
-},{
   "query_id": 2,
   "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:41.401419262Z",
-  "finished_at": "2024-04-30T04:05:42.094735714Z"
-},{
-  "query_id": 4,
-  "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:42.103513052Z",
-  "finished_at": "2024-04-30T04:05:43.036092681Z"
-},{
-  "query_id": 7,
-  "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:43.109012414Z",
-  "finished_at": "2024-04-30T04:05:44.102706585Z"
+  "submitted_at": "2024-05-01T18:39:05.563950233Z",
+  "finished_at": "2024-05-01T18:39:06.443812915Z"
 },{
   "query_id": 9,
   "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:44.117716933Z",
-  "finished_at": "2024-04-30T04:05:44.589305965Z"
-},{
-  "query_id": 11,
-  "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:44.593079833Z",
-  "finished_at": "2024-04-30T04:05:44.790273565Z"
+  "submitted_at": "2024-05-01T18:39:06.491129817Z",
+  "finished_at": "2024-05-01T18:39:06.875821117Z"
 },{
   "query_id": 12,
   "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:44.793114918Z",
-  "finished_at": "2024-04-30T04:05:45.413309418Z"
-},{
-  "query_id": 14,
-  "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:45.550280406Z",
-  "finished_at": "2024-04-30T04:05:45.940785517Z"
+  "submitted_at": "2024-05-01T18:39:06.895659316Z",
+  "finished_at": "2024-05-01T18:39:07.260059502Z"
 },{
   "query_id": 16,
   "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:46.135095564Z",
-  "finished_at": "2024-04-30T04:05:47.109937944Z"
-},{
-  "query_id": 18,
-  "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:47.123801974Z",
-  "finished_at": "2024-04-30T04:05:48.062610608Z"
-},{
-  "query_id": 20,
-  "sql_string": "",
-  "submitted_at": "2024-04-30T04:05:48.116135841Z",
-  "finished_at": "2024-04-30T04:05:48.378793081Z"
+  "submitted_at": "2024-05-01T18:39:07.337608076Z",
+  "finished_at": "2024-05-01T18:39:08.442715800Z"
 }]
