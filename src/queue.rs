@@ -81,8 +81,15 @@ impl State {
         Some(status)
     }
 
+    // TODO: Graceful abort.
     pub async fn abort_query(&self, query_id: u64) {
-        todo!()
+        if let Some(query) = self.table.get(&query_id) {
+            {
+                let mut guard = query.write().await;
+                guard.abort();
+            }
+            self.table.remove(&query_id);
+        }
     }
 
     pub async fn next_task(&self) -> Option<(TaskId, Arc<dyn ExecutionPlan>)> {
@@ -140,6 +147,7 @@ impl State {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn size(&self) -> usize {
         self.queue.lock().await.len()
     }
@@ -149,7 +157,7 @@ impl State {
 mod tests {
     use rand::Rng;
     use std::{fs, time::{Duration, SystemTime}};
-    use tokio::{sync::{Mutex, Notify}, time::sleep};
+    use tokio::{sync::Notify, time::sleep};
 
     use crate::{parser::ExecutionPlanParser, query_graph::QueryGraph};
     use crate::queue::State;

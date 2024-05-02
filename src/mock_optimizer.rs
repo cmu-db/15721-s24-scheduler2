@@ -16,7 +16,7 @@
 
 use crate::mock_catalog::load_catalog;
 use datafusion::error::DataFusionError;
-use datafusion::execution::context::{SessionContext, SessionState};
+use datafusion::execution::context::SessionContext;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::physical_plan::ExecutionPlan;
 use std::sync::Arc;

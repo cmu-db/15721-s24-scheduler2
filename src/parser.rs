@@ -26,16 +26,14 @@
 use crate::mock_catalog::load_catalog;
 use datafusion::{
     arrow::{
-        array::{RecordBatch, RecordBatchReader},
+        array::RecordBatch,
         ipc::{reader::FileReader, writer::FileWriter},
     },
     error::{DataFusionError, Result},
     execution::context::SessionContext,
     physical_plan::ExecutionPlan,
-    physical_planner::PhysicalPlanner,
 };
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
-use futures::TryFutureExt;
 use sqlparser::{dialect::GenericDialect, parser::Parser};
 use std::{fmt, io::Cursor, sync::Arc};
 use tokio::{fs::File, io::AsyncReadExt};

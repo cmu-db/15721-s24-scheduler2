@@ -1,20 +1,18 @@
-use crate::composable_database::scheduler_api_server::{SchedulerApi, SchedulerApiServer};
+use crate::composable_database::scheduler_api_server::SchedulerApi;
 use crate::composable_database::{
     AbortQueryArgs, AbortQueryRet, NotifyTaskStateArgs, NotifyTaskStateRet, QueryInfo,
     QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
     TaskId,
 };
 use crate::mock_catalog::load_catalog;
-use crate::query_graph::{QueryGraph, StageStatus};
 use crate::queue::State;
 use crate::task::TaskStatus;
 use crate::SchedulerError;
 use datafusion::execution::context::SessionContext;
 use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::Notify;
 use tonic::{Request, Response, Status};
 
 pub struct SchedulerService {

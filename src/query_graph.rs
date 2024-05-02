@@ -1,15 +1,15 @@
 #![allow(dead_code)]
-use crate::composable_database::{QueryStatus, TaskId};
-use crate::task::{Task, TaskStatus};
+use crate::composable_database::QueryStatus;
+use crate::task::Task;
 use crate::task_queue::TaskQueue;
 use datafusion::arrow::datatypes::Schema;
-use datafusion::physical_plan::aggregates::AggregateExec;
-use datafusion::physical_plan::joins::{
-    CrossJoinExec, HashJoinExec, NestedLoopJoinExec, SortMergeJoinExec, SymmetricHashJoinExec,
-};
-use datafusion::physical_plan::limit::GlobalLimitExec;
+// use datafusion::physical_plan::joins::{
+// use datafusion::physical_plan::aggregates::AggregateExec;
+//     CrossJoinExec, HashJoinExec, NestedLoopJoinExec, SortMergeJoinExec, SymmetricHashJoinExec,
+// };
+// use datafusion::physical_plan::limit::GlobalLimitExec;
+// use datafusion::physical_plan::sorts::sort::SortExec;
 use datafusion::physical_plan::placeholder_row::PlaceholderRowExec;
-use datafusion::physical_plan::sorts::sort::SortExec;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
