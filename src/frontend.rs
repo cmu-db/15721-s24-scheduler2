@@ -48,6 +48,7 @@ use crate::composable_database::scheduler_api_client::SchedulerApiClient;
 use crate::composable_database::QueryJobStatusArgs;
 use crate::composable_database::QueryStatus;
 use crate::composable_database::QueryStatus::InProgress;
+use crate::intermediate_results::{get_results, TaskKey};
 use crate::mock_catalog::load_catalog;
 use crate::mock_optimizer::Optimizer;
 use crate::parser::ExecutionPlanParser;
@@ -56,7 +57,6 @@ use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::SessionContext;
 use serde::{Deserialize, Serialize};
 use tonic::Request;
-use crate::intermediate_results::{get_results, TaskKey};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct JobInfo {
@@ -329,10 +329,15 @@ impl MockFrontend {
                     //         }
                     //     };
 
-                    let results =  get_results(&TaskKey{stage_id: status.stage_id, query_id: status.query_id}).await
-                        .expect("api.rs: query is done but no results in table");
+                    let results = get_results(&TaskKey {
+                        stage_id: status.stage_id,
+                        query_id: status.query_id,
+                    })
+                    .await
+                    .expect("api.rs: query is done but no results in table");
 
-                    let flattened_results: Vec<RecordBatch> = results.into_iter().flat_map(|r| r.into_iter()).collect();
+                    let flattened_results: Vec<RecordBatch> =
+                        results.into_iter().flat_map(|r| r.into_iter()).collect();
 
                     let updated_job_info = JobInfo {
                         query_id,

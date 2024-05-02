@@ -5,11 +5,11 @@ use crate::task::{
     TaskStatus::{self, *},
 };
 use crate::SchedulerError;
+use datafusion_proto::bytes::physical_plan_to_bytes;
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use datafusion_proto::bytes::physical_plan_to_bytes;
 use tokio::sync::{Mutex, Notify};
 
 // Must implement here since generated TaskId does not derive Hash.

@@ -30,11 +30,7 @@ pub struct SchedulerService {
 
 impl fmt::Debug for SchedulerService {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "SchedulerService {{ queue: {:?} }}",
-            self.queue,
-        )
+        write!(f, "SchedulerService {{ queue: {:?} }}", self.queue,)
     }
 }
 
@@ -99,8 +95,11 @@ impl SchedulerApi for SchedulerService {
         // Build a query graph, store in query table, enqueue new tasks.
         let qid = self.next_query_id();
         let query = QueryGraph::new(qid, plan).await;
-        self.queue.lock().await.add_query(qid, Arc::new(Mutex::new(query))).await;
-
+        self.queue
+            .lock()
+            .await
+            .add_query(qid, Arc::new(Mutex::new(query)))
+            .await;
 
         let response = ScheduleQueryRet { query_id: qid };
         Ok(Response::new(response))
@@ -128,7 +127,7 @@ impl SchedulerApi for SchedulerService {
             return Ok(Response::new(QueryJobStatusRet {
                 query_status: QueryStatus::Done.into(),
                 stage_id: stage_id,
-                query_id: query_id
+                query_id: query_id,
             }));
             // ****************** END CHANGES FROM INTEGRATION TESTING****************//
         }
