@@ -122,7 +122,6 @@ async fn main() {
 
 const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
 const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
-const LOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executor_logs");
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 // creates server, executors, and the frontend
@@ -165,7 +164,6 @@ pub async fn run_single_query(
         drop(frontend_lock);
         return Ok(());
     }
-    unreachable!();
 }
 
 async fn interactive_mode() {
