@@ -23,3 +23,5 @@ test_data/
 **/*.tbl
 
 executor_logs/*
+
+job_summary.json
