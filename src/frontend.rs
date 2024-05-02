@@ -329,7 +329,7 @@ impl MockFrontend {
                     //         }
                     //     };
 
-                    let results =  get_results(&TaskKey{stage_id: status.query_id, query_id: status.query_id}).await
+                    let results =  get_results(&TaskKey{stage_id: status.stage_id, query_id: status.query_id}).await
                         .expect("api.rs: query is done but no results in table");
 
                     let flattened_results: Vec<RecordBatch> = results.into_iter().flat_map(|r| r.into_iter()).collect();

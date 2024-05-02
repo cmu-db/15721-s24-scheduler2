@@ -131,9 +131,6 @@ pub async fn start_system() -> IntegrationTest {
 
     let tester = IntegrationTest::new(CATALOG_PATH.to_string(), CONFIG_PATH.to_string()).await;
 
-    tester.run_server().await;
-    tokio::time::sleep(STARTUP_TIME).await;
-
     tester.run_frontend().await;
     tokio::time::sleep(STARTUP_TIME).await;
 
@@ -239,7 +236,6 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
 
     for request_pair in request_pairs {
         let sql_query = request_pair.0.clone();
-        println!("Submitted 1 request!");
 
         // Record the time just before the request is submitted
         let start_time = Instant::now();
@@ -259,13 +255,9 @@ pub async fn file_mode(file_paths: Vec<&str>, verify_correctness: bool) -> HashM
             }
         }
 
-        // Calculate the time elapsed from the last request submission
-        let time_since_last = last_time.elapsed();
-        println!("Time since last submission: {:?}", time_since_last);
         last_time = Instant::now(); // Reset the timer for the next iteration
     }
 
-    // Optionally, you might want to print out the total time elapsed after the loop
     println!("Total operations time: {:?}", last_time.elapsed());
 
     drop(frontend);
