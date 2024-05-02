@@ -144,9 +144,11 @@ impl SchedulerApi for SchedulerService {
 
     async fn abort_query(
         &self,
-        _request: Request<AbortQueryArgs>,
+        request: Request<AbortQueryArgs>,
     ) -> Result<Response<AbortQueryRet>, Status> {
         // TODO: Actually call executor API to abort query.
+        let AbortQueryArgs { query_id } = request.into_inner();
+        self.queue.lock().await.abort_query(query_id).await;
         let response = AbortQueryRet { aborted: true };
         Ok(Response::new(response))
     }
