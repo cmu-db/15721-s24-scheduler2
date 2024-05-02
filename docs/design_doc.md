@@ -14,14 +14,12 @@
 
 **75% Goals:**
 - Able to break down a physical plan into a distributed QUERY plan.
-- Achieve both inter-QUERY and intra-QUERY parallelism.
-- Provide job status.
 - End-to-end correctness/performance testing framework.
+- Provide job status.
 
 **100% Goals:**
-- Implement data shuffling between QUERY stages.
+- Achieve both inter-QUERY and intra-QUERY parallelism.
 - Cost-based and dynamic priority scheduling for better fairness.
-- Data-locality optimizations.
 - Able to abort/cancel a QUERY.
 
 **125% Goals:**
@@ -30,16 +28,18 @@
 
 # Architectural Design
 
-![Project Proposal Architecture](project_proposal_arch.png "Project Proposal Architecture Diagram")
+![Project Proposal Architecture](architecture.png "Project Proposal Architecture Diagram")
+
 
 **Architectural Components:**
 - **DAG Parser:** Parses a Datafusion ExecutionPlan into a DAG of stages, where each stage consists of tasks that can be completed without shuffling intermediate results. After decomposing the work, it then enqueues tasks into a work queue in a breadth-first manner.
-- **Work Queue:** A concurrent queue (initially FIFO) where tasks are enqueued by the DAG Parser. Each QUERY submitted by the optimizer also has a cost, allowing for heuristic adjustments to the ordering.
+- **Work Queue:** A concurrent queue where tasks are enqueued by the DAG Parser. Each QUERY submitted by the optimizer also has a cost, allowing for heuristic adjustments to the ordering.
 - **Work Threads (tokio):** Tokio threads are created for each executor node to handle communications.
 - **QueryID Table:** An in-memory data structure mapping QueryIDs to a DAG of remaining QUERY fragments and cost estimates retrieved from the optimizer.
 - **Executors:** Each executor is connected to the scheduler and the other executors via gRPC (tonic).
-- **Intermediate Results**: Intermediate results are stored as a thread-safe HashMap<TaskKey, Vec<RecordBatch> in shared memory. All executors will be able to access intermediate results without having to serialize/deserialize data.
+- **Intermediate Results**: Intermediate results are stored as a thread-safe hashmap in shared memory. All executors will be able to access intermediate results without having to serialize/deserialize data.
 
+![Task Dispatch Loop](task_dispatch_loop.png "Task Dispatch Loop")
 **Workflow:**
 1. Receives Datafusion ExecutionPlans from Query Optimizer and parses them into DAG, then stores in QueryID Table.
 2. Leaves of DAG are added to work queue that work threads can pull from.
@@ -62,6 +62,8 @@ Individual components within the scheduler will be unit tested using Rust’s te
 
 The end-to-end testing framework is composed of three primary components: the mock frontend, the mock catalog, and the mock executors.
 
+
+![E2E Testing Architecture](e2e-testing-arch.png)
 ### 1. Frontend
 The `MockFrontend` class is responsible for:
  - Establishing and maintaining a connection with the scheduler.
@@ -106,12 +108,12 @@ These consist of DataFusion executors and gRPC clients that execute tasks, recei
 ### Performance Benchmarking
 To assess the scheduler's capacity to handle complex OLAP queries and maintain high throughput, we intend to use the integration test framework to simultaneously submit all 22 TPC-H queries across a cluster of executors. We will collect the following metrics:
 
+- **Speedup from Scaling Out Executors**: Measure the speedup gained from increasing the number of executors.
 - **Execution Time for Each Query**: Measure the duration from submission to completion for each query.
 - **Busy-Idle Time Ratio for Each Executor**: Record periods of activity and inactivity for each executor throughout the test.
 
 Additionally, we plan to develop data visualization tools in Python to present the results more effectively.
 
-![E2E Testing Architecture](e2e_testing_arch.png)
 
 ## Future Composability with Other Components
 The mock optimizer and executor can be directly replaced with alternative implementations without necessitating any additional changes to the system. While the catalog, cache, and storage layers are not directly integrated into the testing system, we plan to encapsulate most of the logic within the mock catalog to simplify future integration.
