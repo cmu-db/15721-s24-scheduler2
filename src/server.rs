@@ -103,8 +103,7 @@ impl SchedulerApi for SchedulerService {
         // Build a query graph, store in query table, enqueue new tasks.
         let qid = self.next_query_id();
         let query = QueryGraph::new(qid, plan).await;
-        let graph = self.query_table.add_query(query).await;
-        self.queue.lock().await.add_query(qid, graph).await;
+        self.queue.lock().await.add_query(qid, Arc::new(Mutex::new(query))).await;
 
         let response = ScheduleQueryRet { query_id: qid };
         Ok(Response::new(response))
