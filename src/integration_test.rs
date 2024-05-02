@@ -189,9 +189,9 @@ impl IntegrationTest {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
-    use super::*;
     use datafusion::arrow::array::{Int32Array, RecordBatch};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use std::path::PathBuf;

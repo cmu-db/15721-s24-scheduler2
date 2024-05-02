@@ -156,12 +156,15 @@ impl State {
 #[cfg(test)]
 mod tests {
     use rand::Rng;
-    use std::{fs, time::{Duration, SystemTime}};
+    use std::{
+        fs,
+        time::{Duration, SystemTime},
+    };
     use tokio::{sync::Notify, time::sleep};
 
-    use crate::{parser::ExecutionPlanParser, query_graph::QueryGraph};
     use crate::queue::State;
     use crate::task::TaskStatus;
+    use crate::{parser::ExecutionPlanParser, query_graph::QueryGraph};
     use std::{cmp::min, sync::Arc};
 
     // Deprecated, use test_queue_conc instead
@@ -290,9 +293,7 @@ mod tests {
         // Add a bunch of queries with staggered submission time
         let start_enqueue = SystemTime::now();
         for plan in long_plans {
-            queue
-                .add_query(Arc::clone(&plan))
-                .await;
+            queue.add_query(Arc::clone(&plan)).await;
             sleep(Duration::from_millis(10)).await;
         }
         let enq_time = SystemTime::now().duration_since(start_enqueue).unwrap();

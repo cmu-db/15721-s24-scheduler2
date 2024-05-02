@@ -123,7 +123,10 @@ impl QueryGraph {
                     let outputs = stage.outputs.clone();
 
                     if outputs.is_empty() {
-                        println!("QueryGraph::update_stage_status: Query {} is done.", self.query_id);
+                        println!(
+                            "QueryGraph::update_stage_status: Query {} is done.",
+                            self.query_id
+                        );
                         self.status = QueryStatus::Done;
                         return Ok(());
                     }

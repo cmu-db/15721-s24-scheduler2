@@ -30,7 +30,6 @@ impl TaskQueue {
     pub fn next_task(&mut self) -> Task {
         self.queue.pop_front().expect("Queue has no tasks.")
     }
-
 }
 
 #[cfg(test)]
