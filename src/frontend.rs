@@ -56,6 +56,7 @@ use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::SessionContext;
 use serde::{Deserialize, Serialize};
 use tonic::Request;
+use crate::intermediate_results::{get_results, TaskKey};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct JobInfo {
@@ -314,25 +315,30 @@ impl MockFrontend {
                     self.num_running_jobs -= 1;
                     self.num_finished_jobs += 1;
 
-                    let serialized_results = status.query_result;
+                    // let serialized_results = status.query_result;
+                    //
+                    // let results =
+                    //     match ExecutionPlanParser::deserialize_record_batches(serialized_results) {
+                    //         Ok(res) => res,
+                    //         Err(err) => {
+                    //             eprintln!(
+                    //                 "poll_results: fail to deserialize results for query {}: {}",
+                    //                 query_id, err
+                    //             );
+                    //             continue;
+                    //         }
+                    //     };
 
-                    let results =
-                        match ExecutionPlanParser::deserialize_record_batches(serialized_results) {
-                            Ok(res) => res,
-                            Err(err) => {
-                                eprintln!(
-                                    "poll_results: fail to deserialize results for query {}: {}",
-                                    query_id, err
-                                );
-                                continue;
-                            }
-                        };
+                    let results =  get_results(&TaskKey{stage_id: status.query_id, query_id: status.query_id}).await
+                        .expect("api.rs: query is done but no results in table");
+
+                    let flattened_results: Vec<RecordBatch> = results.into_iter().flat_map(|r| r.into_iter()).collect();
 
                     let updated_job_info = JobInfo {
                         query_id,
                         status: QueryStatus::Done,
                         finished_at: Some(Utc::now()),
-                        result: Some(results),
+                        result: Some(flattened_results),
                         submitted_at: job.submitted_at,
                         sql_string: job.sql_string.to_string(),
                     };

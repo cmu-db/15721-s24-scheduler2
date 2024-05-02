@@ -120,25 +120,26 @@ impl SchedulerApi for SchedulerService {
         let status = self.queue.lock().await.get_query_status(query_id).await;
         if status == QueryStatus::Done {
             let stage_id = 0;
-            let final_result = get_results(&TaskKey { stage_id, query_id })
-                .await
-                .expect("api.rs: query is done but no results in table");
-            // print_batches(&final_result).unwrap();
+            // let final_result = get_results(&TaskKey { stage_id, query_id })
+            //     .await
+            //     .expect("api.rs: query is done but no results in table");
 
             // ****************** BEGIN CHANGES FROM INTEGRATION TESTING ***************//
-            let final_result_bytes =
-                ExecutionPlanParser::serialize_record_batches(final_result[0].clone())
-                    .expect("fail to serialize record batch");
+            // let final_result_bytes =
+            //     ExecutionPlanParser::serialize_record_batches(final_result[0].clone())
+            //         .expect("fail to serialize record batch");
 
             return Ok(Response::new(QueryJobStatusRet {
                 query_status: QueryStatus::Done.into(),
-                query_result: final_result_bytes,
+                stage_id: stage_id,
+                query_id: query_id
             }));
             // ****************** END CHANGES FROM INTEGRATION TESTING****************//
         }
         return Ok(Response::new(QueryJobStatusRet {
             query_status: status.into(),
-            query_result: Vec::new(),
+            stage_id: 0,
+            query_id: 0,
         }));
     }
 

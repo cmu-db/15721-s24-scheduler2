@@ -53,7 +53,9 @@ message QueryJobStatusArgs {
 
 message QueryJobStatusRet {
     QueryStatus query_status = 1;
-    bytes query_result = 2;
+    // location for the final result in the intermediate result map
+    uint64 stage_id = 2;
+    uint64 query_id = 3;
 }
 
 message AbortQueryArgs {
