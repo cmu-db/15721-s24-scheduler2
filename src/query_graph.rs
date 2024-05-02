@@ -145,7 +145,12 @@ impl QueryGraph {
                     }
                 }
                 s => {
-                    let msg = format!("Mismatched stage statuses for stage {}. Got: {:?}", stage_id, s.clone()).leak();
+                    let msg = format!(
+                        "Mismatched stage statuses for stage {}. Got: {:?}",
+                        stage_id,
+                        s.clone()
+                    )
+                    .leak();
                     return Err(msg);
                 }
             }
@@ -251,11 +256,11 @@ impl GraphBuilder {
         }
 
         let mut children = vec![]; // Vec::with_capacity(plan.children().len());
-        // if plan.as_any().is::<HashJoinExec>()
-        //     || plan.as_any().is::<SortMergeJoinExec>()
-        //     || plan.as_any().is::<NestedLoopJoinExec>()
-        //     || plan.as_any().is::<CrossJoinExec>()
-        //     || plan.as_any().is::<SymmetricHashJoinExec>()
+                                   // if plan.as_any().is::<HashJoinExec>()
+                                   //     || plan.as_any().is::<SortMergeJoinExec>()
+                                   //     || plan.as_any().is::<NestedLoopJoinExec>()
+                                   //     || plan.as_any().is::<CrossJoinExec>()
+                                   //     || plan.as_any().is::<SymmetricHashJoinExec>()
         if plan.children().len() == 2 {
             let left = plan.children()[0].clone();
             let right = plan.children()[1].clone();

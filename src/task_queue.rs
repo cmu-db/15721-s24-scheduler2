@@ -90,8 +90,7 @@ mod tests {
             let queue = Arc::new(Mutex::new(TaskQueue::new()));
             {
                 let mut queue_lock = queue.lock().await;
-                queue_lock
-                    .add_tasks(vec![create_task(1), create_task(2)]);
+                queue_lock.add_tasks(vec![create_task(1), create_task(2)]);
             }
 
             let queue_clone = queue.clone();

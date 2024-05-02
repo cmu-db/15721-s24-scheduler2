@@ -63,9 +63,9 @@ use std::time::{Duration, SystemTime};
 // use chrono::Utc;
 // use tokio::io::AsyncWriteExt;
 use scheduler2::composable_database::ScheduleQueryArgs;
+use scheduler2::mock_executor::MockExecutor;
 use tokio::time::Instant;
 use tonic::Request;
-use scheduler2::mock_executor::MockExecutor;
 
 #[tokio::main]
 async fn main() {
@@ -342,11 +342,9 @@ pub async fn baseline_mode() {
     let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
 
     // Create a CSV file called baseline_execution_times.csv
-    let file = File::create("baseline_execution_times.csv")
-        .expect("failed to create file");
+    let file = File::create("baseline_execution_times.csv").expect("failed to create file");
     let mut writer = BufWriter::new(file);
-    writeln!(writer, "tpch_query_id,execution_time_ms")
-        .expect("failed to write headers");
+    writeln!(writer, "tpch_query_id,execution_time_ms").expect("failed to write headers");
 
     let mut tpch_query_id = 1;
     for file_path in TPCH_FILES {
@@ -372,8 +370,7 @@ pub async fn baseline_mode() {
         let duration_ms = duration.as_millis(); // converting duration to milliseconds
 
         // Write the results to the CSV file
-        writeln!(writer, "{},{}", tpch_query_id, duration_ms)
-            .expect("failed to write data");
+        writeln!(writer, "{},{}", tpch_query_id, duration_ms).expect("failed to write data");
 
         tpch_query_id += 1;
     }
@@ -400,8 +397,8 @@ pub async fn benchmark_mode() {
 #[cfg(test)]
 mod tests {
 
-    use crate::TPCH_FILES;
     use crate::file_mode;
+    use crate::TPCH_FILES;
 
     #[tokio::test]
     async fn test_file_mode() {

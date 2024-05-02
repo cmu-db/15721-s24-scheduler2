@@ -64,15 +64,16 @@ impl Queue {
     // Used in both add_running_task and remove_task.
     async fn update_status(
         &mut self,
-        key: QueryKey,
+        old_key: QueryKey,
+        new_key: QueryKey,
         finished_stage_id: u64,
         finished_stage_status: StageStatus,
     ) {
         // Get the graph for this query
-        let graph = Arc::clone(&self.query_map.get(&key.qid).unwrap().1);
+        let graph = Arc::clone(&self.query_map.get(&old_key.qid).unwrap().1);
         // Temporarily remove query from queue, if present, and get its graph
         // TODO: only do this if the query key was changed?
-        let _ = self.queue.remove(&key);
+        let _ = self.queue.remove(&old_key);
 
         // If graph has more tasks available, re-insert query and notify
         let mut guard = graph.lock().await;
@@ -80,7 +81,7 @@ impl Queue {
             .update_stage_status(finished_stage_id, finished_stage_status)
             .unwrap();
         if let QueryQueueStatus::Available = guard.get_queue_status() {
-            self.queue.insert(key);
+            self.queue.insert(new_key);
             self.avail.notify_waiters();
         }
     }
@@ -93,8 +94,13 @@ impl Queue {
         self.running_task_map.insert(task.task_id, task.clone());
         // Send the update to the query graph and reorder queue.
         // WARNING: stage_status may not be 'running' if tasks and stages are not 1:1
-        self.update_status(key, task.task_id.stage_id, StageStatus::Running(0))
-            .await;
+        self.update_status(
+            key.clone(),
+            key,
+            task.task_id.stage_id,
+            StageStatus::Running(0),
+        )
+        .await;
     }
 
     /* Get the minimum element of the queue, or None if the queue is empty */
@@ -136,11 +142,12 @@ impl Queue {
         let mut key = self.query_map.get(&query).unwrap().0.lock().await;
         // Ensure the task is running.
         if let Running(start_ts) = task.status {
+            let old_key = *key;
             // Increment the query's pass using the task's elapsed time.
             (*key).ft += SystemTime::now().duration_since(start_ts).unwrap();
-            let key_copy = *key;
+            let new_key = *key;
             drop(key); // to avoid double mutable borrow
-            self.update_status(key_copy, task_id.stage_id, finished_stage_status)
+            self.update_status(old_key, new_key, task_id.stage_id, finished_stage_status)
                 .await;
         } else {
             panic!("Task removed but is not running.");
