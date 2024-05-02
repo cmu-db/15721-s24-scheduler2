@@ -3,6 +3,7 @@ use std::time::SystemTime;
 
 // TODO: some of these don't do anything since
 // the task is only created when it is ready
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum TaskStatus {
     Ready,

@@ -230,7 +230,7 @@ impl MockFrontend {
                 let existing_value = self.jobs.insert(
                     query_id,
                     JobInfo {
-                        query_id: query_id,
+                        query_id,
                         submitted_at: Utc::now(),
                         sql_string: sql_string.to_string(),
                         result: None,
@@ -280,7 +280,7 @@ impl MockFrontend {
         // eprintln!("Polling!");
         assert!(self.scheduler_api_client.is_some());
 
-        let mut client = self.scheduler_api_client.as_mut().unwrap();
+        let client = self.scheduler_api_client.as_mut().unwrap();
 
         let keys: Vec<u64> = self.jobs.keys().cloned().collect();
         for query_id in keys {

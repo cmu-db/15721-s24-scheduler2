@@ -31,17 +31,6 @@ impl TaskQueue {
         self.queue.pop_front().expect("Queue has no tasks.")
     }
 
-    pub fn push_tasks(&mut self, tasks: Vec<Task>) {
-        self.queue.extend(tasks);
-    }
-
-    pub fn push_task(&mut self, task: Task) {
-        self.queue.push_back(task);
-    }
-
-    pub fn pop_task(&mut self) -> Option<Task> {
-        self.queue.pop_front()
-    }
 }
 
 #[cfg(test)]

@@ -32,14 +32,13 @@
 
 use crate::composable_database::scheduler_api_client::SchedulerApiClient;
 use crate::composable_database::QueryStatus::InProgress;
-use crate::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, QueryStatus, TaskId};
+use crate::composable_database::{NotifyTaskStateArgs, NotifyTaskStateRet, QueryStatus};
 use crate::frontend::JobInfo;
 use crate::intermediate_results::{insert_results, rewrite_query, TaskKey};
 use crate::mock_catalog::load_catalog;
 use crate::mock_executor::MockExecutor;
 use chrono::Utc;
 use datafusion::execution::context::SessionContext;
-use datafusion::physical_plan::ExecutionPlan;
 use datafusion_proto::bytes::physical_plan_from_bytes;
 use std::path::Path;
 use std::path::PathBuf;

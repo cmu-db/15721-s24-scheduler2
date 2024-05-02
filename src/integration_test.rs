@@ -8,21 +8,18 @@ use crate::server::SchedulerService;
 use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
 use datafusion::logical_expr::{col, Expr};
-use datafusion::prelude::{concat, SessionContext};
-use serde::{Deserialize, Serialize};
+use datafusion::prelude::SessionContext;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Server;
 
 pub struct IntegrationTest {
     catalog_path: String,
-    config_path: String,
     ctx: Arc<SessionContext>,
     config: Config,
     pub frontend: Arc<Mutex<MockFrontend>>,
 }
 
-const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
 pub const CATALOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
 const LOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executor_logs");
 
@@ -37,7 +34,6 @@ impl IntegrationTest {
             ctx,
             config,
             catalog_path,
-            config_path,
             frontend: Arc::new(Mutex::new(frontend)),
         }
     }
@@ -195,7 +191,6 @@ impl IntegrationTest {
 mod tests {
     use crate::integration_test::IntegrationTest;
     use crate::parser::ExecutionPlanParser;
-    // use crate::CATALOG_PATH;
     use super::*;
     use datafusion::arrow::array::{Int32Array, RecordBatch};
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
@@ -203,12 +198,15 @@ mod tests {
     use std::sync::Arc;
     use tokio::fs;
 
+    const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
+
     async fn initialize_integration_test() -> IntegrationTest {
         let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data");
-        let config_path = concat!(env!("CARGO_MANIFEST_DIR"), "/executors.toml");
+        let config_path = CONFIG_PATH;
         IntegrationTest::new(catalog_path.to_string(), config_path.to_string()).await
     }
 
+    #[allow(dead_code)]
     pub async fn get_all_tpch_queries_test() -> Vec<String> {
         let parser = ExecutionPlanParser::new(CATALOG_PATH).await;
         let mut res = Vec::new();
