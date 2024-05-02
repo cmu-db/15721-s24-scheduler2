@@ -20,7 +20,8 @@ use std::sync::Arc;
 #[derive(Clone, Debug, Default)]
 pub enum StageStatus {
     #[default]
-    NotStarted,
+    Waiting,
+    Runnable,
     Running(u64),
     Finished(u64), // More detailed datatype to describe location(s) of ALL output data.
 }
@@ -55,6 +56,8 @@ impl QueryGraph {
         // To run this configuration, use 'cargo build --features stages'.
         let mut builder = GraphBuilder::new();
         let stages = builder.build(plan.clone());
+        println!("QueryGraph::new: generated {} stages.", stages.len());
+        println!("{:#?}", stages);
 
         let mut query = Self {
             query_id,
@@ -64,27 +67,23 @@ impl QueryGraph {
             task_queue: TaskQueue::new(),
         };
 
-        let id = query.next_task_id();
-        let task = Task {
-            task_id: TaskId {
-                task_id: id,
-                query_id,
-                stage_id: id,
-            },
-            status: TaskStatus::Ready,
-        };
-        query.task_queue.add_tasks(vec![task]);
+        // Build tasks for leaf stages.
+        for (i, stage) in query.stages.iter().enumerate() {
+            if let StageStatus::Runnable = stage.status {
+                let task = Task::new(query_id, i as u64, query.next_task_id());
+                query.task_queue.add_tasks(vec![task]);
+            }
+        }
         query
     }
 
     #[inline]
-    fn next_task_id(&mut self) -> u64 {
+    fn next_task_id(&self) -> u64 {
         self.tid_counter.fetch_add(1, Ordering::SeqCst)
     }
 
-    #[inline]
     // Returns whether the query is done, waiting for tasks, or has tasks ready
-    fn get_queue_status(&self) -> QueryQueueStatus {
+    pub fn get_queue_status(&self) -> QueryQueueStatus {
         // If the query is done
         if self.status == QueryStatus::Done {
             return QueryQueueStatus::Done;
@@ -102,125 +101,63 @@ impl QueryGraph {
         self.task_queue.next_task()
     }
 
-    pub async fn update_stage_status(
+    pub fn abort(&mut self) {
+        self.status = QueryStatus::Failed;
+    }
+
+    pub fn update_stage_status(
         &mut self,
         stage_id: u64,
         status: StageStatus,
-    ) -> Result<QueryQueueStatus, &'static str> {
-        if self.stages.get(stage_id as usize).is_some() {
-            // Compare current status against new status
-            match (&self.stages.get(stage_id as usize).unwrap().status, &status) {
-                // If transition NotStarted -> Running, simply update status
-                (StageStatus::NotStarted, StageStatus::Running(_)) => {
-                    self.stages.get_mut(stage_id as usize).unwrap().status = status;
-                    return Ok(self.get_queue_status());
+    ) -> Result<(), &'static str> {
+        if let Some(stage) = self.stages.get_mut(stage_id as usize) {
+            match (&stage.status, &status) {
+                (StageStatus::Waiting, StageStatus::Runnable) => {
+                    stage.status = status;
                 }
-                // If transition Running -> Finished, remove this stage as an input from all of its outputs
+                (StageStatus::Runnable, StageStatus::Running(_a)) => {
+                    stage.status = status;
+                }
                 (StageStatus::Running(_a), StageStatus::Finished(_b)) => {
-                    // Get list of outputs
-                    let outputs = {
-                        let stage = self.stages.get_mut(stage_id as usize).unwrap();
-                        stage.status = status;
-                        stage.outputs.clone()
-                    };
+                    stage.status = status;
+                    let outputs = stage.outputs.clone();
 
-                    // If this stage has no outputs, this query is done
                     if outputs.is_empty() {
                         self.status = QueryStatus::Done;
-                        // No more to do
-                        return Ok(self.get_queue_status());
+                        return Ok(());
                     }
 
-                    // Remove this stage from each output stage's input stage
-                    for output_stage_id in &outputs {
-                        let output_stage = self.stages.get_mut(*output_stage_id as usize).unwrap();
-
-                        // Add output stage to queue if it has no inputs
-                        if output_stage.inputs.len() == 0 {
-                            // Set output stage's status to "running"
-                            output_stage.status = StageStatus::Running(0); // TODO: "ready stage status?"
-                            let new_output_task = Task {
-                                task_id: TaskId {
-                                    query_id: self.query_id,
-                                    task_id: *output_stage_id,
-                                    stage_id: *output_stage_id,
-                                },
-                                status: TaskStatus::Ready,
-                            };
-                            // Add new task to the queue
+                    // Check to see if new stages are runnable.
+                    for output_id in &outputs {
+                        if self.stages[*output_id as usize]
+                            .inputs
+                            .iter()
+                            .all(|&input_id| {
+                                matches!(
+                                    self.stages[input_id as usize].status,
+                                    StageStatus::Finished(_)
+                                )
+                            })
+                        {
+                            self.update_stage_status(*output_id, StageStatus::Runnable)?;
+                            let new_output_task =
+                                Task::new(self.query_id, *output_id, self.next_task_id());
                             self.task_queue.add_tasks(vec![new_output_task]);
                         }
                     }
-                    return Ok(self.get_queue_status());
                 }
                 s => {
-                    let msg = format!("Mismatched stage statuses. Got: {:?}", s.clone()).leak();
-                    Err(msg)
+                    let msg = format!("Mismatched stage statuses for stage {}. Got: {:?}", stage_id, s.clone()).leak();
+                    return Err(msg);
                 }
             }
+            Ok(())
         } else {
             Err("Task not found.")
         }
     }
 
-    pub fn abort(&mut self) {
-        self.status = QueryStatus::Failed;
-    }
-
-pub fn update_stage_status2(
-    &mut self,
-    stage_id: u64,
-    status: StageStatus,
-) -> Result<QueryQueueStatus, &'static str> {
-    if let Some(stage) = self.stages.get_mut(stage_id as usize) {
-        match (&stage.status, &status) {
-            // TODO: handle input/output stuff
-            (StageStatus::NotStarted, StageStatus::Running(_)) => {
-                stage.status = status;
-            }
-            (StageStatus::Running(_a), StageStatus::Finished(_b)) => {
-                stage.status = status;
-                let outputs = stage.outputs.clone();
-
-                if outputs.is_empty() {
-                    self.status = QueryStatus::Done;
-                    // No more to do
-                    return Ok(self.get_queue_status());
-                }
-
-                // stage.status = status;
-                // Remove this stage from each output stage's input stage
-                for output_id in &outputs {
-                    // output_stage.inputs.remove(&stage_id);
-                    let output_stage = &mut self.stages[*output_id as usize];
-
-                    // Add output stage to queue if its input size is zero
-                    if output_stage.inputs.len() == 0 {
-                        output_stage.status = StageStatus::Running(0); // TODO: "ready stage status?"
-                        let new_output_task = Task {
-                            task_id: TaskId {
-                                query_id: self.query_id,
-                                task_id: *output_id,
-                                stage_id: *output_id,
-                            },
-                            status: TaskStatus::Ready,
-                        };
-                        // Add new task to the queue
-                        self.task_queue.add_tasks(vec![new_output_task]);
-                    }
-                }
-            }
-            s => {
-                let msg = format!("Mismatched stage statuses. Got: {:?}", s.clone()).leak();
-                return Err(msg)
-            }
-        }
-        Ok(self.get_queue_status())
-    } else {
-        Err("Task not found.")
-    }
-}
-
+    // fn build_tasks(&mut self)
 }
 
 #[derive(Clone, Debug)]
@@ -250,9 +187,15 @@ impl Pipeline {
 
 impl Into<QueryStage> for Pipeline {
     fn into(self) -> QueryStage {
+        let status = if self.inputs.is_empty() {
+            StageStatus::Runnable
+        } else {
+            StageStatus::Waiting
+        };
+
         QueryStage {
             plan: self.plan.unwrap(),
-            status: StageStatus::NotStarted,
+            status,
             outputs: self.outputs,
             inputs: self.inputs,
         }

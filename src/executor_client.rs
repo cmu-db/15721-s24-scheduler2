@@ -118,8 +118,14 @@ impl ExecutorClient {
                 finished_at: None,
             };
 
+
+            println!(
+                "[Executor{}]: Running plan: {:#?}",
+                self.id, plan
+            );
             let execution_result = self.executor.execute(plan).await;
             let execution_success = execution_result.is_ok();
+            execution_result.as_ref().expect("Failed to execute query");
 
             cur_job.finished_at = Some(Utc::now());
 

@@ -35,6 +35,10 @@ impl TaskQueue {
         self.queue.extend(tasks);
     }
 
+    pub fn push_task(&mut self, task: Task) {
+        self.queue.push_back(task);
+    }
+
     pub fn pop_task(&mut self) -> Option<Task> {
         self.queue.pop_front()
     }

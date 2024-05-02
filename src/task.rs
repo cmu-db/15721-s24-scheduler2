@@ -18,6 +18,19 @@ pub struct Task {
     pub(crate) status: TaskStatus, // TODO: unused?
 }
 
+impl Task {
+    pub fn new(query_id: u64, stage_id: u64, task_id: u64) -> Self {
+        Self {
+            task_id: TaskId {
+                query_id,
+                task_id,
+                stage_id,
+            },
+            status: TaskStatus::Ready,
+        }
+    }
+}
+
 const HANDSHAKE_TASK_ID: TaskId = TaskId {
     query_id: u64::MAX,
     task_id: u64::MAX,

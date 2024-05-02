@@ -75,14 +75,11 @@ impl Queue {
         let _ = self.queue.remove(&key);
 
         // If graph has more tasks available, re-insert query and notify
-        if graph
-            .lock()
-            .await
+        let mut guard = graph.lock().await;
+        guard
             .update_stage_status(finished_stage_id, finished_stage_status)
-            .await
-            .unwrap()
-            == QueryQueueStatus::Available
-        {
+            .unwrap();
+        if let QueryQueueStatus::Available = guard.get_queue_status() {
             self.queue.insert(key);
             self.avail.notify_waiters();
         }
@@ -160,7 +157,7 @@ impl Queue {
             Some(key) => {
                 // If a query is available, get its next task
                 let graph = &self.query_map.get(&key.qid).unwrap().1;
-                let new_task = graph.lock().await.next_task().await;
+                let new_task = graph.lock().await.next_task();
                 debug_assert!(matches!(new_task.status, TaskStatus::Ready));
                 self.add_running_task(new_task.clone(), key).await;
                 Some(new_task.task_id)
@@ -187,16 +184,16 @@ impl Queue {
         if let Some(query_entry) = self.query_map.get(&qid) {
             query_entry.1.lock().await.abort();
             self.query_map.remove(&qid);
-        }   
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use rand::Rng;
+    use std::time::Duration;
     use tokio::sync::{Mutex, Notify};
     use tokio::time::sleep;
-    use std::time::Duration;
 
     use crate::parser::ExecutionPlanParser;
     use crate::{
@@ -225,14 +222,8 @@ mod tests {
             ft: now1.clone(),
             qid: 1,
         };
-        let key2 = QueryKey {
-            ft: now2,
-            qid: 0,
-        };
-        let key3 = QueryKey {
-            ft: now1,
-            qid: 0,
-        };
+        let key2 = QueryKey { ft: now2, qid: 0 };
+        let key3 = QueryKey { ft: now1, qid: 0 };
         // Make sure durations are compared first
         assert!(key1 < key2);
         // Then qids
