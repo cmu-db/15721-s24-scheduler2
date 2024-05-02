@@ -53,11 +53,9 @@ pub struct QueryGraph {
 impl QueryGraph {
     pub async fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
         // Build stages.
-        // To run this configuration, use 'cargo build --features stages'.
         let mut builder = GraphBuilder::new();
         let stages = builder.build(plan.clone());
         println!("QueryGraph::new: generated {} stages.", stages.len());
-        println!("{:#?}", stages);
 
         let mut query = Self {
             query_id,
@@ -252,7 +250,7 @@ impl GraphBuilder {
             return plan;
         }
 
-        let mut children = vec![];
+        let mut children = vec![]; // Vec::with_capacity(plan.children().len());
         // if plan.as_any().is::<HashJoinExec>()
         //     || plan.as_any().is::<SortMergeJoinExec>()
         //     || plan.as_any().is::<NestedLoopJoinExec>()

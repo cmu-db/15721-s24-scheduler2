@@ -19,6 +19,8 @@
 
 use datafusion::arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
+use datafusion::physical_plan::memory::MemoryExec;
+use datafusion::physical_plan::placeholder_row::PlaceholderRowExec;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -75,44 +77,38 @@ pub async fn remove_results(task: &TaskKey) -> Option<Vec<RecordBatch>> {
     lock.remove(task)
 }
 
-async fn rewrite_node(
-    plan: Arc<dyn ExecutionPlan>,
-    query_id: u64,
-) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-    let children = plan.children();
-    let mut new_children = Vec::with_capacity(children.len());
-    let mut changed = false;
-
-    for child in children.into_iter() {
-        let new_child = Box::pin(rewrite_node(child, query_id));
-        let new_child = new_child.await?;
-        if !Arc::ptr_eq(&new_child, &new_children.last().unwrap_or(&new_child)) {
-            changed = true;
-        }
-        new_children.push(new_child);
-    }
-
-    if changed {
-        with_new_children_if_necessary(plan, new_children)
-    } else {
-        Ok(plan)
-    }
-}
-
 /// Rewrite an ExecutionPlan and attach the intermediate data in the plan
 pub async fn rewrite_query(
     plan: Arc<dyn ExecutionPlan>,
     query_id: u64,
 ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-    let result = Box::pin(rewrite_node(plan, query_id));
-    result.await
+    if let Some(_) = plan.as_any().downcast_ref::<PlaceholderRowExec>() {
+        if let Some(id) = plan.schema().metadata().get("IntermediateResult") {
+            let stage_id: u64 = id.parse().expect("failed to parse stage_id");
+
+            let key = TaskKey { stage_id, query_id };
+            let results = get_results(&key).await.unwrap();
+
+            let new_plan = MemoryExec::try_new(&[results], plan.schema().clone(), None)?;
+            return Ok(Arc::new(new_plan));
+        }
+    }
+
+    let children = plan.children();
+    let mut new_children = Vec::with_capacity(children.len());
+    for child in children {
+        let new_child = Box::pin(rewrite_query(child, query_id)).await?;
+        new_children.push(new_child);
+    }
+
+    Ok(with_new_children_if_necessary(plan, new_children)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ExecutionPlanParser;
     use crate::integration_test::CATALOG_PATH;
+    use crate::parser::ExecutionPlanParser;
     use datafusion::arrow::array::Int32Array;
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use datafusion::arrow::record_batch::RecordBatch;
