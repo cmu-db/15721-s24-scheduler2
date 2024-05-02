@@ -5,12 +5,15 @@ use crate::task::{
     TaskStatus::{self, *},
 };
 use crate::SchedulerError;
-use std::collections::{BTreeSet, HashMap};
+use dashmap::DashMap;
+use datafusion::physical_plan::ExecutionPlan;
+use datafusion_proto::bytes::physical_plan_to_bytes;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use datafusion_proto::bytes::physical_plan_to_bytes;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::{Mutex, Notify, RwLock};
 
 // Must implement here since generated TaskId does not derive Hash.
 impl Hash for TaskId {
@@ -46,6 +49,114 @@ pub struct Queue {
     running_task_map: HashMap<TaskId, Task>,
     // Notify primitive that signals when new tasks are ready.
     avail: Arc<Notify>,
+}
+
+pub struct State {
+    // queue: Mutex<VecDeque<QueryKey>>,
+    queue: Mutex<BTreeMap<Duration, u64>>,
+    start_ts: SystemTime,
+
+    query_id_counter: AtomicU64,
+    table: DashMap<u64, RwLock<QueryGraph>>,
+    running_tasks: DashMap<TaskId, Task>,
+    notify: Arc<Notify>,
+}
+
+impl State {
+    pub fn new(notify: Arc<Notify>) -> Self {
+        Self {
+            queue: Mutex::new(BTreeMap::new()),
+            start_ts: SystemTime::now(),
+            query_id_counter: AtomicU64::new(0),
+            table: DashMap::new(),
+            running_tasks: DashMap::new(),
+            notify,
+        }
+    }
+
+    fn next_query_id(&self) -> u64 {
+        self.query_id_counter.fetch_add(1, Ordering::SeqCst)
+    }
+
+    pub async fn add_query(&self, plan: Arc<dyn ExecutionPlan>) -> u64 {
+        let id = self.next_query_id();
+        let mut query = QueryGraph::new(id, plan);
+        let time = SystemTime::now().duration_since(self.start_ts).unwrap();
+        query.time = time;
+
+        self.table.insert(id, RwLock::new(query));
+        self.queue.lock().await.insert(time, id);
+
+        self.notify.notify_waiters();
+        id
+    }
+
+    pub async fn get_query_status(&self, query_id: u64) -> Option<QueryStatus> {
+        let status = self.table.get(&query_id)?.read().await.status;
+        if status == QueryStatus::Done {
+            self.table.remove(&query_id);
+        }
+        Some(status)
+    }
+
+    pub async fn abort_query(&self, query_id: u64) {
+        todo!()
+    }
+
+    pub async fn next_task(&self) -> Option<(TaskId, Arc<dyn ExecutionPlan>)> {
+        let Some((duration, query_id)) = self.queue.lock().await.pop_first() else {
+            return None;
+        };
+        let query = self.table.get(&query_id).unwrap();
+        let mut guard = query.write().await;
+
+        let mut task = guard.next_task();
+        task.status = Running(SystemTime::now());
+        let task_id = task.task_id;
+        let plan = guard.get_plan(task.task_id.stage_id);
+
+        // Update query to reflect running task. Requeue if more tasks are available.
+        guard
+            .update_stage_status(task.task_id.stage_id, StageStatus::Running(0))
+            .unwrap();
+        if let QueryQueueStatus::Available = guard.get_queue_status() {
+            self.queue.lock().await.insert(duration, query_id);
+            self.notify.notify_waiters();
+        }
+
+        self.running_tasks.insert(task_id, task);
+        Some((task_id, plan))
+    }
+
+    pub async fn report_task(&self, task_id: TaskId, status: TaskStatus) {
+        if let Some((_, task)) = self.running_tasks.remove(&task_id) {
+            println!("Updating {:?} status to {:?}", task_id, status);
+            let TaskStatus::Running(ts) = task.status else {
+                println!("Task removed with status {:?}", task.status);
+                panic!("Task removed but is not running.");
+            };
+            let query = self.table.get(&task_id.query_id).unwrap();
+            let mut guard = query.write().await;
+
+            match status {
+                TaskStatus::Finished => guard
+                    .update_stage_status(task_id.stage_id, StageStatus::Finished(0))
+                    .unwrap(),
+                TaskStatus::Failed => todo!(),
+                TaskStatus::Aborted => todo!(),
+                _ => unreachable!(),
+            }
+
+            let new_time = guard.time + SystemTime::now().duration_since(ts).unwrap();
+            let mut queue = self.queue.lock().await;
+            let _ = queue.remove(&guard.time);
+            if let QueryQueueStatus::Available = guard.get_queue_status() {
+                queue.insert(new_time, task_id.query_id);
+                self.notify.notify_waiters();
+            }
+            guard.time = new_time;
+        }
+    }
 }
 
 // Notify variable is shared with scheduler service to control task dispatch.

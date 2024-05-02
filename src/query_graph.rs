@@ -3,7 +3,6 @@ use crate::composable_database::{QueryStatus, TaskId};
 use crate::task::{Task, TaskStatus};
 use crate::task_queue::TaskQueue;
 use datafusion::arrow::datatypes::Schema;
-use datafusion::common::JoinSide;
 use datafusion::physical_plan::aggregates::AggregateExec;
 use datafusion::physical_plan::joins::{
     CrossJoinExec, HashJoinExec, NestedLoopJoinExec, SortMergeJoinExec, SymmetricHashJoinExec,
@@ -15,6 +14,7 @@ use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 // TODO Change to Waiting, Ready, Running(vec[taskid]), Finished(vec[locations?])
 #[derive(Clone, Debug, Default)]
@@ -48,10 +48,11 @@ pub struct QueryGraph {
     tid_counter: AtomicU64, // TODO: add mutex to stages and make elements pointers to avoid copying
     pub stages: Vec<QueryStage>, // Can be a vec since all stages in a query are enumerated from 0.
     task_queue: TaskQueue,  // Ready tasks in this graph
+    pub time: Duration,
 }
 
 impl QueryGraph {
-    pub async fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
+    pub fn new(query_id: u64, plan: Arc<dyn ExecutionPlan>) -> Self {
         // Build stages.
         let mut builder = GraphBuilder::new();
         let stages = builder.build(plan.clone());
@@ -63,6 +64,7 @@ impl QueryGraph {
             tid_counter: AtomicU64::new(0),
             stages,
             task_queue: TaskQueue::new(),
+            time: Duration::new(0, 0),
         };
 
         // Build tasks for leaf stages.
@@ -121,6 +123,7 @@ impl QueryGraph {
                     let outputs = stage.outputs.clone();
 
                     if outputs.is_empty() {
+                        println!("QueryGraph::update_stage_status: Query {} is done.", self.query_id);
                         self.status = QueryStatus::Done;
                         return Ok(());
                     }
@@ -161,6 +164,10 @@ impl QueryGraph {
     }
 
     // fn build_tasks(&mut self)
+    pub fn get_plan(&self, stage_id: u64) -> Arc<dyn ExecutionPlan> {
+        let plan = self.stages[stage_id as usize].plan.clone();
+        plan
+    }
 }
 
 #[derive(Clone, Debug)]

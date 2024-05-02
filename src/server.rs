@@ -4,24 +4,22 @@ use crate::composable_database::{
     QueryJobStatusArgs, QueryJobStatusRet, QueryStatus, ScheduleQueryArgs, ScheduleQueryRet,
     TaskId,
 };
-use crate::intermediate_results::{get_results, TaskKey};
 use crate::mock_catalog::load_catalog;
-use crate::parser::ExecutionPlanParser;
 use crate::query_graph::{QueryGraph, StageStatus};
 use crate::queue::Queue;
+use crate::queue::State;
+use crate::task::TaskStatus;
 use crate::SchedulerError;
-use datafusion::arrow::util::pretty::print_batches;
 use datafusion::execution::context::SessionContext;
-use datafusion_proto::bytes::physical_plan_from_bytes;
+use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::{Mutex, Notify};
-use tokio::time::{sleep, Duration};
-use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
 pub struct SchedulerService {
+    state: Arc<State>,
     queue: Arc<Mutex<Queue>>,
     ctx: Arc<SessionContext>, // If we support changing the catalog at runtime, this should be a RwLock.
     query_id_counter: AtomicU64,
@@ -30,11 +28,7 @@ pub struct SchedulerService {
 
 impl fmt::Debug for SchedulerService {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "SchedulerService {{ queue: {:?} }}",
-            self.queue,
-        )
+        write!(f, "SchedulerService {{ queue: {:?} }}", self.queue,)
     }
 }
 
@@ -42,6 +36,7 @@ impl SchedulerService {
     pub async fn new(catalog_path: &str) -> Self {
         let avail = Arc::new(Notify::new());
         Self {
+            state: Arc::new(State::new(avail.clone())),
             queue: Arc::new(Mutex::new(Queue::new(Arc::clone(&avail)))),
             ctx: load_catalog(catalog_path).await,
             query_id_counter: AtomicU64::new(0),
@@ -59,19 +54,28 @@ impl SchedulerService {
         task_id_opt: Option<TaskId>,
     ) -> Result<(TaskId, Vec<u8>), SchedulerError> {
         if let Some(task_id) = task_id_opt {
-            let mut queue = self.queue.lock().await;
-            // Remove the current task from the queue.
-            queue.remove_task(task_id, StageStatus::Finished(0)).await;
+            // let mut queue = self.queue.lock().await;
+            // // Remove the current task from the queue.
+            // queue.remove_task(task_id, StageStatus::Finished(0)).await;
+            self.state.report_task(task_id, TaskStatus::Finished).await;
         }
         loop {
-            let mut queue = self.queue.lock().await;
-            if let Some(new_task_id) = queue.next_task().await {
-                let stage = queue
-                    .get_plan_bytes(new_task_id.query_id, new_task_id.stage_id)
-                    .await?;
-                return Ok((new_task_id, stage));
+            // let mut queue = self.queue.lock().await;
+            // if let Some(new_task_id) = queue.next_task().await {
+            //     let stage = queue
+            //         .get_plan_bytes(new_task_id.query_id, new_task_id.stage_id)
+            //         .await?;
+            //     return Ok((new_task_id, stage));
+            // }
+            // drop(queue);
+            if let Some((task_id, plan)) = self.state.next_task().await {
+                let bytes = physical_plan_to_bytes(plan)
+                    .expect("Failed to serialize physical plan")
+                    .to_vec();
+                println!("SchedulerService: Sending task {:?}", task_id);
+                return Ok((task_id, bytes));
             }
-            drop(queue);
+            println!("SchedulerService: Waiting for new tasks.");
             self.avail.notified().await;
         }
     }
@@ -94,13 +98,13 @@ impl SchedulerApi for SchedulerService {
 
         let plan = physical_plan_from_bytes(bytes.as_slice(), &self.ctx)
             .expect("Failed to deserialize physical plan");
-        // println!("schedule_query: received plan {:?}", plan);
+
+        let qid = self.state.add_query(plan).await;
 
         // Build a query graph, store in query table, enqueue new tasks.
-        let qid = self.next_query_id();
-        let query = QueryGraph::new(qid, plan).await;
-        self.queue.lock().await.add_query(qid, Arc::new(Mutex::new(query))).await;
-
+        // let qid = self.next_query_id();
+        // let query = QueryGraph::new(qid, plan);
+        // self.queue.lock().await.add_query(qid, Arc::new(Mutex::new(query))).await;
 
         let response = ScheduleQueryRet { query_id: qid };
         Ok(Response::new(response))
@@ -113,8 +117,14 @@ impl SchedulerApi for SchedulerService {
     ) -> Result<Response<QueryJobStatusRet>, Status> {
         let QueryJobStatusArgs { query_id } = request.into_inner();
 
-        let status = self.queue.lock().await.get_query_status(query_id).await;
+        let status = self
+            .state
+            .get_query_status(query_id)
+            .await
+            .unwrap_or(QueryStatus::NotFound);
+        // let status = self.queue.lock().await.get_query_status(query_id).await;
         if status == QueryStatus::Done {
+            println!("SchedulerService: Query {} is done.", query_id);
             let stage_id = 0;
             // let final_result = get_results(&TaskKey { stage_id, query_id })
             //     .await
@@ -127,8 +137,8 @@ impl SchedulerApi for SchedulerService {
 
             return Ok(Response::new(QueryJobStatusRet {
                 query_status: QueryStatus::Done.into(),
-                stage_id: stage_id,
-                query_id: query_id
+                stage_id,
+                query_id,
             }));
             // ****************** END CHANGES FROM INTEGRATION TESTING****************//
         }
@@ -145,7 +155,8 @@ impl SchedulerApi for SchedulerService {
     ) -> Result<Response<AbortQueryRet>, Status> {
         // TODO: Actually call executor API to abort query.
         let AbortQueryArgs { query_id } = request.into_inner();
-        self.queue.lock().await.abort_query(query_id).await;
+        // self.queue.lock().await.abort_query(query_id).await;
+        self.state.abort_query(query_id).await;
         let response = AbortQueryRet { aborted: true };
         Ok(Response::new(response))
     }
@@ -243,10 +254,10 @@ mod tests {
                 test_file
             );
         }
-        println!(
-            "test_scheduler: queued {} tasks.",
-            scheduler_service.queue.lock().await.size()
-        );
+        // println!(
+        //     "test_scheduler: queued {} tasks.",
+        //     scheduler_service.queue.lock().await.size()
+        // );
 
         // TODO: add concurrent test eventually
         let mut send_task = NotifyTaskStateArgs {
