@@ -119,10 +119,6 @@ impl ExecutorClient {
             };
 
 
-            println!(
-                "[Executor{}]: Running plan: {:#?}",
-                self.id, plan
-            );
             let execution_result = self.executor.execute(plan).await;
             let execution_success = execution_result.is_ok();
             execution_result.as_ref().expect("Failed to execute query");

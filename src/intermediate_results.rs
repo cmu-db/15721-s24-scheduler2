@@ -50,20 +50,20 @@ impl Hash for TaskKey {
 }
 
 // thread-safe hashmap of task key -> intermediate results
-static INTERMEDIATE_RESULTS: Lazy<Arc<Mutex<HashMap<TaskKey, Vec<RecordBatch>>>>> =
+static INTERMEDIATE_RESULTS: Lazy<Arc<Mutex<HashMap<TaskKey, Vec<Vec<RecordBatch>>>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
-pub async fn get_results(task_id: &TaskKey) -> Option<Vec<RecordBatch>> {
+pub async fn get_results(task_id: &TaskKey) -> Option<Vec<Vec<RecordBatch>>> {
     let lock = INTERMEDIATE_RESULTS.lock().await;
     lock.get(task_id).cloned()
 }
 
-pub async fn insert_results(task_id: TaskKey, results: Vec<RecordBatch>) {
+pub async fn insert_results(task_id: TaskKey, results: Vec<Vec<RecordBatch>>) {
     let mut lock = INTERMEDIATE_RESULTS.lock().await;
     lock.insert(task_id, results);
 }
 
-pub async fn append_results(task: &TaskKey, new_results: Vec<RecordBatch>) {
+pub async fn append_results(task: &TaskKey, new_results: Vec<Vec<RecordBatch>>) {
     let mut lock = INTERMEDIATE_RESULTS.lock().await;
     if let Some(results) = lock.get_mut(task) {
         results.extend(new_results);
@@ -72,7 +72,7 @@ pub async fn append_results(task: &TaskKey, new_results: Vec<RecordBatch>) {
     }
 }
 
-pub async fn remove_results(task: &TaskKey) -> Option<Vec<RecordBatch>> {
+pub async fn remove_results(task: &TaskKey) -> Option<Vec<Vec<RecordBatch>>> {
     let mut lock = INTERMEDIATE_RESULTS.lock().await;
     lock.remove(task)
 }
@@ -89,7 +89,7 @@ pub async fn rewrite_query(
             let key = TaskKey { stage_id, query_id };
             let results = get_results(&key).await.unwrap();
 
-            let new_plan = MemoryExec::try_new(&[results], plan.schema().clone(), None)?;
+            let new_plan = MemoryExec::try_new(&results, plan.schema().clone(), None)?;
             return Ok(Arc::new(new_plan));
         }
     }
@@ -114,11 +114,11 @@ mod tests {
     use datafusion::arrow::record_batch::RecordBatch;
 
     // Helper function to create a dummy RecordBatch
-    fn create_dummy_record_batch() -> Vec<RecordBatch> {
+    fn create_dummy_record_batch() -> Vec<Vec<RecordBatch>> {
         let id_array = Int32Array::from(vec![1, 2, 3, 4, 5]);
         let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
         let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(id_array)]).unwrap();
-        vec![batch]
+        vec![vec![batch]]
     }
 
     #[tokio::test]

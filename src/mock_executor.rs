@@ -34,12 +34,18 @@ impl MockExecutor {
     pub async fn execute(
         &self,
         plan: Arc<dyn ExecutionPlan>,
-    ) -> datafusion::common::Result<Vec<RecordBatch>, DataFusionError> {
+    ) -> datafusion::common::Result<Vec<Vec<RecordBatch>>, DataFusionError> {
         let task_ctx = self.ctx.task_ctx();
-        let mut results = Vec::new();
-        let mut stream = plan.execute(0, task_ctx)?;
-        while let Some(batch) = stream.next().await {
-            results.push(batch?);
+
+        let mut results = vec![];
+        let num_partitions = plan.properties().output_partitioning().partition_count();
+        for i in 0..num_partitions {
+            let mut partition_results = Vec::new();
+            let mut stream = plan.execute(i, task_ctx.clone())?;
+            while let Some(batch) = stream.next().await {
+                partition_results.push(batch?);
+            }
+            results.push(partition_results);
         }
         Ok(results)
     }
