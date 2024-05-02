@@ -156,17 +156,18 @@ impl Queue {
     Blocking is handled in the server.
     */
     pub async fn next_task(&mut self) -> Option<TaskId> {
-        // Get the highest priority query.
-        match self.min() {
-            Some(key) => {
-                // If a query is available, get its next task
-                let graph = &self.query_map.get(&key.qid).unwrap().1;
-                let new_task = graph.lock().await.next_task();
-                debug_assert!(matches!(new_task.status, TaskStatus::Ready));
-                self.add_running_task(new_task.clone(), key).await;
-                Some(new_task.task_id)
-            }
-            None => None,
+        if let Some(key) = self.min() {
+            // If a query is available, get its next task
+            let graph = &self.query_map.get(&key.qid).unwrap().1;
+            println!("Queue size before getting task: {:#?}", self.queue.len());
+            let new_task = graph.lock().await.next_task();
+
+            debug_assert!(matches!(new_task.status, TaskStatus::Ready));
+
+            self.add_running_task(new_task.clone(), key).await;
+            Some(new_task.task_id)
+        } else {
+            None
         }
     }
 
