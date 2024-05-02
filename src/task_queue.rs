@@ -13,12 +13,12 @@ impl TaskQueue {
         }
     }
 
-    pub async fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.queue.len()
     }
 
     // Add tasks to the queue.
-    pub async fn add_tasks(&mut self, tasks: Vec<Task>) {
+    pub fn add_tasks(&mut self, tasks: Vec<Task>) {
         self.queue.extend(tasks);
     }
 
@@ -27,8 +27,16 @@ impl TaskQueue {
      Due to the structure of the outer queue,
      there queue should always be non-empty when called.
     */
-    pub async fn next_task(&mut self) -> Task {
+    pub fn next_task(&mut self) -> Task {
         self.queue.pop_front().expect("Queue has no tasks.")
+    }
+
+    pub fn push_tasks(&mut self, tasks: Vec<Task>) {
+        self.queue.extend(tasks);
+    }
+
+    pub fn pop_task(&mut self) -> Option<Task> {
+        self.queue.pop_front()
     }
 }
 
@@ -57,7 +65,7 @@ mod tests {
         let runtime = Runtime::new().unwrap();
         runtime.block_on(async {
             let queue = TaskQueue::new();
-            assert_eq!(queue.size().await, 0);
+            assert_eq!(queue.size(), 0);
         });
     }
 
@@ -66,8 +74,8 @@ mod tests {
         let runtime = Runtime::new().unwrap();
         runtime.block_on(async {
             let mut queue = TaskQueue::new();
-            queue.add_tasks(vec![create_task(1)]).await;
-            assert_eq!(queue.size().await, 1);
+            queue.add_tasks(vec![create_task(1)]);
+            assert_eq!(queue.size(), 1);
         });
     }
 
@@ -79,15 +87,14 @@ mod tests {
             {
                 let mut queue_lock = queue.lock().await;
                 queue_lock
-                    .add_tasks(vec![create_task(1), create_task(2)])
-                    .await;
+                    .add_tasks(vec![create_task(1), create_task(2)]);
             }
 
             let queue_clone = queue.clone();
             let handle = tokio::spawn(async move {
                 let mut queue_lock = queue_clone.lock().await;
                 assert_eq!(
-                    queue_lock.next_task().await.task_id,
+                    queue_lock.next_task().task_id,
                     TaskId {
                         query_id: 1,
                         task_id: 1,
@@ -95,7 +102,7 @@ mod tests {
                     }
                 );
                 assert_eq!(
-                    queue_lock.next_task().await.task_id,
+                    queue_lock.next_task().task_id,
                     TaskId {
                         query_id: 2,
                         task_id: 2,
