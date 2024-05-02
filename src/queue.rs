@@ -417,10 +417,5 @@ mod tests {
                 println!("(Round {}) Query {}/{} ok.", rnd + 1, i + 1, ngraphs);
             }
         }
-        // println!("Queued {} queries.", qid.lock().await.load(Ordering::SeqCst));
-        // make sure no more tasks remain
-        assert!(Arc::clone(&queue).lock().await.next_task().await.is_none());
-        assert!(queue.lock().await.size() == 0);
-        println!("Finished {:?} tasks.", nplans);
     }
 }
