@@ -1,0 +1,22 @@
+{
+    "info": {
+        "title":    "Scheduler2",
+        "github":   "https://github.com/cmu-db/15721-s24-scheduler2/",
+        "description":  "This project implements an pull-based query scheduler service that communicates via gRPC.",
+        "students": [
+            {
+                "name": "Aidan Smith",
+                "url": "https://aidansmith.xyz"
+            },
+            {
+                "name": "Makoto Tomokiyo",
+                "url": "https://CHANGE_ME"
+            },
+            {
+                "name": "Mingkang Li",
+                "url": "https://CHANGE_ME"
+            }
+        ]
+    }
+}
+
