@@ -8,7 +8,6 @@ mod mock_optimizer;
 pub mod parser;
 pub mod profiling;
 mod query_graph;
-mod query_table;
 mod queue;
 pub mod server;
 mod task;

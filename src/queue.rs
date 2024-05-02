@@ -4,10 +4,12 @@ use crate::task::{
     Task,
     TaskStatus::{self, *},
 };
+use crate::SchedulerError;
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+use datafusion_proto::bytes::physical_plan_to_bytes;
 use tokio::sync::{Mutex, Notify};
 
 // Must implement here since generated TaskId does not derive Hash.
@@ -39,6 +41,7 @@ pub struct Queue {
     start_ts: SystemTime,
     // Structure that maps query IDs to query keys.
     query_map: HashMap<u64, (Arc<Mutex<QueryKey>>, Arc<Mutex<QueryGraph>>)>,
+    // table: DashMap<u64, RwLock<QueryGraph>>,
     // List of currently running tasks.
     running_task_map: HashMap<TaskId, Task>,
     // Notify primitive that signals when new tasks are ready.
@@ -189,6 +192,22 @@ impl Queue {
         if let Some(query_entry) = self.query_map.get(&qid) {
             query_entry.1.lock().await.abort();
             self.query_map.remove(&qid);
+        }
+    }
+
+    pub async fn get_plan_bytes(
+        &self,
+        query_id: u64,
+        stage_id: u64,
+    ) -> Result<Vec<u8>, SchedulerError> {
+        let t = &self.query_map;
+        if let Some((_, graph)) = t.get(&query_id) {
+            let plan = Arc::clone(&graph.lock().await.stages[stage_id as usize].plan);
+            Ok(physical_plan_to_bytes(plan)
+                .expect("Failed to serialize physical plan")
+                .to_vec())
+        } else {
+            Err(SchedulerError::Error("Graph not found.".to_string()))
         }
     }
 }
