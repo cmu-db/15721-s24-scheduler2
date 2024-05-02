@@ -78,7 +78,6 @@ impl SchedulerApi for SchedulerService {
 
         let plan = physical_plan_from_bytes(bytes.as_slice(), &self.ctx)
             .expect("Failed to deserialize physical plan");
-
         let qid = self.state.add_query(plan).await;
 
         let response = ScheduleQueryRet { query_id: qid };
@@ -181,8 +180,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_scheduler() {
-        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/expr.slt");
-        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_files/");
+        let test_file = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql/1.sql");
+        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/");
         let scheduler_service = Box::new(SchedulerService::new(catalog_path).await);
         let parser = ExecutionPlanParser::new(catalog_path).await;
         println!("test_scheduler: Testing file {}", test_file);
@@ -227,10 +226,10 @@ mod tests {
                 test_file
             );
         }
-        // println!(
-        //     "test_scheduler: queued {} tasks.",
-        //     scheduler_service.queue.lock().await.size()
-        // );
+        println!(
+            "test_scheduler: queued {} tasks.",
+            scheduler_service.state.size().await
+        );
 
         // TODO: add concurrent test eventually
         let mut send_task = NotifyTaskStateArgs {
@@ -238,18 +237,16 @@ mod tests {
             success: true,
         };
         // may not terminate
-        loop {
-            let ret = scheduler_service
-                .notify_task_state(Request::new(send_task.clone()))
-                .await
-                .unwrap();
-            let NotifyTaskStateRet {
-                has_new_task,
-                task,
-                physical_plan,
-            } = ret.into_inner();
-            assert!(task.is_some());
-            send_task.task = task;
-        }
+        let ret = scheduler_service
+            .notify_task_state(Request::new(send_task.clone()))
+            .await
+            .unwrap();
+        let NotifyTaskStateRet {
+            has_new_task,
+            task,
+            physical_plan,
+        } = ret.into_inner();
+        println!("test_scheduler: Received task {:?}", task.unwrap());
+        send_task.task = task;
     }
 }

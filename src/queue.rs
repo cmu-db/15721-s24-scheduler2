@@ -4,11 +4,9 @@ use crate::task::{
     Task,
     TaskStatus::{self, *},
 };
-use crate::SchedulerError;
 use dashmap::DashMap;
 use datafusion::physical_plan::ExecutionPlan;
-use datafusion_proto::bytes::physical_plan_to_bytes;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -150,10 +148,10 @@ impl State {
 #[cfg(test)]
 mod tests {
     use rand::Rng;
-    use std::fs;
-    use tokio::sync::{Mutex, Notify};
+    use std::{fs, time::{Duration, SystemTime}};
+    use tokio::{sync::{Mutex, Notify}, time::sleep};
 
-    use crate::parser::ExecutionPlanParser;
+    use crate::{parser::ExecutionPlanParser, query_graph::QueryGraph};
     use crate::queue::State;
     use crate::task::TaskStatus;
     use std::{cmp::min, sync::Arc};
@@ -249,5 +247,60 @@ mod tests {
         assert!(Arc::clone(&queue).next_task().await.is_none());
         assert!(queue.size().await == 0);
         println!("Finished {:?} tasks.", nplans);
+    }
+
+    // Test correctness of stride scheduling algorithm.
+    #[tokio::test]
+    async fn test_stride() {
+        let test_sql_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/test_sql/");
+        let catalog_path = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/");
+        let queue = Box::new(State::new(Arc::new(Notify::new())));
+        let parser = ExecutionPlanParser::new(catalog_path).await;
+        println!("test_queue_conc: Testing files in {}", test_sql_dir);
+
+        // Generate list of all tpch plans
+        let mut physical_plans = Vec::new();
+        for file in fs::read_dir(test_sql_dir).unwrap() {
+            let path_buf = file.unwrap().path();
+            let path = path_buf.to_str().unwrap();
+            physical_plans.extend(parser.get_execution_plan_from_file(&path).await.unwrap());
+        }
+
+        println!("Got {} plans.", physical_plans.len());
+        let mut long_plans = Vec::new();
+
+        // Generate list of plans with at least `rounds` stages
+        let rounds = 5;
+        for plan in physical_plans {
+            let graph = QueryGraph::new(0, Arc::clone(&plan));
+            if graph.stages.len() >= rounds {
+                long_plans.push(plan);
+            }
+        }
+        let nplans = long_plans.len();
+
+        // Add a bunch of queries with staggered submission time
+        let start_enqueue = SystemTime::now();
+        for plan in long_plans {
+            queue
+                .add_query(Arc::clone(&plan))
+                .await;
+            sleep(Duration::from_millis(10)).await;
+        }
+        let enq_time = SystemTime::now().duration_since(start_enqueue).unwrap();
+
+        // Ensure correct order of queue
+        for rnd in 0..rounds {
+            for i in 0..nplans {
+                let (task, _) = queue.next_task().await.unwrap();
+                // Queries should be processed in order
+                assert_eq!(task.query_id, i as u64);
+                // "process" for at least as long as (max_pass - min_pass)
+                sleep(enq_time).await;
+                // Return task; update query's pass
+                queue.report_task(task, TaskStatus::Finished).await;
+                println!("(Round {}) Query {}/{} ok.", rnd + 1, i + 1, nplans);
+            }
+        }
     }
 }
