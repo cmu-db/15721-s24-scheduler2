@@ -8,7 +8,6 @@ use crate::intermediate_results::{get_results, TaskKey};
 use crate::mock_catalog::load_catalog;
 use crate::parser::ExecutionPlanParser;
 use crate::query_graph::{QueryGraph, StageStatus};
-use crate::query_table::QueryTable;
 use crate::queue::Queue;
 use crate::SchedulerError;
 use datafusion::arrow::util::pretty::print_batches;
@@ -23,7 +22,6 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
 pub struct SchedulerService {
-    query_table: Arc<QueryTable>,
     queue: Arc<Mutex<Queue>>,
     ctx: Arc<SessionContext>, // If we support changing the catalog at runtime, this should be a RwLock.
     query_id_counter: AtomicU64,
@@ -34,8 +32,8 @@ impl fmt::Debug for SchedulerService {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "SchedulerService {{ query_table: {:?}, queue: {:?} }}",
-            self.query_table, self.queue,
+            "SchedulerService {{ queue: {:?} }}",
+            self.queue,
         )
     }
 }
@@ -44,7 +42,6 @@ impl SchedulerService {
     pub async fn new(catalog_path: &str) -> Self {
         let avail = Arc::new(Notify::new());
         Self {
-            query_table: Arc::new(QueryTable::new().await),
             queue: Arc::new(Mutex::new(Queue::new(Arc::clone(&avail)))),
             ctx: load_catalog(catalog_path).await,
             query_id_counter: AtomicU64::new(0),
@@ -69,8 +66,7 @@ impl SchedulerService {
         loop {
             let mut queue = self.queue.lock().await;
             if let Some(new_task_id) = queue.next_task().await {
-                let stage = self
-                    .query_table
+                let stage = queue
                     .get_plan_bytes(new_task_id.query_id, new_task_id.stage_id)
                     .await?;
                 return Ok((new_task_id, stage));
@@ -104,6 +100,7 @@ impl SchedulerApi for SchedulerService {
         let qid = self.next_query_id();
         let query = QueryGraph::new(qid, plan).await;
         self.queue.lock().await.add_query(qid, Arc::new(Mutex::new(query))).await;
+
 
         let response = ScheduleQueryRet { query_id: qid };
         Ok(Response::new(response))
